@@ -55,9 +55,14 @@ html, body {
 }
 .chip .ic { font-size: 13px; }
 
-.ghost-btn {
-  pointer-events: auto; position: absolute;
+.side-btns {
+  position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + 14px); right: calc(env(safe-area-inset-right, 0px) + 14px);
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.ghost-btn {
+  pointer-events: auto;
   width: 40px; height: 40px; border: 0; border-radius: 14px;
   background: rgba(253, 246, 232, .75); box-shadow: var(--shadow);
   font-size: 18px; cursor: pointer;
@@ -112,6 +117,34 @@ html, body {
   box-shadow: 0 6px 0 #bf7049; cursor: pointer;
 }
 .primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #bf7049; }
+
+/* ---------- Bossleiste ---------- */
+.bossbar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  width: min(320px, 68vw); text-align: center;
+  transition: opacity .3s;
+}
+.bossbar.hidden { opacity: 0; }
+
+/* auf schmalen Schirmen unter den HUD-Stapel rutschen, statt ihn zu überdecken */
+@media (max-width: 620px) {
+  .bossbar { top: calc(env(safe-area-inset-top, 0px) + 104px); width: min(320px, 82vw); }
+}
+.bossbar .name {
+  display: block; margin-bottom: 5px; font-size: 12px; font-weight: 800;
+  letter-spacing: .4px; color: var(--cream);
+  text-shadow: 0 2px 6px rgba(62, 74, 44, .55);
+}
+.bossbar .track {
+  height: 12px; border-radius: 7px; overflow: hidden;
+  background: rgba(62, 74, 44, .45); box-shadow: var(--shadow);
+}
+.bossbar .fill {
+  height: 100%; width: 100%; transform-origin: left center;
+  background: linear-gradient(180deg, #e2643c, #b8452a);
+  transition: transform .16s ease-out;
+}
 
 /* ---------- Erfahrungsleiste & Rast ---------- */
 .bar.xp { width: 168px; height: 18px; }

@@ -155,7 +155,7 @@ function push(bucket, key, geo, x, y, z, rotY = 0, sx = 1, sy = 1, sz = 1, rotX 
 /* ------------------------------------------------------------------ */
 /*  Requisiten eines Chunks                                            */
 /* ------------------------------------------------------------------ */
-function buildProps(cx, cz, bucket, colliders, fires) {
+function buildProps(cx, cz, bucket, colliders, fires, shrines) {
   const rand = rngFor(cx, cz, SEED);
   const ox = cx * CHUNK, oz = cz * CHUNK;
 
@@ -215,7 +215,7 @@ function buildProps(cx, cz, bucket, colliders, fires) {
   }
 
   // --- Steinkreis als seltenes Wahrzeichen ---
-  if (rand() < 0.05) {
+  if (rand() < 0.15) {
     const sx = ox + 10 + rand() * (CHUNK - 20);
     const sz = oz + 10 + rand() * (CHUNK - 20);
     if (isLand(sx, sz) && slopeAt(sx, sz) < 0.45) {
@@ -228,6 +228,7 @@ function buildProps(cx, cz, bucket, colliders, fires) {
         push(bucket, 'rock', G.lintel, px, py + 2.6, pz, -a);
         colliders.push({ x: px, z: pz, r: 0.8 });
       }
+      shrines.push({ x: sx, y: heightAt(sx, sz), z: sz, key: shrineKey(sx, sz) });
     }
   }
 
@@ -294,6 +295,17 @@ function buildProps(cx, cz, bucket, colliders, fires) {
     }
   }
 }
+
+// Steinkreise bekommen einen festen Schlüssel, damit ein besiegter Wächter
+// besiegt bleibt, auch wenn der Chunk zwischendurch entladen wird.
+export function shrineKey(x, z) { return Math.round(x) + '_' + Math.round(z); }
+
+// Lichtsäule über einem Steinkreis – von Weitem sichtbares Ziel.
+const beaconGeo = new THREE.CylinderGeometry(1.1, 2.2, 30, 7, 1, true);
+const beaconMat = new THREE.MeshBasicMaterial({
+  color: '#ffe0ac', transparent: true, opacity: 0.13,
+  depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+});
 
 /* ------------------------------------------------------------------ */
 /*  Boden-Mesh eines Chunks (facettiert, Farbe pro Dreieck)            */
@@ -412,7 +424,15 @@ export class World {
 
     const bucket = {};
     const fires = [];
-    buildProps(cx, cz, bucket, colliders, fires);
+    const shrines = [];
+    buildProps(cx, cz, bucket, colliders, fires, shrines);
+
+    for (const sh of shrines) {
+      const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+      beacon.position.set(sh.x, sh.y + 14, sh.z);
+      beacon.renderOrder = 2;
+      group.add(beacon);
+    }
     for (const key in bucket) {
       const merged = mergeGeometries(bucket[key], false);
       if (!merged) continue;
@@ -424,11 +444,11 @@ export class World {
     }
 
     this.scene.add(group);
-    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders, fires });
+    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders, fires, shrines });
   }
 
   disposeChunk(k, chunk) {
-    chunk.group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    chunk.group.traverse((o) => { if (o.isMesh && o.geometry !== beaconGeo) o.geometry.dispose(); });
     this.scene.remove(chunk.group);
     this.chunks.delete(k);
   }
@@ -437,7 +457,7 @@ export class World {
     this.castShadows = on;
     for (const [, chunk] of this.chunks) {
       chunk.group.traverse((o) => {
-        if (!o.isMesh) return;
+        if (!o.isMesh || o.material === beaconMat) return;
         o.castShadow = on && o.material !== groundMat;
         o.receiveShadow = on;
       });
@@ -455,6 +475,23 @@ export class World {
         for (const f of chunk.fires) {
           const d = (f.x - pos.x) ** 2 + (f.z - pos.z) ** 2;
           if (d < bestD) { bestD = d; best = f; }
+        }
+      }
+    }
+    return best;
+  }
+
+  // Nächster Steinkreis im Umkreis – dort wartet ein Wächter.
+  nearestShrine(pos, radius) {
+    const ccx = Math.floor(pos.x / CHUNK), ccz = Math.floor(pos.z / CHUNK);
+    let best = null, bestD = radius * radius;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const chunk = this.chunks.get(this.key(ccx + dx, ccz + dz));
+        if (!chunk) continue;
+        for (const sh of chunk.shrines) {
+          const d = (sh.x - pos.x) ** 2 + (sh.z - pos.z) ** 2;
+          if (d < bestD) { bestD = d; best = sh; }
         }
       }
     }

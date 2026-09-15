@@ -42,8 +42,9 @@ css/style.css       cozy UI (abgerundet, cremefarben, safe-area-tauglich)
 js/noise.js         deterministisches Value-Noise + fbm (gleiche Koordinate = gleicher Wert)
 js/world.js         Höhenfeld, Chunk-Streaming, Gelände-Mesh, Bäume/Häuser/Steinkreise
 js/input.js         Touch-Joystick + Tastatur
-js/entities.js      Spielfigur, Gegner, Pfeile, Geschosse, Edelsteine, Partikel
+js/entities.js      Spielfigur, Gegner, Wächter, Pfeile, Geschosse, Edelsteine, Partikel
 js/upgrades.js      Upgrade-Karten, Erfahrungskurve
+js/audio.js         synthetisierter Klang (Wind, Feuer, Effekte, Untermalung)
 js/postfx.js        Tilt-Shift (Miniatureffekt) als eigener Render-Pass
 js/main.js          Szene, Licht, Kamera, Spielschleife, Kampf-Regel
 vendor/three/       three.js (MIT) lokal eingebunden
@@ -92,6 +93,21 @@ Hand, Scharfe Spitzen, Durchschlag, Weitsicht, Zäh, Leichte Schuhe,
 Sammlerglück oder Warme Suppe. Jede Karte hat ein Maximum und stapelt bis
 dahin. Mit jeder Stufe werden auch die Gegner zäher.
 
+### Wächter der Steinkreise
+
+Steinkreise senden eine schmale Lichtsäule nach oben — von Weitem das einzige
+Ziel in der Landschaft. Im Kreis schläft ein Wächter, zusammengesunken und
+unverwundbar, bis jemand auf 15 m herankommt. Dann richtet er sich auf und
+kämpft: Er geht schwer auf einen zu, kündigt seinen Schlag mit einem
+wachsenden Ring an (wer im Ring steht, kassiert ihn) und ruft ab und zu zwei
+Hüpfer zu Hilfe. Sein schmaler Kollisionsradius lässt ihn zwischen den eigenen
+Steinen hindurch.
+
+Besiegt lässt er sieben Edelsteine, Heilung und eine sofortige Stufe fallen.
+Welche Kreise erledigt sind, merkt sich der Lauf über einen Schlüssel aus den
+Koordinaten — ein toter Wächter bleibt tot, auch wenn der Chunk zwischendurch
+entladen wird.
+
 ### Lagerfeuer
 
 Zelte und einzelne Feuerstellen sind Rastplätze: In 4 m Umkreis heilt man
@@ -115,10 +131,21 @@ Drei Gegnersorten, die zu unterschiedlichem Verhalten zwingen:
 Gegner werden in 17–28 m Entfernung nachgeschoben; je weiter man vom Startpunkt
 wegläuft und je höher die eigene Stufe, desto mehr und zähere kommen.
 
+## Klang
+
+`js/audio.js` erzeugt jeden Ton zur Laufzeit mit der Web Audio API — es gibt
+keine einzige Audiodatei. Ein Rauschpuffer trägt Wind, Lagerfeuerknistern und
+alle Schläge; kurze Oszillatoren mit Hüllkurve machen Bogen, Treffer und
+Geschosse. Edelsteine klingen beim schnellen Einsammeln eine Pentatonik
+aufwärts, der Stufenaufstieg ist ein Dreiklang, und alle 9–16 Sekunden liegt
+ein ruhiger Akkordton darunter. Das Feuer wird aus der Entfernung geregelt, ist
+also von selbst räumlich. Browser lassen Ton erst nach einer Geste zu — der
+Startknopf schaltet ihn frei, der 🔊-Knopf schaltet ihn stumm (wird gemerkt).
+
 ## Nächste Ideen
 
-- Sounds und Musik
-- Bosse an Wahrzeichen (Steinkreis) mit eigener Beute
 - Dörfer beleben: NPCs, kleine Aufträge, Händler für Edelsteine
 - Ausrüstung, die einen Lauf überdauert
-- Tag- und Nachtwechsel
+- Tag- und Nachtwechsel, Wetter
+- Mehr Wächtersorten mit eigenen Angriffsmustern
+- Spielstand sichern (Stufe und Fortschritt über Läufe hinweg)

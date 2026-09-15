@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { World, heightAt, setSeed, regionName } from './world.js';
 import { Input } from './input.js';
-import { Player, EnemyManager, ProjectileManager, Particles, Gems, EnemyShots } from './entities.js';
+import { Player, EnemyManager, ProjectileManager, Particles, Gems, EnemyShots, Boss } from './entities.js';
 import { TiltShift } from './postfx.js';
 import { freshStats, pickThree, applyUpgrade, xpForLevel } from './upgrades.js';
+import { GameAudio } from './audio.js';
 
 /* --------------------------------- Setup --------------------------------- */
 const canvas = document.getElementById('scene');
@@ -50,7 +51,9 @@ const enemies = new EnemyManager(scene);
 const arrows = new ProjectileManager(scene);
 const shots = new EnemyShots(scene);
 const gems = new Gems(scene);
+const boss = new Boss(scene);
 const fx = new Particles(scene);
+const audio = new GameAudio();
 
 /* ------------------------------ Bildschirm ------------------------------- */
 function resize() {
@@ -96,6 +99,10 @@ const state = {
   fireTimer: 0,
   resting: false,
   camPos: new THREE.Vector3(),
+  cleared: new Set(),      // besiegte Wächter
+  gemStreak: 0,
+  streakTimer: 0,
+  shrineCheck: 0,
 };
 
 let stats = freshStats();
@@ -120,8 +127,12 @@ function newRun() {
   arrows.reset();
   shots.reset();
   gems.reset();
+  boss.reset();
   fx.reset();
   stats = freshStats();
+  state.cleared.clear();
+  state.gemStreak = 0;
+  bossBar.classList.add('hidden');
   state.score = 0;
   state.idleTime = 0;
   state.fireTimer = 0;
@@ -140,6 +151,7 @@ function newRun() {
 
 function onPlayerHit(enemy) {
   const dead = player.hurt(enemy.damage);
+  audio.hurt();
   fx.burst(player.pos, '#df8a5c', 5);
   // kleiner Rückstoß für den Gegner
   const dx = enemy.pos.x - player.pos.x, dz = enemy.pos.z - player.pos.z;
@@ -149,19 +161,64 @@ function onPlayerHit(enemy) {
   if (dead) gameOver();
 }
 
-function onKill(enemy) {
-  fx.burst(enemy.pos, enemy.mat.color.getHex(), 9);
-  gems.drop(enemy.pos);
+function onKill(target) {
+  if (target === boss) { onBossDown(); return; }
+  audio.kill();
+  fx.burst(target.pos, target.mat.color.getHex(), 9);
+  gems.drop(target.pos);
+}
+
+/* ---------------------------- Wächter ------------------------------------ */
+const bossBar = document.getElementById('bossBar');
+const bossFill = document.getElementById('bossFill');
+
+const bossCallbacks = {
+  onWake: () => {
+    audio.bossWake();
+    bossBar.classList.remove('hidden');
+  },
+  onSummon: (pos) => {
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * Math.PI * 2;
+      enemies.spawnAt(pos.x + Math.cos(a) * 6, pos.z + Math.sin(a) * 6, 'hopper', 1);
+    }
+  },
+  onSlam: (pos, radius, damage) => {
+    audio.bossSlam();
+    fx.burst(pos, '#9b9a84', 12);
+    const d = Math.hypot(player.pos.x - pos.x, player.pos.z - pos.z);
+    if (d < radius) {
+      audio.hurt();
+      if (player.hurt(damage)) gameOver();
+    }
+  },
+};
+
+function onBossDown() {
+  audio.bossDown();
+  fx.burst(boss.pos, '#ffe0ac', 16);
+  state.cleared.add(boss.shrine.key);
+  bossBar.classList.add('hidden');
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    gems.drop({ x: boss.pos.x + Math.cos(a) * 2.2, y: boss.pos.y, z: boss.pos.z + Math.sin(a) * 2.2 });
+  }
+  player.hp = Math.min(player.hpMax, player.hp + 40);
+  levelUp();                       // der Segen des Steinkreises
 }
 
 function onCollect() {
   state.score += 1;
   stats.xp += 1;
+  state.gemStreak = state.streakTimer > 0 ? state.gemStreak + 1 : 0;
+  state.streakTimer = 1.6;
+  audio.gem(state.gemStreak);
   if (stats.xp >= stats.xpNeed) levelUp();
 }
 
 function onShotHit(damage) {
-  fx.burst(player.pos, '#8a4a33', 5);
+  fx.burst(player.pos, '#e2643c', 5);
+  audio.hurt();
   if (player.hurt(damage)) gameOver();
 }
 
@@ -193,6 +250,7 @@ function levelUp() {
     cardsEl.append(btn);
   }
   state.paused = true;
+  audio.levelUp();
   levelupEl.classList.remove('hidden');
 }
 
@@ -215,7 +273,12 @@ function combat(dt) {
   state.idleTime += dt;
   if (state.idleTime < 0.1) return;
 
-  const target = enemies.nearest(player.pos, stats.range);
+  let target = enemies.nearest(player.pos, stats.range);
+  if (boss.awake) {
+    const d = Math.hypot(boss.pos.x - player.pos.x, boss.pos.z - player.pos.z);
+    const dt2 = target ? Math.hypot(target.pos.x - player.pos.x, target.pos.z - player.pos.z) : 1e9;
+    if (d < stats.range + 2 && d < dt2) target = boss;
+  }
   if (!target) return;
 
   player.aimAt(target.pos.x, target.pos.z);
@@ -229,6 +292,7 @@ function combat(dt) {
       const a = base + (i - (stats.arrows - 1) / 2) * stats.spread;
       arrows.fire(player.pos, Math.sin(a), Math.cos(a), stats.pierce);
     }
+    audio.shoot();
     player.bow.rotation.z = player.bowRest + 0.5;   // kleines Zucken beim Schuss
   }
 }
@@ -256,6 +320,7 @@ function updateHUD(force) {
 
 /* -------------------------------- Schleife -------------------------------- */
 const clock = new THREE.Clock();
+const targets = [];
 
 function frame() {
   requestAnimationFrame(frame);
@@ -267,6 +332,19 @@ function frame() {
     combat(dt);
     enemies.update(dt, player, world, onPlayerHit, shots);
 
+    // Wächter: schläft im Steinkreis, bis man hineintritt
+    state.shrineCheck -= dt;
+    if (!boss.alive && state.shrineCheck <= 0) {
+      state.shrineCheck = 0.5;
+      const shrine = world.nearestShrine(player.pos, 26);
+      if (shrine && !state.cleared.has(shrine.key)) boss.spawn(shrine, stats.level);
+    }
+    boss.update(dt, player, world, bossCallbacks);
+    if (boss.awake) bossFill.style.transform = `scaleX(${Math.max(0, boss.hp / boss.hpMax)})`;
+    else if (!boss.alive) bossBar.classList.add('hidden');
+
+    if (state.streakTimer > 0) state.streakTimer -= dt;
+
     // Lagerfeuer: in der Nähe erholt man sich spürbar
     const fire = world.nearestFire(player.pos, 34);
     if (fire) {
@@ -275,17 +353,24 @@ function frame() {
       fireLight.intensity = 2.4 + Math.sin(state.idleTime * 9 + fire.x) * 0.4;
       state.resting = d < 4.2;
       if (state.resting) player.hp = Math.min(player.hpMax, player.hp + 16 * dt);
+      audio.setFireDistance(d);
     } else {
       fireLight.intensity = 0;
       state.resting = false;
+      audio.setFireDistance(null);
     }
-    arrows.update(dt, enemies, onKill);
+    targets.length = 0;
+    for (const e of enemies.living) targets.push(e);
+    if (boss.awake) targets.push(boss);
+    arrows.update(dt, targets, onKill);
     shots.update(dt, player, onShotHit);
     gems.update(dt, player, onCollect, stats.magnet);
     fx.update(dt);
     player.bow.rotation.z += (player.bowRest - player.bow.rotation.z) * Math.min(1, dt * 10);
 
     world.update(player.pos.x, player.pos.z, 1);   // höchstens ein Chunk pro Frame
+
+    audio.ambient(dt);
 
     hudTimer -= dt;
     if (hudTimer <= 0) { hudTimer = 0.1; updateHUD(); }
@@ -304,12 +389,30 @@ function frame() {
 }
 
 /* --------------------------------- Menüs --------------------------------- */
+const soundBtn = document.getElementById('soundBtn');
+let muted = false;
+try { muted = localStorage.getItem('cozy-muted') === '1'; } catch (err) { /* egal */ }
+audio.setMuted(muted);
+soundBtn.textContent = muted ? '🔇' : '🔊';
+soundBtn.classList.toggle('off', muted);
+
+soundBtn.addEventListener('click', () => {
+  muted = !muted;
+  audio.unlock();
+  audio.setMuted(muted);
+  soundBtn.textContent = muted ? '🔇' : '🔊';
+  soundBtn.classList.toggle('off', muted);
+  try { localStorage.setItem('cozy-muted', muted ? '1' : '0'); } catch (err) { /* egal */ }
+});
+
 document.getElementById('startBtn').addEventListener('click', () => {
+  audio.unlock();
   document.getElementById('start').classList.add('hidden');
   newRun();
 });
 
 document.getElementById('againBtn').addEventListener('click', () => {
+  audio.unlock();
   document.getElementById('dead').classList.add('hidden');
   newRun();
 });
@@ -320,7 +423,7 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, arrows, shots, gems, world, renderer, scene, camera, sun, post,
+window.__game = { state, player, enemies, arrows, shots, gems, boss, audio, world, renderer, scene, camera, sun, post,
   get stats() { return stats; }, levelUp };
 
 document.addEventListener('gesturestart', (e) => e.preventDefault());

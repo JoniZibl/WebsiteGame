@@ -33,7 +33,15 @@
       </div>
       <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du rastest</span></div>
     </div>
-    <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
+    <div class="side-btns">
+      <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
+      <button id="soundBtn" class="ghost-btn" title="Ton an/aus">🔊</button>
+    </div>
+  </div>
+
+  <div id="bossBar" class="bossbar hidden">
+    <span class="name">Wächter des Steinkreises</span>
+    <div class="track"><div class="fill" id="bossFill"></div></div>
   </div>
 
   <div id="hint" class="hint hidden">Loslassen &rarr; schie&szlig;en</div>
@@ -51,6 +59,7 @@
         <li><b>Loslassen</b> &rarr; du zielst &amp; schie&szlig;t automatisch</li>
         <li>Edelsteine sammeln &rarr; neue F&auml;higkeiten</li>
         <li>Am <b>Lagerfeuer</b> erholst du dich</li>
+        <li>Lichts&auml;ulen f&uuml;hren zu den <b>W&auml;chtern</b></li>
       </ul>
       <button id="startBtn" class="primary">Losziehen</button>
     </div>

@@ -323,6 +323,11 @@ export class EnemyManager {
     for (const e of this.pool) if (e.alive) e.update(dt, player, world, onHitPlayer, shots);
   }
 
+  spawnAt(x, z, kind, tier) {
+    const free = this.pool.find((e) => !e.alive);
+    if (free && isLand(x, z)) free.spawn(x, z, tier, kind, this.tough);
+  }
+
   nearest(pos, maxDist) {
     let best = null, bestD = maxDist * maxDist;
     for (const e of this.living) {
@@ -331,6 +336,194 @@ export class EnemyManager {
     }
     return best;
   }
+}
+
+
+/* =========================================================================== */
+/*  Wächter — schläft im Steinkreis, bis jemand zu nah kommt                    */
+/* =========================================================================== */
+export class Boss {
+  constructor(scene) {
+    this.group = new THREE.Group();
+    const stone = new THREE.MeshLambertMaterial({ color: '#9b9a84', flatShading: true });
+    const stoneDark = new THREE.MeshLambertMaterial({ color: '#7d7c69', flatShading: true });
+    const moss = new THREE.MeshLambertMaterial({ color: '#6b8b45', flatShading: true });
+    this.eyeMat = new THREE.MeshBasicMaterial({ color: '#df8a5c' });
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.9, 1.3), stone);
+    torso.position.y = 1.5;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.85, 0.95), stoneDark);
+    head.position.y = 2.75;
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.22, 1.1), moss);
+    cap.position.y = 3.2;
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.5, 0.6), stoneDark);
+    armL.position.set(-1.2, 1.5, 0);
+    const armR = armL.clone();
+    armR.position.x = 1.2;
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.7), stoneDark);
+    legL.position.set(-0.45, 0.4, 0);
+    const legR = legL.clone();
+    legR.position.x = 0.45;
+
+    const eyeGeo2 = new THREE.BoxGeometry(0.2, 0.12, 0.1);
+    const eyeL = new THREE.Mesh(eyeGeo2, this.eyeMat); eyeL.position.set(-0.24, 2.8, 0.5);
+    const eyeR = new THREE.Mesh(eyeGeo2, this.eyeMat); eyeR.position.set(0.24, 2.8, 0.5);
+
+    this.arms = [armL, armR];
+    [torso, head, cap, armL, armR, legL, legR, eyeL, eyeR].forEach((m) => {
+      m.castShadow = true;
+      this.group.add(m);
+    });
+    this.mats = [stone, stoneDark];
+
+    // Ring, der den Schlag ankündigt
+    this.ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.85, 1, 24).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: '#e2643c', transparent: true, opacity: 0.55, depthWrite: false })
+    );
+    this.ring.visible = false;
+    this.ring.renderOrder = 2;
+
+    this.blob = makeBlob(3.2);
+    scene.add(this.group, this.ring, this.blob);
+    this.pos = new THREE.Vector3();
+    this.def = { scale: 3 };          // damit Pfeile denselben Treffertest nutzen können
+    this.alive = false;
+    this.setVisible(false);
+  }
+
+  setVisible(v) { this.group.visible = v; this.blob.visible = v; if (!v) this.ring.visible = false; }
+
+  spawn(shrine, level) {
+    this.shrine = shrine;
+    this.pos.set(shrine.x, heightAt(shrine.x, shrine.z), shrine.z);
+    this.hpMax = 45 + level * 14;
+    this.hp = this.hpMax;
+    this.damage = 22 + level * 3;
+    this.speed = 2.0;
+    this.radius = 0.9;
+    this.state = 'sleep';
+    this.timer = 0;
+    this.slamCd = 3.2;
+    this.summonCd = 9;
+    this.flash = 0;
+    this.dying = 0;
+    this.alive = true;
+    this.size = 1.4;                  // der Wächter überragt alles andere
+    this.group.scale.setScalar(this.size);
+    this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+    this.setVisible(true);
+  }
+
+  get awake() { return this.alive && this.state !== 'sleep' && this.dying <= 0; }
+
+  update(dt, player, world, cb) {
+    if (!this.alive) return;
+
+    if (this.dying > 0) {
+      this.dying -= dt;
+      this.group.position.y = this.pos.y - (1 - this.dying / 1.2) * 1.6;
+      this.group.rotation.z = (1 - this.dying / 1.2) * 0.5;
+      if (this.dying <= 0) { this.alive = false; this.setVisible(false); this.group.rotation.z = 0; }
+      return;
+    }
+
+    if (this.flash > 0) this.flash -= dt;
+    for (const m of this.mats) m.emissive.setScalar(this.flash > 0 ? 0.4 : 0);
+
+    const dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    this.timer += dt;
+
+    if (this.state === 'sleep') {
+      // zusammengesunken, bis jemand in den Kreis tritt
+      this.group.scale.set(this.size, this.size * 0.55, this.size);
+      this.eyeMat.color.setHex(0x5c5a4c);
+      if (dist < 15) {
+        this.state = 'wake';
+        this.timer = 0;
+        cb.onWake();
+      }
+      this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+      this.blob.position.set(this.pos.x, this.pos.y + 0.04, this.pos.z);
+      return;
+    }
+
+    if (this.state === 'wake') {
+      const t = Math.min(1, this.timer / 1.3);
+      this.group.scale.set(this.size, this.size * (0.55 + t * 0.45), this.size);
+      this.eyeMat.color.setHex(0xdf8a5c);
+      if (t >= 1) { this.state = 'chase'; this.timer = 0; }
+    }
+
+    if (this.state === 'chase') {
+      this.slamCd -= dt;
+      this.summonCd -= dt;
+
+      if (dist > 2.6) {
+        const next = this.pos.clone();
+        next.x += (dx / dist) * this.speed * dt;
+        next.z += (dz / dist) * this.speed * dt;
+        if (heightAt(next.x, next.z) > WATER_LEVEL) {
+          world.resolveCollisions(next, this.radius);
+          this.pos.x = next.x; this.pos.z = next.z;
+        }
+      }
+      if (this.slamCd <= 0 && dist < 11) {
+        this.state = 'windup';
+        this.timer = 0;
+        this.ring.visible = true;
+      }
+      if (this.summonCd <= 0) {
+        this.summonCd = 11;
+        cb.onSummon(this.pos);
+      }
+      // schwerer Gang
+      const sway = Math.sin(this.timer * 4.5);
+      this.arms[0].rotation.x = sway * 0.35;
+      this.arms[1].rotation.x = -sway * 0.35;
+    }
+
+    if (this.state === 'windup') {
+      const t = Math.min(1, this.timer / 1.0);
+      const r = 1.5 + t * 6.0;
+      this.ring.scale.setScalar(r);
+      this.ring.material.opacity = 0.25 + t * 0.45;
+      this.arms[0].rotation.x = -t * 1.5;
+      this.arms[1].rotation.x = -t * 1.5;
+      this.group.scale.set(this.size * (1 + t * 0.08), this.size * (1 - t * 0.06), this.size * (1 + t * 0.08));
+      if (t >= 1) {
+        this.state = 'recover';
+        this.timer = 0;
+        this.ring.visible = false;
+        this.slamCd = 3.4;
+        cb.onSlam(this.pos, 7.5, this.damage);
+      }
+    }
+
+    if (this.state === 'recover') {
+      this.group.scale.setScalar(this.size);
+      this.arms[0].rotation.x = 0;
+      this.arms[1].rotation.x = 0;
+      if (this.timer > 0.7) { this.state = 'chase'; this.timer = 0; }
+    }
+
+    this.pos.y = heightAt(this.pos.x, this.pos.z);
+    this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
+    this.group.rotation.y = Math.atan2(dx, dz);
+    this.blob.position.set(this.pos.x, this.pos.y + 0.04, this.pos.z);
+    this.ring.position.set(this.pos.x, this.pos.y + 0.08, this.pos.z);
+  }
+
+  hurt(dmg) {
+    if (!this.awake) return false;      // im Schlaf ist er unverwundbar
+    this.hp -= dmg;
+    this.flash = 0.09;
+    if (this.hp <= 0) { this.dying = 1.2; this.ring.visible = false; return true; }
+    return false;
+  }
+
+  reset() { this.alive = false; this.setVisible(false); }
 }
 
 /* =========================================================================== */
@@ -413,14 +606,14 @@ export class ProjectileManager {
     p.mesh.visible = true;
   }
 
-  update(dt, enemies, onKill) {
+  update(dt, targets, onKill) {
     for (const p of this.items) {
       if (!p.alive) continue;
       p.life -= dt;
       p.mesh.position.addScaledVector(p.dir, this.speed * dt);
       if (p.life <= 0) { p.alive = false; p.mesh.visible = false; continue; }
 
-      for (const e of enemies.living) {
+      for (const e of targets) {
         if (p.hit.includes(e)) continue;
         const r = 0.55 * e.def.scale;
         const dx = e.pos.x - p.mesh.position.x, dz = e.pos.z - p.mesh.position.z;
