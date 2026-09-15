@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, CHUNK, heightAt, setSeed } from './world.js';
 import { Input } from './input.js';
-import { Player, EnemyManager, ProjectileManager, Particles } from './entities.js';
+import { Player, EnemyManager, ProjectileManager, Particles, Gems } from './entities.js';
 
 /* --------------------------------- Setup --------------------------------- */
 const canvas = document.getElementById('scene');
@@ -40,6 +40,7 @@ const input = new Input();
 const player = new Player(scene);
 const enemies = new EnemyManager(scene);
 const arrows = new ProjectileManager(scene);
+const gems = new Gems(scene);
 const fx = new Particles(scene);
 
 /* ------------------------------ Bildschirm ------------------------------- */
@@ -99,6 +100,7 @@ function newRun() {
   player.reset();
   enemies.reset();
   arrows.reset();
+  gems.reset();
   fx.reset();
   state.score = 0;
   state.idleTime = 0;
@@ -126,8 +128,12 @@ function onPlayerHit(enemy) {
 }
 
 function onKill(enemy) {
-  state.score += 1;
   fx.burst(enemy.pos, enemy.mat.color.getHex(), 9);
+  gems.drop(enemy.pos);
+}
+
+function onCollect() {
+  state.score += 1;
 }
 
 function gameOver() {
@@ -189,6 +195,7 @@ function frame() {
     combat(dt);
     enemies.update(dt, player, world, onPlayerHit);
     arrows.update(dt, enemies, onKill);
+    gems.update(dt, player, onCollect);
     fx.update(dt);
     player.bow.rotation.z += (player.bowRest - player.bow.rotation.z) * Math.min(1, dt * 10);
 
@@ -227,7 +234,7 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, arrows, world, renderer, scene, camera, sun };
+window.__game = { state, player, enemies, arrows, gems, world, renderer, scene, camera, sun };
 
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());

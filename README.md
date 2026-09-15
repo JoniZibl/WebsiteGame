@@ -27,7 +27,9 @@ Am Handy im gleichen WLAN: `http://<IP-des-Rechners>:8000`.
 
 Der Workflow `.github/workflows/pages.yml` veröffentlicht den Stand automatisch.
 Einmalig nötig: in GitHub unter **Settings → Pages → Build and deployment → Source**
-auf **GitHub Actions** stellen. Danach liegt das Spiel unter
+auf **GitHub Actions** stellen (der Workflow kann Pages nicht selbst einschalten —
+das darf nur ein Mensch mit Admin-Rechten). Danach den Workflow unter **Actions →
+Deploy to GitHub Pages → Run workflow** einmal starten. Danach liegt das Spiel unter
 `https://jonizibl.github.io/WebsiteGame/` und lässt sich am Handy wie eine App
 zum Startbildschirm hinzufügen.
 

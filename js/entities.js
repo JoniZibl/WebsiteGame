@@ -324,6 +324,58 @@ export class ProjectileManager {
 }
 
 /* =========================================================================== */
+/*  Edelsteine — fallen aus Gegnern und fliegen zum Spieler                     */
+/* =========================================================================== */
+export class Gems {
+  constructor(scene, max = 24) {
+    const geo = new THREE.OctahedronGeometry(0.26, 0);
+    const mat = new THREE.MeshLambertMaterial({ color: '#6fd6e8', flatShading: true, emissive: '#2a6d7a' });
+    this.items = Array.from({ length: max }, () => {
+      const m = new THREE.Mesh(geo, mat);
+      m.visible = false;
+      m.castShadow = true;
+      scene.add(m);
+      return { mesh: m, alive: false, t: 0, base: 0 };
+    });
+  }
+
+  drop(pos) {
+    const g = this.items.find((i) => !i.alive);
+    if (!g) return;
+    g.alive = true;
+    g.t = Math.random() * 6.28;
+    g.base = pos.y + 0.45;
+    g.mesh.position.set(pos.x, g.base, pos.z);
+    g.mesh.visible = true;
+  }
+
+  update(dt, player, onCollect) {
+    for (const g of this.items) {
+      if (!g.alive) continue;
+      g.t += dt * 3;
+      const p = g.mesh.position;
+      const dx = player.pos.x - p.x, dz = player.pos.z - p.z;
+      const d = Math.hypot(dx, dz);
+
+      if (d < 4.5) {                       // sanfter Magnet
+        const pull = Math.min(1, (4.5 - d) / 4.5) * 14 * dt;
+        p.x += dx * pull; p.z += dz * pull;
+      }
+      if (d < 0.9) {
+        g.alive = false; g.mesh.visible = false;
+        onCollect(g);
+        continue;
+      }
+      g.base = heightAt(p.x, p.z) + 0.45;
+      p.y = g.base + Math.sin(g.t) * 0.12;
+      g.mesh.rotation.y += dt * 2.2;
+    }
+  }
+
+  reset() { this.items.forEach((g) => { g.alive = false; g.mesh.visible = false; }); }
+}
+
+/* =========================================================================== */
 /*  Partikel für Treffer & kleine Freudenmomente                               */
 /* =========================================================================== */
 export class Particles {
