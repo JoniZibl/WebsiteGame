@@ -5,7 +5,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 /* ---------------- weicher Blob-Schatten (günstig auf dem Handy) ------------- */
 const blobGeo = new THREE.CircleGeometry(0.5, 14).rotateX(-Math.PI / 2);
-const blobMat = new THREE.MeshBasicMaterial({ color: '#2f4858', transparent: true, opacity: 0.18, depthWrite: false });
+const blobMat = new THREE.MeshBasicMaterial({ color: '#3d4a2c', transparent: true, opacity: 0.2, depthWrite: false });
 function makeBlob(scale = 1) {
   const m = new THREE.Mesh(blobGeo, blobMat);
   m.scale.setScalar(scale);
@@ -23,12 +23,13 @@ export class Player {
     this.group.add(this.rig);
     this.rig.scale.setScalar(1.7);   // gut lesbar aus der Vogelperspektive
 
-    const cloak = new THREE.MeshLambertMaterial({ color: '#ef8a72', flatShading: true });
-    const cloakDark = new THREE.MeshLambertMaterial({ color: '#d26a57', flatShading: true });
-    const skin = new THREE.MeshLambertMaterial({ color: '#f6d9b8', flatShading: true });
-    const cream = new THREE.MeshLambertMaterial({ color: '#fdf6e8', flatShading: true });
-    const pack = new THREE.MeshLambertMaterial({ color: '#6c8f7d', flatShading: true });
-    const wood = new THREE.MeshLambertMaterial({ color: '#7a5540', flatShading: true });
+    // Die Figur ist das hellste Ding im Bild, die Kapuze der warme Akzent.
+    const cloak = new THREE.MeshLambertMaterial({ color: '#f2e7cc', flatShading: true });
+    const cloakDark = new THREE.MeshLambertMaterial({ color: '#df8a5c', flatShading: true });
+    const skin = new THREE.MeshLambertMaterial({ color: '#e8cba6', flatShading: true });
+    const cream = new THREE.MeshLambertMaterial({ color: '#fbf4e2', flatShading: true });
+    const pack = new THREE.MeshLambertMaterial({ color: '#7d8f56', flatShading: true });
+    const wood = new THREE.MeshLambertMaterial({ color: '#6b5643', flatShading: true });
 
     // Silhouette von oben: breite Schultern, davor der Kopf, hinten die Kapuze.
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.4, 3, 9), cloak);
@@ -145,8 +146,8 @@ export class Player {
 /* =========================================================================== */
 const enemyGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
 const eyeGeo = new THREE.BoxGeometry(0.13, 0.16, 0.08);
-const eyeMat = new THREE.MeshBasicMaterial({ color: '#2f4858' });
-const ENEMY_COLORS = ['#f2879c', '#f2b179', '#a98fd6', '#7fb8ef'];
+const eyeMat = new THREE.MeshBasicMaterial({ color: '#3b3226' });
+const ENEMY_COLORS = ['#d4764a', '#bf6040', '#e0a061', '#a9713f'];
 
 class Enemy {
   constructor(scene) {
@@ -280,7 +281,7 @@ export class EnemyManager {
 export class ProjectileManager {
   constructor(scene, max = 40) {
     const shaft = new THREE.BoxGeometry(0.07, 0.07, 0.55);
-    const mat = new THREE.MeshLambertMaterial({ color: '#fdf6e8', flatShading: true });
+    const mat = new THREE.MeshLambertMaterial({ color: '#f7eed6', flatShading: true });
     this.items = Array.from({ length: max }, () => {
       const m = new THREE.Mesh(shaft, mat);
       m.visible = false;
@@ -329,7 +330,7 @@ export class ProjectileManager {
 export class Gems {
   constructor(scene, max = 24) {
     const geo = new THREE.OctahedronGeometry(0.26, 0);
-    const mat = new THREE.MeshLambertMaterial({ color: '#6fd6e8', flatShading: true, emissive: '#2a6d7a' });
+    const mat = new THREE.MeshLambertMaterial({ color: '#f2dda2', flatShading: true, emissive: '#6b5a24' });
     this.items = Array.from({ length: max }, () => {
       const m = new THREE.Mesh(geo, mat);
       m.visible = false;

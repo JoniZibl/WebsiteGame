@@ -44,13 +44,16 @@ function slopeAt(x, z) {
 /* ------------------------------------------------------------------ */
 /*  Cozy-Palette                                                       */
 /* ------------------------------------------------------------------ */
+// Eine Familie: warme Salbei- und Olivgrüne, dazu Sand und Stein im selben
+// warmen Grau. Terrakotta ist der einzige Fremdton und bleibt den Dingen
+// vorbehalten, die auffallen sollen (Dächer, Zelte, Gegner, die Figur).
 const C = {
-  sand:   new THREE.Color('#e7cfa4'),
-  grass1: new THREE.Color('#82c99e'),
-  grass2: new THREE.Color('#6fbb92'),
-  grass3: new THREE.Color('#9ad8b2'),
-  rock:   new THREE.Color('#a9b4bd'),
-  deep:   new THREE.Color('#5fb3a6'),
+  sand:   new THREE.Color('#d6c391'),
+  grass1: new THREE.Color('#a8bd78'),
+  grass2: new THREE.Color('#91a962'),
+  grass3: new THREE.Color('#7d9455'),
+  rock:   new THREE.Color('#a6a48d'),
+  deep:   new THREE.Color('#7ea184'),
 };
 
 const tmpColor = new THREE.Color();
@@ -79,15 +82,16 @@ function terrainColor(h, slope, jitter) {
 const mat = (hex, opts = {}) => new THREE.MeshLambertMaterial({ color: hex, flatShading: true, ...opts });
 
 export const MATS = {
-  trunk:  mat('#8a6249'),
-  leafA:  mat('#47875f'),
-  leafB:  mat('#2f6349'),
-  leafC:  mat('#5aa370'),
-  leafD:  mat('#79b06a'),
-  rock:   mat('#9aa6b0'),
-  wall:   mat('#f2e2c4'),
-  roof:   mat('#ef8a72'),
-  flower: mat('#ffd772'),
+  trunk:  mat('#6b5643'),
+  leafA:  mat('#87a257'),
+  leafB:  mat('#6b8b45'),
+  leafC:  mat('#4a6633'),
+  leafD:  mat('#2f4423'),
+  rock:   mat('#a3a18b'),
+  wall:   mat('#eee1c0'),
+  roof:   mat('#df8a5c'),
+  tent:   mat('#e2915f'),
+  flower: mat('#f1e5c2'),
 };
 
 const G = {
@@ -101,6 +105,8 @@ const G = {
   lintel: new THREE.BoxGeometry(1.9, 0.5, 0.6).toNonIndexed(),
   bud:    new THREE.SphereGeometry(0.22, 5, 4).toNonIndexed(),
   blob:   new THREE.IcosahedronGeometry(1.0, 0).toNonIndexed(),
+  tent:   new THREE.CylinderGeometry(1.0, 1.0, 1.9, 3, 1).rotateZ(Math.PI / 2).toNonIndexed(),
+  ember:  new THREE.ConeGeometry(0.3, 0.45, 5).toNonIndexed(),
 };
 
 const _m = new THREE.Matrix4();
@@ -144,6 +150,23 @@ function buildProps(cx, cz, bucket, colliders) {
         push(bucket, 'roof', G.roof, hx, hy + 1.9 * sc + 0.6, hz, rot + Math.PI / 4, sc, sc, sc);
         colliders.push({ x: hx, z: hz, r: 1.9 * sc });
       }
+    }
+  }
+
+  // --- Zeltlager auf einer Lichtung ---
+  if (rand() < 0.14) {
+    const tx = ox + 8 + rand() * (CHUNK - 16);
+    const tz = oz + 8 + rand() * (CHUNK - 16);
+    const ty = heightAt(tx, tz);
+    if (ty > WATER_LEVEL + 1.2 && slopeAt(tx, tz) < 0.35) {
+      const sc = 0.85 + rand() * 0.3;
+      const rot = rand() * Math.PI * 2;
+      push(bucket, 'tent', G.tent, tx, ty + 0.5 * sc, tz, rot, sc, sc, sc);
+      // Feuerstelle daneben
+      const fx2 = tx + Math.cos(rot) * 2.2, fz2 = tz + Math.sin(rot) * 2.2;
+      push(bucket, 'rock', G.rock, fx2, heightAt(fx2, fz2) + 0.12, fz2, 0, 0.7, 0.4, 0.7);
+      push(bucket, 'tent', G.ember, fx2, heightAt(fx2, fz2) + 0.3, fz2, rand() * 6.28, 0.8, 0.8, 0.8);
+      colliders.push({ x: tx, z: tz, r: 1.5 * sc });
     }
   }
 
@@ -194,10 +217,13 @@ function buildProps(cx, cz, bucket, colliders) {
         push(bucket, leaf, G.blob, x, y + 1.9 * sc, z, rand() * 6.28, sc * 1.05, sc * 0.95, sc * 1.05);
         push(bucket, leaf, G.blob, x + 0.35 * sc, y + 2.5 * sc, z - 0.2 * sc, rand() * 6.28, sc * 0.6, sc * 0.6, sc * 0.6);
       } else {
-        // Nadelbaum aus zwei Kegeln
-        push(bucket, 'trunk', G.trunk, x, y + 0.5 * sc, z, 0, sc, sc, sc);
-        push(bucket, leaf, G.cone1, x, y + 1.5 * sc, z, rand() * 6.28, sc, sc, sc);
-        push(bucket, leaf, G.cone2, x, y + 2.7 * sc, z, rand() * 6.28, sc, sc, sc);
+        // Nadelbaum aus zwei Kegeln; ein Teil davon schlank und hoch
+        const slim = rand() < 0.45;
+        const w = slim ? sc * 0.62 : sc;
+        const hgt = slim ? sc * 1.7 : sc;
+        push(bucket, 'trunk', G.trunk, x, y + 0.5 * sc, z, 0, sc * 0.8, sc, sc * 0.8);
+        push(bucket, leaf, G.cone1, x, y + 1.5 * hgt, z, rand() * 6.28, w, hgt, w);
+        push(bucket, leaf, G.cone2, x, y + 2.7 * hgt, z, rand() * 6.28, w, hgt, w);
       }
       colliders.push({ x, z, r: 0.55 * sc });
     } else if (roll < 0.28) {
@@ -285,7 +311,7 @@ export class World {
     waterGeo.rotateX(-Math.PI / 2);
     this.water = new THREE.Mesh(
       waterGeo,
-      new THREE.MeshLambertMaterial({ color: '#69c3c0', transparent: true, opacity: 0.82 })
+      new THREE.MeshLambertMaterial({ color: '#7fa88b', transparent: true, opacity: 0.85 })
     );
     this.water.position.y = WATER_LEVEL;
     this.water.renderOrder = -1;

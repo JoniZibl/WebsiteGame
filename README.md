@@ -2,6 +2,7 @@
 
 Ein kleiner Top-Down-Prototyp im Browser: prozedural erzeugte, endlose Low-Poly-Welt,
 eine Figur in der Mitte, Steuerung wie in *Archero* — **laufen oder schießen, nie beides**.
+Die Welt sieht durch einen Tilt-Shift-Pass aus wie eine Miniaturlandschaft.
 
 Gebaut mit [three.js](https://threejs.org) als reine statische Seite. Kein Build-Schritt,
 kein npm install, kein CDN: three.js liegt mit im Repo unter `vendor/`.
@@ -41,7 +42,8 @@ css/style.css       cozy UI (abgerundet, cremefarben, safe-area-tauglich)
 js/noise.js         deterministisches Value-Noise + fbm (gleiche Koordinate = gleicher Wert)
 js/world.js         Höhenfeld, Chunk-Streaming, Gelände-Mesh, Bäume/Häuser/Steinkreise
 js/input.js         Touch-Joystick + Tastatur
-js/entities.js      Spielfigur, Gegner, Pfeile, Partikel
+js/entities.js      Spielfigur, Gegner, Pfeile, Edelsteine, Partikel
+js/postfx.js        Tilt-Shift (Miniatureffekt) als eigener Render-Pass
 js/main.js          Szene, Licht, Kamera, Spielschleife, Kampf-Regel
 vendor/three/       three.js (MIT) lokal eingebunden
 ```
@@ -55,6 +57,23 @@ einer neu gebaut (~1–5 ms), weiter entfernte werden wieder entsorgt. Bäume, F
 Blumen, Dörfer und Steinkreise streut ein pro Chunk gesäter Zufallsgenerator, alle
 Meshes eines Chunks werden pro Material zu einem Mesh zusammengefasst —
 im Schnitt ~70 Draw Calls für die ganze sichtbare Welt.
+
+### Miniatureffekt
+
+`js/postfx.js` zeichnet die Szene in ein Render-Target, weichzeichnet eine halb
+aufgelöste Kopie zweimal separabel (horizontal/vertikal) und mischt beides über
+eine Maske, die nur ein schmales, leicht geneigtes Band in Bildmitte scharf lässt —
+genau der Trick, der echte Landschaften wie Modellbau aussehen lässt. Dazu eine
+Spur mehr Sättigung. Die Unschärfe läuft in halber Auflösung, auf dem Handy mit
+einem Durchgang statt zwei.
+
+### Farbpalette
+
+Alles kommt aus einer Familie: warme Salbei- und Olivgrüne fürs Gelände
+(`#a8bd78` → `#2f4423`), Sand `#d6c391`, Stein `#a6a48d`, Wasser `#7fa88b`.
+Terrakotta `#df8a5c` ist der einzige Fremdton und bleibt den Dingen vorbehalten,
+die auffallen sollen: Dächer, Zelte, Gegner und die Kapuze der Figur. Die Figur
+selbst ist das hellste Objekt im Bild, damit man sie im Wald immer findet.
 
 ### Kampf
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { World, CHUNK, heightAt, setSeed } from './world.js';
 import { Input } from './input.js';
 import { Player, EnemyManager, ProjectileManager, Particles, Gems } from './entities.js';
+import { TiltShift } from './postfx.js';
 
 /* --------------------------------- Setup --------------------------------- */
 const canvas = document.getElementById('scene');
@@ -16,25 +17,26 @@ try {
     'Auf dem Handy hilft meist Chrome oder Safari in einem normalen Tab.</p></div></div>';
   throw err;
 }
-renderer.setClearColor('#a9dbd4');
+renderer.setClearColor('#cdd6ad');
 
 const isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 let quality = isTouch ? 'low' : 'high';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#a9dbd4');
-scene.fog = new THREE.Fog('#a9dbd4', 58, 140);
+scene.background = new THREE.Color('#cdd6ad');
+scene.fog = new THREE.Fog('#d3dab4', 62, 150);
 
 const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 320);
 const CAM_OFFSET = new THREE.Vector3(0, 33, 25);
 
-const hemi = new THREE.HemisphereLight('#dff3ec', '#7aa891', 0.62);
+const hemi = new THREE.HemisphereLight('#e7ecc9', '#6c7a49', 0.52);
 scene.add(hemi);
 
-const sun = new THREE.DirectionalLight('#fff4dc', 1.25);
+const sun = new THREE.DirectionalLight('#fff2d2', 1.4);
 sun.position.set(26, 42, 16);
 scene.add(sun, sun.target);
 
+const post = new TiltShift(renderer);
 const world = new World(scene, 2);
 const input = new Input();
 const player = new Player(scene);
@@ -47,8 +49,12 @@ const fx = new Particles(scene);
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   const cap = quality === 'high' ? 2 : 1.5;
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, cap));
+  const pr = Math.min(devicePixelRatio || 1, cap);
+  renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
+  post.setSize(w, h, pr, quality === 'high' ? 4 : 2);
+  // im Hochformat ist das scharfe Band etwas breiter, sonst verschwindet zu viel Spielfeld
+  post.compositeMat.uniforms.uBand.value = h > w ? 0.2 : 0.16;
   camera.aspect = w / h;
   // im Hochformat etwas weiter rauszoomen, damit man genug Umgebung sieht
   camera.fov = h > w ? 48 : 40;
@@ -69,6 +75,7 @@ function applyQuality() {
     c.updateProjectionMatrix();
   }
   world.setShadows(high);
+  post.iterations = high ? 2 : 1;
   document.getElementById('qualityBtn').classList.toggle('off', !high);
   resize();
 }
@@ -118,7 +125,7 @@ function newRun() {
 
 function onPlayerHit(enemy) {
   const dead = player.hurt(enemy.damage);
-  fx.burst(player.pos, '#ef8a72', 5);
+  fx.burst(player.pos, '#df8a5c', 5);
   // kleiner Rückstoß für den Gegner
   const dx = enemy.pos.x - player.pos.x, dz = enemy.pos.z - player.pos.z;
   const d = Math.hypot(dx, dz) || 1;
@@ -214,7 +221,7 @@ function frame() {
   sun.target.position.copy(player.pos);
   sun.target.updateMatrixWorld();
 
-  renderer.render(scene, camera);
+  post.render(scene, camera);
 }
 
 /* --------------------------------- Menüs --------------------------------- */
@@ -234,7 +241,7 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, arrows, gems, world, renderer, scene, camera, sun };
+window.__game = { state, player, enemies, arrows, gems, world, renderer, scene, camera, sun, post };
 
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
