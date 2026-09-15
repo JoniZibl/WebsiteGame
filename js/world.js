@@ -155,7 +155,7 @@ function push(bucket, key, geo, x, y, z, rotY = 0, sx = 1, sy = 1, sz = 1, rotX 
 /* ------------------------------------------------------------------ */
 /*  Requisiten eines Chunks                                            */
 /* ------------------------------------------------------------------ */
-function buildProps(cx, cz, bucket, colliders, fires, shrines) {
+function buildProps(cx, cz, bucket, colliders, fires, shrines, villages) {
   const rand = rngFor(cx, cz, SEED);
   const ox = cx * CHUNK, oz = cz * CHUNK;
 
@@ -165,6 +165,7 @@ function buildProps(cx, cz, bucket, colliders, fires, shrines) {
     const vx = ox + 8 + rand() * (CHUNK - 16);
     const vz = oz + 8 + rand() * (CHUNK - 16);
     if (isLand(vx, vz) && slopeAt(vx, vz) < 0.5) {
+      villages.push({ x: vx, y: heightAt(vx, vz), z: vz });
       const n = 3 + Math.floor(rand() * 4);
       for (let i = 0; i < n; i++) {
         const a = rand() * Math.PI * 2, d = 2.5 + rand() * 7;
@@ -425,7 +426,8 @@ export class World {
     const bucket = {};
     const fires = [];
     const shrines = [];
-    buildProps(cx, cz, bucket, colliders, fires, shrines);
+    const villages = [];
+    buildProps(cx, cz, bucket, colliders, fires, shrines, villages);
 
     for (const sh of shrines) {
       const beacon = new THREE.Mesh(beaconGeo, beaconMat);
@@ -444,7 +446,7 @@ export class World {
     }
 
     this.scene.add(group);
-    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders, fires, shrines });
+    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders, fires, shrines, villages });
   }
 
   disposeChunk(k, chunk) {
@@ -464,39 +466,29 @@ export class World {
     }
   }
 
-  // Nächste Feuerstelle im Umkreis – Rastplatz zum Heilen.
-  nearestFire(pos, radius) {
+  // Nächster Punkt einer Art ("fires", "shrines", "villages") im Umkreis.
+  nearestOf(list, pos, radius) {
     const ccx = Math.floor(pos.x / CHUNK), ccz = Math.floor(pos.z / CHUNK);
     let best = null, bestD = radius * radius;
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
+    const reach = Math.ceil(radius / CHUNK);
+    for (let dz = -reach; dz <= reach; dz++) {
+      for (let dx = -reach; dx <= reach; dx++) {
         const chunk = this.chunks.get(this.key(ccx + dx, ccz + dz));
         if (!chunk) continue;
-        for (const f of chunk.fires) {
-          const d = (f.x - pos.x) ** 2 + (f.z - pos.z) ** 2;
-          if (d < bestD) { bestD = d; best = f; }
+        for (const item of chunk[list]) {
+          const d = (item.x - pos.x) ** 2 + (item.z - pos.z) ** 2;
+          if (d < bestD) { bestD = d; best = item; }
         }
       }
     }
     return best;
   }
 
+  nearestFire(pos, radius) { return this.nearestOf('fires', pos, radius); }
+  nearestVillage(pos, radius) { return this.nearestOf('villages', pos, radius); }
+
   // Nächster Steinkreis im Umkreis – dort wartet ein Wächter.
-  nearestShrine(pos, radius) {
-    const ccx = Math.floor(pos.x / CHUNK), ccz = Math.floor(pos.z / CHUNK);
-    let best = null, bestD = radius * radius;
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const chunk = this.chunks.get(this.key(ccx + dx, ccz + dz));
-        if (!chunk) continue;
-        for (const sh of chunk.shrines) {
-          const d = (sh.x - pos.x) ** 2 + (sh.z - pos.z) ** 2;
-          if (d < bestD) { bestD = d; best = sh; }
-        }
-      }
-    }
-    return best;
-  }
+  nearestShrine(pos, radius) { return this.nearestOf('shrines', pos, radius); }
 
   // Schiebt eine Position aus Bäumen/Häusern heraus.
   resolveCollisions(pos, radius) {

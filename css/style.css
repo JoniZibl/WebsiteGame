@@ -118,6 +118,29 @@ html, body {
 }
 .primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #bf7049; }
 
+/* ---------- Handeln-Knopf ---------- */
+.trade-btn {
+  pointer-events: auto; position: absolute;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
+  border: 0; border-radius: 17px; padding: 12px 22px;
+  background: var(--coral); color: #fff; font: inherit; font-weight: 800; font-size: 15px;
+  box-shadow: 0 5px 0 #bf7049, var(--shadow);
+  transition: opacity .25s;
+}
+.trade-btn:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 2px 0 #bf7049; }
+.trade-btn.hidden { opacity: 0; pointer-events: none; }
+
+/* ---------- Ladenzeilen ---------- */
+.upgrade.buy .lvl { font-size: 13px; opacity: .8; }
+.upgrade[disabled] { opacity: .45; }
+.upgrade .cost {
+  margin-left: auto; display: flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 800; white-space: nowrap;
+}
+
+#shopList { margin-bottom: 16px; max-height: 46vh; overflow-y: auto; }
+
 /* ---------- Bossleiste ---------- */
 .bossbar {
   position: fixed; left: 50%; transform: translateX(-50%);

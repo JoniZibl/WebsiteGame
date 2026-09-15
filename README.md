@@ -45,6 +45,8 @@ js/input.js         Touch-Joystick + Tastatur
 js/entities.js      Spielfigur, Gegner, Wächter, Pfeile, Geschosse, Edelsteine, Partikel
 js/upgrades.js      Upgrade-Karten, Erfahrungskurve
 js/audio.js         synthetisierter Klang (Wind, Feuer, Effekte, Untermalung)
+js/villagers.js     Dorfbewohner und Krämerstand
+js/save.js          Spielstand, dauerhafte Verbesserungen, Bestwerte
 js/postfx.js        Tilt-Shift (Miniatureffekt) als eigener Render-Pass
 js/main.js          Szene, Licht, Kamera, Spielschleife, Kampf-Regel
 vendor/three/       three.js (MIT) lokal eingebunden
@@ -108,6 +110,35 @@ Welche Kreise erledigt sind, merkt sich der Lauf über einen Schlüssel aus den
 Koordinaten — ein toter Wächter bleibt tot, auch wenn der Chunk zwischendurch
 entladen wird.
 
+### Dorfleben und Handel
+
+Nähert man sich einem Dorf auf 80 m, besetzt `js/villagers.js` es mit fünf
+Bewohnern, die zwischen den Häusern umherschlendern, und einem Krämer mit
+Stand (cremefarbene Plane, Waren auf dem Tisch, darüber ein schwebendes
+Zeichen). Der Krämer dreht sich zu einem hin. Steht man vor dem Stand,
+erscheint der Handeln-Knopf.
+
+Im Laden kauft man mit gesammelten Edelsteinen **dauerhafte** Verbesserungen:
+Zähe Haut (+20 Startleben), Harter Kern (+1 Grundschaden), Zweiter Pfeil,
+Wanderstiefel (+6 % Tempo) und Glückssteine (Gegner lassen öfter zwei Steine
+fallen). Gekauftes wirkt sofort, nicht erst im nächsten Lauf.
+
+### Spielstand
+
+`js/save.js` legt Vorrat, gekaufte Verbesserungen und den besten Lauf in
+localStorage ab — alles defensiv gelesen, im privaten Modus darf der Zugriff
+auch fehlschlagen. Jeder eingesammelte Edelstein wandert sofort in den Vorrat,
+gespeichert wird alle zwölf Sekunden sowie beim Verlassen der Seite. Ein
+abgebrochener Lauf verliert also nichts — wichtig auf dem Handy.
+
+### Tag und Nacht
+
+Ein voller Umlauf dauert gut fünf Minuten. Zwischen sechs Stützstellen werden
+Himmel, Nebel, Sonnenfarbe, Sonnenstärke und Umgebungslicht interpoliert, die
+Sonne wandert dabei von Ost nach West. Nachts ist es blaugrau und dämmrig,
+Lagerfeuer leuchten spürbar stärker, und es sind mehr Gegner unterwegs. Die
+Tageszeit steht im HUD.
+
 ### Lagerfeuer
 
 Zelte und einzelne Feuerstellen sind Rastplätze: In 4 m Umkreis heilt man
@@ -144,8 +175,8 @@ Startknopf schaltet ihn frei, der 🔊-Knopf schaltet ihn stumm (wird gemerkt).
 
 ## Nächste Ideen
 
-- Dörfer beleben: NPCs, kleine Aufträge, Händler für Edelsteine
-- Ausrüstung, die einen Lauf überdauert
-- Tag- und Nachtwechsel, Wetter
+- Kleine Aufträge der Dorfbewohner („bring mir zehn Steine")
+- Wetter: Regen, Nebelbänke, Schnee in kalten Regionen
 - Mehr Wächtersorten mit eigenen Angriffsmustern
-- Spielstand sichern (Stufe und Fortschritt über Läufe hinweg)
+- Ausrüstung mit Fundstücken statt nur Werten
+- Eine Karte, die schon besuchte Gegenden zeigt

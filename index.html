@@ -30,9 +30,11 @@
       <div class="chips">
         <div class="chip"><span class="ic">💎</span><span id="score">0</span></div>
         <div class="chip"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
+        <div class="chip"><span class="ic" id="timeIcon">☀️</span><span id="timeText">Morgen</span></div>
       </div>
       <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du rastest</span></div>
     </div>
+    <button id="tradeBtn" class="trade-btn hidden">🧺 Handeln</button>
     <div class="side-btns">
       <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
       <button id="soundBtn" class="ghost-btn" title="Ton an/aus">🔊</button>
@@ -60,7 +62,9 @@
         <li>Edelsteine sammeln &rarr; neue F&auml;higkeiten</li>
         <li>Am <b>Lagerfeuer</b> erholst du dich</li>
         <li>Lichts&auml;ulen f&uuml;hren zu den <b>W&auml;chtern</b></li>
+        <li>Im Dorf kauft der <b>Kr&auml;mer</b> dir Dauerhaftes</li>
       </ul>
+      <p class="sub" id="startStash">Vorrat: 0 💎</p>
       <button id="startBtn" class="primary">Losziehen</button>
     </div>
   </div>
@@ -73,12 +77,22 @@
     </div>
   </div>
 
+  <div id="shop" class="overlay hidden">
+    <div class="card">
+      <h1>Krämerstand</h1>
+      <p class="sub">Dein Vorrat: <b id="shopGems">0</b> 💎</p>
+      <div id="shopList" class="cards"></div>
+      <button id="shopClose" class="primary">Weiterziehen</button>
+    </div>
+  </div>
+
   <div id="dead" class="overlay hidden">
     <div class="card">
       <h1>Ausgeruht</h1>
       <p class="sub">Du wachst wieder am Lagerfeuer auf.</p>
       <p class="big" id="deadScore">0 💎</p>
       <p class="sub" id="deadLevel">Stufe 1</p>
+      <p class="sub" id="deadStash">Vorrat: 0 💎</p>
       <button id="againBtn" class="primary">Nochmal</button>
     </div>
   </div>

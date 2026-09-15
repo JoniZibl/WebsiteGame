@@ -5,6 +5,8 @@ import { Player, EnemyManager, ProjectileManager, Particles, Gems, EnemyShots, B
 import { TiltShift } from './postfx.js';
 import { freshStats, pickThree, applyUpgrade, xpForLevel } from './upgrades.js';
 import { GameAudio } from './audio.js';
+import { Villagers } from './villagers.js';
+import * as Save from './save.js';
 
 /* --------------------------------- Setup --------------------------------- */
 const canvas = document.getElementById('scene');
@@ -54,6 +56,8 @@ const gems = new Gems(scene);
 const boss = new Boss(scene);
 const fx = new Particles(scene);
 const audio = new GameAudio();
+const villagers = new Villagers(scene);
+const saveData = Save.load();
 
 /* ------------------------------ Bildschirm ------------------------------- */
 function resize() {
@@ -91,6 +95,51 @@ function applyQuality() {
 }
 
 /* --------------------------------- Spiel --------------------------------- */
+/* ------------------------------------------------------------------------- */
+/*  Tageszeit: ein voller Umlauf dauert gut fünf Minuten                       */
+/* ------------------------------------------------------------------------- */
+const DAY_LENGTH = 320;   // Sekunden
+
+const SKY_KEYS = [
+  { t: 0.00, sky: '#f0cfa2', sun: '#ffc08a', sunI: 0.55, hemi: 0.42, name: 'Morgen', icon: '🌅' },
+  { t: 0.18, sky: '#cdd6ad', sun: '#fff2d2', sunI: 1.40, hemi: 0.52, name: 'Tag',    icon: '☀️' },
+  { t: 0.52, sky: '#cdd6ad', sun: '#fff2d2', sunI: 1.40, hemi: 0.52, name: 'Tag',    icon: '☀️' },
+  { t: 0.66, sky: '#e8b98c', sun: '#ff9e6b', sunI: 0.85, hemi: 0.45, name: 'Abend',  icon: '🌇' },
+  { t: 0.78, sky: '#5b6479', sun: '#8aa0c8', sunI: 0.30, hemi: 0.34, name: 'Nacht',  icon: '🌙' },
+  { t: 0.94, sky: '#5b6479', sun: '#8aa0c8', sunI: 0.30, hemi: 0.34, name: 'Nacht',  icon: '🌙' },
+  { t: 1.00, sky: '#f0cfa2', sun: '#ffc08a', sunI: 0.55, hemi: 0.42, name: 'Morgen', icon: '🌅' },
+];
+
+const skyA = new THREE.Color();
+const skyB = new THREE.Color();
+const sunA = new THREE.Color();
+
+function applyDaytime(t) {
+  let i = 0;
+  while (i < SKY_KEYS.length - 2 && SKY_KEYS[i + 1].t <= t) i++;
+  const a = SKY_KEYS[i], b = SKY_KEYS[i + 1];
+  const k = (t - a.t) / (b.t - a.t);
+
+  skyA.set(a.sky); skyB.set(b.sky);
+  skyA.lerp(skyB, k);
+  scene.background.copy(skyA);
+  scene.fog.color.copy(skyA);
+  renderer.setClearColor(skyA);
+
+  sunA.set(a.sun); skyB.set(b.sun);
+  sun.color.copy(sunA.lerp(skyB, k));
+  sun.intensity = a.sunI + (b.sunI - a.sunI) * k;
+  hemi.intensity = a.hemi + (b.hemi - a.hemi) * k;
+
+  // Sonne wandert von Ost nach West und steht nachts tief
+  const ang = (t - 0.2) * Math.PI * 2;
+  state.sunDir.set(Math.cos(ang) * 40, 20 + Math.sin(ang) * 34, 18);
+  if (state.sunDir.y < 12) state.sunDir.y = 12;
+
+  const label = k < 0.5 ? a : b;
+  return label;
+}
+
 const state = {
   running: false,
   paused: false,          // während der Upgrade-Wahl
@@ -103,6 +152,11 @@ const state = {
   gemStreak: 0,
   streakTimer: 0,
   shrineCheck: 0,
+  time: 0.22,                    // Spielstart am Vormittag
+  sunDir: new THREE.Vector3(26, 42, 16),
+  bosses: 0,
+  saveTimer: 0,
+  tradeOpen: false,
 };
 
 let stats = freshStats();
@@ -121,23 +175,28 @@ function newRun() {
   world.queue.length = 0;
 
   player.reset();
-  player.hpMax = 100;
-  player.hp = 100;
   enemies.reset();
   arrows.reset();
   shots.reset();
   gems.reset();
   boss.reset();
+  villagers.hide();
   fx.reset();
   stats = freshStats();
+  Save.applyPerks(saveData, stats, player);
   state.cleared.clear();
+  state.bosses = 0;
+  state.time = 0.22;
   state.gemStreak = 0;
   bossBar.classList.add('hidden');
   state.score = 0;
   state.idleTime = 0;
   state.fireTimer = 0;
   state.paused = false;
+  state.tradeOpen = false;
   document.getElementById('levelup').classList.add('hidden');
+  shopEl.classList.add('hidden');
+  tradeBtn.classList.add('hidden');
 
   world.update(player.pos.x, player.pos.z, 60);   // Startgebiet sofort bauen
   player.pos.y = heightAt(player.pos.x, player.pos.z);
@@ -166,6 +225,7 @@ function onKill(target) {
   audio.kill();
   fx.burst(target.pos, target.mat.color.getHex(), 9);
   gems.drop(target.pos);
+  if (Math.random() < (stats.luck || 0)) gems.drop(target.pos);   // Glückssteine
 }
 
 /* ---------------------------- Wächter ------------------------------------ */
@@ -198,6 +258,7 @@ function onBossDown() {
   audio.bossDown();
   fx.burst(boss.pos, '#ffe0ac', 16);
   state.cleared.add(boss.shrine.key);
+  state.bosses += 1;
   bossBar.classList.add('hidden');
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2;
@@ -210,6 +271,8 @@ function onBossDown() {
 function onCollect() {
   state.score += 1;
   stats.xp += 1;
+  saveData.gems += 1;
+  state.saveTimer = Math.min(state.saveTimer, 3);
   state.gemStreak = state.streakTimer > 0 ? state.gemStreak + 1 : 0;
   state.streakTimer = 1.6;
   audio.gem(state.gemStreak);
@@ -258,6 +321,9 @@ function gameOver() {
   state.running = false;
   document.getElementById('deadScore').textContent = state.score + ' 💎';
   document.getElementById('deadLevel').textContent = 'Stufe ' + stats.level + ' erreicht';
+  Save.recordRun(saveData, stats.level, state.score, state.bosses);
+  document.getElementById('deadStash').textContent = `Vorrat: ${saveData.gems} 💎 · Bester Lauf: Stufe ${saveData.best.level}`;
+  document.getElementById('startStash').textContent = `Vorrat: ${saveData.gems} 💎`;
   document.getElementById('dead').classList.remove('hidden');
 }
 
@@ -297,6 +363,61 @@ function combat(dt) {
   }
 }
 
+/* ------------------------------ Krämerstand ------------------------------ */
+const shopEl = document.getElementById('shop');
+const shopList = document.getElementById('shopList');
+const shopGems = document.getElementById('shopGems');
+const tradeBtn = document.getElementById('tradeBtn');
+
+function renderShop() {
+  shopGems.textContent = saveData.gems;
+  shopList.replaceChildren();
+  for (const perk of Save.PERKS) {
+    const have = Save.perkLevel(saveData, perk.id);
+    const cost = Save.perkCost(perk, saveData);
+    const btn = document.createElement('button');
+    btn.className = 'upgrade buy';
+    btn.disabled = cost === null || saveData.gems < cost;
+    btn.innerHTML =
+      `<span class="ic">${perk.icon}</span>` +
+      `<span><b>${perk.title}</b><small>${perk.text}</small></span>` +
+      `<span class="cost">${cost === null ? `${have}/${perk.max} ✓` : `${cost} 💎`}</span>`;
+    btn.addEventListener('click', () => {
+      if (Save.buyPerk(saveData, perk)) {
+        audio.levelUp();
+        applyPerkToRun(perk.id);
+        renderShop();
+        updateHUD(true);
+      }
+    });
+    shopList.append(btn);
+  }
+}
+
+// Gekauftes wirkt sofort, nicht erst im nächsten Lauf.
+function applyPerkToRun(id) {
+  const lvl = Save.perkLevel(saveData, id);
+  if (id === 'leben') { player.hpMax = 100 + lvl * 20; player.hp = player.hpMax; }
+  if (id === 'schaden') stats.damage += 1;
+  if (id === 'pfeil') stats.arrows += 1;
+  if (id === 'tempo') player.speed = player.baseSpeed * (1 + lvl * 0.06);
+  if (id === 'glueck') stats.luck = lvl * 0.2;
+}
+
+function openShop() {
+  state.tradeOpen = true;
+  state.paused = true;
+  renderShop();
+  shopEl.classList.remove('hidden');
+}
+
+tradeBtn.addEventListener('click', () => { audio.unlock(); openShop(); });
+document.getElementById('shopClose').addEventListener('click', () => {
+  shopEl.classList.add('hidden');
+  state.tradeOpen = false;
+  state.paused = false;
+});
+
 /* --------------------------------- HUD ----------------------------------- */
 const hpFill = document.getElementById('hpFill');
 const hpText = document.getElementById('hpText');
@@ -305,6 +426,8 @@ const areaEl = document.getElementById('area');
 const xpFill = document.getElementById('xpFill');
 const xpText = document.getElementById('xpText');
 const restEl = document.getElementById('rest');
+const timeIcon = document.getElementById('timeIcon');
+const timeText = document.getElementById('timeText');
 let hudTimer = 0;
 
 function updateHUD(force) {
@@ -350,7 +473,8 @@ function frame() {
     if (fire) {
       const d = Math.hypot(fire.x - player.pos.x, fire.z - player.pos.z);
       fireLight.position.set(fire.x, fire.y + 1.1, fire.z);
-      fireLight.intensity = 2.4 + Math.sin(state.idleTime * 9 + fire.x) * 0.4;
+      const night = Math.max(0, Math.min(1, (state.time - 0.66) * 6, (0.96 - state.time) * 6));
+      fireLight.intensity = (2.2 + night * 3.4) + Math.sin(state.idleTime * 9 + fire.x) * 0.4;
       state.resting = d < 4.2;
       if (state.resting) player.hp = Math.min(player.hpMax, player.hp + 16 * dt);
       audio.setFireDistance(d);
@@ -369,6 +493,24 @@ function frame() {
     player.bow.rotation.z += (player.bowRest - player.bow.rotation.z) * Math.min(1, dt * 10);
 
     world.update(player.pos.x, player.pos.z, 1);   // höchstens ein Chunk pro Frame
+    villagers.update(dt, player, world);
+
+    // Tageszeit weiterdrehen
+    state.time = (state.time + dt / DAY_LENGTH) % 1;
+    const phase = applyDaytime(state.time);
+    timeIcon.textContent = phase.icon;
+    timeText.textContent = phase.name;
+
+    // nachts wird es voller draußen
+    enemies.nightBonus = phase.name === 'Nacht' ? 2 : 0;
+
+    // Händler in Reichweite?
+    const canTrade = villagers.nearTrader(player.pos) && !state.paused;
+    tradeBtn.classList.toggle('hidden', !canTrade);
+
+    // Vorrat gelegentlich sichern
+    state.saveTimer -= dt;
+    if (state.saveTimer <= 0) { state.saveTimer = 12; Save.save(saveData); }
 
     audio.ambient(dt);
 
@@ -381,7 +523,7 @@ function frame() {
   camera.position.lerp(want, 1 - Math.pow(0.0015, dt));
   camera.lookAt(player.pos.x, player.pos.y + 1.1, player.pos.z);
 
-  sun.position.set(player.pos.x + 26, player.pos.y + 42, player.pos.z + 16);
+  sun.position.set(player.pos.x + state.sunDir.x, player.pos.y + state.sunDir.y, player.pos.z + state.sunDir.z);
   sun.target.position.copy(player.pos);
   sun.target.updateMatrixWorld();
 
@@ -405,6 +547,8 @@ soundBtn.addEventListener('click', () => {
   try { localStorage.setItem('cozy-muted', muted ? '1' : '0'); } catch (err) { /* egal */ }
 });
 
+document.getElementById('startStash').textContent = `Vorrat: ${saveData.gems} 💎`;
+
 document.getElementById('startBtn').addEventListener('click', () => {
   audio.unlock();
   document.getElementById('start').classList.add('hidden');
@@ -423,8 +567,11 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, arrows, shots, gems, boss, audio, world, renderer, scene, camera, sun, post,
+window.__game = { state, player, enemies, arrows, shots, gems, boss, audio, villagers, saveData, Save, openShop, world, renderer, scene, camera, sun, post,
   get stats() { return stats; }, levelUp };
+
+window.addEventListener('pagehide', () => Save.save(saveData));
+document.addEventListener('visibilitychange', () => { if (document.hidden) Save.save(saveData); });
 
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());

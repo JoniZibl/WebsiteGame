@@ -282,6 +282,7 @@ export class EnemyManager {
     this.pool = Array.from({ length: max }, () => new Enemy(scene));
     this.spawnTimer = 1.5;
     this.tough = 0;          // wächst mit dem Level des Spielers mit
+    this.nightBonus = 0;     // nachts sind mehr unterwegs
   }
 
   reset() {
@@ -303,7 +304,7 @@ export class EnemyManager {
   update(dt, player, world, onHitPlayer, shots) {
     // Schwierigkeit wächst mit der Entfernung vom Startpunkt
     const tier = Math.floor(Math.hypot(player.pos.x, player.pos.z) / 90);
-    const target = Math.min(4 + tier * 2 + Math.floor(this.tough * 0.6), this.pool.length);
+    const target = Math.min(4 + tier * 2 + Math.floor(this.tough * 0.6) + this.nightBonus, this.pool.length);
 
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && this.living.length < target) {
