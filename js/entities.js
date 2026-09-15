@@ -55,8 +55,8 @@ export class Player {
     bag.position.set(0, 0.62, -0.38);
 
     // Bogen liegt flach vor der Brust – von oben ein klarer Richtungspfeil
-    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.045, 4, 10, Math.PI * 0.95), wood);
-    bow.position.set(0, 0.86, 0.34);
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 4, 9, Math.PI * 0.9), wood);
+    bow.position.set(0.3, 0.62, 0.26);
     bow.rotation.set(Math.PI / 2, 0, -Math.PI / 2);
 
     [torso, shoulderL, shoulderR, head, hood, nose, bag, bow].forEach((m) => {

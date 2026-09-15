@@ -66,8 +66,8 @@ function terrainColor(h, slope, jitter) {
   tmpColor.lerp(C.rock, clamp((slope - 0.6) * 0.9, 0, 0.45) + clamp((h - 11) * 0.12, 0, 0.4));
 
   // Strand als weicher Verlauf zum Wasser hin (keine harten Flecken)
-  const shore = smoothstep(WATER_LEVEL + 2.2, WATER_LEVEL + 0.2, h);
-  tmpColor.lerp(C.sand, shore * 0.9);
+  const shore = smoothstep(WATER_LEVEL + 1.4, WATER_LEVEL + 0.2, h);
+  tmpColor.lerp(C.sand, shore * 0.85);
   if (h < WATER_LEVEL) tmpColor.lerp(C.deep, smoothstep(WATER_LEVEL, WATER_LEVEL - 1.2, h));
 
   return tmpColor.multiplyScalar(shade);
