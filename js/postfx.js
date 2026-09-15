@@ -89,11 +89,11 @@ export class TiltShift {
         tSharp: { value: null },
         tBlur: { value: null },
         uFocus: { value: 0.5 },
-        uBand: { value: 0.16 },
-        uFeather: { value: 0.3 },
+        uBand: { value: 0.13 },
+        uFeather: { value: 0.24 },
         uAmount: { value: 1.0 },
         uTilt: { value: 0.03 },
-        uSaturation: { value: 1.08 },
+        uSaturation: { value: 1.14 },
       },
       vertexShader: VERT,
       fragmentShader: COMPOSITE_FRAG,
@@ -140,7 +140,7 @@ export class TiltShift {
     const step = this.blurMat.uniforms.uDir.value;
     // zwei Durchgänge horizontal/vertikal ergeben eine schön weiche Bokeh-Anmutung
     for (let i = 0; i < this.iterations; i++) {
-      const spread = 1 + i * 1.6;
+      const spread = 1.4 + i * 2.1;
       this.blurMat.uniforms.tDiffuse.value = i === 0 ? this.scene.texture : this.b.texture;
       step.set(spread / this.halfW, 0);
       this._blit(this.blurMat, this.a);

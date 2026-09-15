@@ -46,6 +46,9 @@ js/entities.js      Spielfigur, Gegner, Wächter, Pfeile, Geschosse, Edelsteine,
 js/upgrades.js      Upgrade-Karten, Erfahrungskurve
 js/audio.js         synthetisierter Klang (Wind, Feuer, Effekte, Untermalung)
 js/villagers.js     Dorfbewohner und Krämerstand
+js/critters.js      Rehe, Hasen, Falter und Glühwürmchen
+js/camp.js          eigenes Lager: Feuer, Zelt, Laterne, Zaun
+js/meshkit.js       verschmilzt Figuren zu je einem Mesh (spart Draw Calls)
 js/save.js          Spielstand, dauerhafte Verbesserungen, Bestwerte
 js/postfx.js        Tilt-Shift (Miniatureffekt) als eigener Render-Pass
 js/main.js          Szene, Licht, Kamera, Spielschleife, Kampf-Regel
@@ -62,6 +65,41 @@ Blumen, Dörfer und Steinkreise streut ein pro Chunk gesäter Zufallsgenerator, 
 Meshes eines Chunks werden pro Material zu einem Mesh zusammengefasst —
 im Schnitt ~70 Draw Calls für die ganze sichtbare Welt.
 
+### Schwimmen
+
+Wasser sperrt nichts ab: ab 15 cm Tiefe watet man (72 % Tempo), ab 90 cm
+schwimmt man (55 %, träger) und treibt an der Oberfläche, mit Wellenring statt
+Schatten. Damit sitzt man nie auf einer Insel fest. Gegner bleiben am Ufer
+stehen — eine Insel ist also auch ein sicherer Platz.
+
+### Sammeln und Bauen
+
+In jedem Chunk liegen bis zu neun **Fundstellen**: Birken (Holz), Findlinge
+(Stein) und Beerenbüsche. Sie liegen getrennt von den verschmolzenen
+Requisiten, damit eine einzelne davon verschwinden kann — beim letzten Schlag
+wird das Mesh des Chunks neu gebaut (ein paar Millisekunden). Ihre Meshes
+existieren nur im 3×3-Umfeld des Spielers; weiter draußen bleiben nur die
+Daten, das spart rund 85 Draw Calls.
+
+Aus dem Material baut man sein **Lager**: Lagerfeuer (4 Holz) heilt und
+leuchtet, Zelt (8 Holz, 2 Stein) ist der Platz zum Aufwachen, Laterne und
+Zaun halten Licht und Gegner. Alles Gebaute steht in der Welt und im
+Spielstand.
+
+### Eine Welt, die bleibt
+
+Jeder Spielstand hat genau einen Welt-Seed. Die Welt ist also immer dieselbe,
+das Lager steht beim nächsten Mal noch da, und nach einer Niederlage wacht man
+im eigenen Zelt auf statt in einer neuen Welt.
+
+### Lebendige Welt
+
+Rehe und Hasen ziehen in der Nähe umher und fliehen, wenn man auf neun Meter
+herankommt. Tagsüber flattern Falter, nachts glimmen Glühwürmchen — dieselbe
+Instanz-Wolke, nur anders gefärbt. Die Blätter wiegen sich im Wind: ein
+einziger Zeitwert treibt einen Vertex-Shader, der jeden Punkt nach seiner Höhe
+im Baum verschiebt (`aSway`).
+
 ### Miniatureffekt
 
 `js/postfx.js` zeichnet die Szene in ein Render-Target, weichzeichnet eine halb
@@ -73,11 +111,16 @@ einem Durchgang statt zwei.
 
 ### Farbpalette
 
-Alles kommt aus einer Familie: warme Salbei- und Olivgrüne fürs Gelände
-(`#a8bd78` → `#2f4423`), Sand `#d6c391`, Stein `#a6a48d`, Wasser `#7fa88b`.
-Terrakotta `#df8a5c` ist der einzige Fremdton und bleibt den Dingen vorbehalten,
-die auffallen sollen: Dächer, Zelte, Gegner und die Kapuze der Figur. Die Figur
-selbst ist das hellste Objekt im Bild, damit man sie im Wald immer findet.
+Bilderbuch statt Tarnfarben: kräftige Wiesengrüne (`#6cba5e` → `#2a6338`),
+warmer Sand `#e9d29b`, Türkiswasser `#3f9b95`, Holz `#a9713f`. Häuser tragen
+hellen Putz `#f6e6c6` mit rotem Ziegeldach `#c9563f` und cremefarbenem Zierrat
+— dieselbe Rolle hat Rot bei Pilzen, Zelten und Gegnern. Der Himmel ist ein
+warmes Creme `#ece0c0`, wie der Hintergrund einer Modellbau-Aufnahme.
+
+Häuser bestehen aus Einzelteilen statt aus Kiste plus Kegel: Sockel, Putzwand,
+Eckbalken, zwei geneigte Dachflächen mit Firstbalken, Holztür mit Stufe,
+Fenster und Kamin. Dörfer bekommen Trittsteinwege vom Platz zu jedem Haus und
+ein paar Zäune.
 
 ### Regionen
 

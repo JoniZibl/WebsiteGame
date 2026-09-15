@@ -12,7 +12,14 @@ export const PERKS = [
   { id: 'glueck',  icon: '🍀', title: 'Glückssteine',   text: 'Gegner lassen öfter zwei Steine fallen', max: 3, cost: (n) => 25 + n * 18 },
 ];
 
-const EMPTY = { gems: 0, perks: {}, best: { level: 1, gems: 0, bosses: 0 } };
+const EMPTY = {
+  gems: 0,
+  perks: {},
+  best: { level: 1, gems: 0, bosses: 0 },
+  seed: 0,                                  // eine Welt, die bleibt
+  res: { holz: 0, stein: 0, beeren: 0 },
+  camp: [],
+};
 
 export function load() {
   try {
@@ -27,6 +34,13 @@ export function load() {
         gems: Math.max(0, data.best?.gems | 0),
         bosses: Math.max(0, data.best?.bosses | 0),
       },
+      seed: data.seed | 0,
+      res: {
+        holz: Math.max(0, data.res?.holz | 0),
+        stein: Math.max(0, data.res?.stein | 0),
+        beeren: Math.max(0, data.res?.beeren | 0),
+      },
+      camp: Array.isArray(data.camp) ? data.camp.filter((c) => c && typeof c.type === 'string') : [],
     };
   } catch (err) {
     return structuredClone(EMPTY);
@@ -42,6 +56,15 @@ export function save(data) {
 }
 
 export function perkLevel(data, id) { return data.perks[id] | 0; }
+
+/** Jeder Spielstand hat genau eine Welt. Beim ersten Start wird sie gewürfelt. */
+export function worldSeed(data) {
+  if (!data.seed) {
+    data.seed = (Math.random() * 1e9) | 0 || 12345;
+    save(data);
+  }
+  return data.seed;
+}
 
 export function perkCost(perk, data) {
   const n = perkLevel(data, perk.id);

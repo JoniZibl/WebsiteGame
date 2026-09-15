@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { heightAt } from './world.js';
+import { flattenGroup } from './meshkit.js';
 
 // Dörfer bekommen Leben: ein paar Bewohner, die um die Häuser schlendern,
 // und ein Händler mit Stand, bei dem man dauerhafte Verbesserungen kauft.
@@ -23,8 +24,9 @@ function makeFigure(cloakColor, scale = 1) {
   nose.rotation.x = Math.PI / 2;
 
   [body, head, cap, nose].forEach((m) => { m.castShadow = true; group.add(m); });
-  group.scale.setScalar(1.55 * scale);
-  return group;
+  const flat = flattenGroup(group);
+  flat.scale.setScalar(1.55 * scale);
+  return flat;
 }
 
 const shadowGeo = new THREE.CircleGeometry(0.5, 12).rotateX(-Math.PI / 2);
@@ -89,8 +91,9 @@ export class Villagers {
     );
     this.marker.position.set(0, 3.4, -0.4);
 
-    this.stall = new THREE.Group();
-    [awning, ...stripes, post, post2, table, ...crates].forEach((m) => { m.castShadow = true; this.stall.add(m); });
+    const stallParts = new THREE.Group();
+    [awning, ...stripes, post, post2, table, ...crates].forEach((m) => { m.castShadow = true; stallParts.add(m); });
+    this.stall = flattenGroup(stallParts);
     this.stall.add(this.marker);
     this.stall.visible = false;
     this.trader.visible = false;

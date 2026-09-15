@@ -68,24 +68,24 @@ function slopeAt(x, z) {
 // warmen Grau. Terrakotta ist der einzige Fremdton und bleibt den Dingen
 // vorbehalten, die auffallen sollen (Dächer, Zelte, Gegner, die Figur).
 const C = {
-  sand:   new THREE.Color('#d6c391'),
-  grass1: new THREE.Color('#a8bd78'),
-  grass2: new THREE.Color('#91a962'),
-  grass3: new THREE.Color('#7d9455'),
-  rock:   new THREE.Color('#a6a48d'),
-  deep:   new THREE.Color('#7ea184'),
-  dry1:   new THREE.Color('#cdbf83'),
-  dry2:   new THREE.Color('#b3a566'),
+  sand:   new THREE.Color('#e9d29b'),
+  grass1: new THREE.Color('#6cba5e'),
+  grass2: new THREE.Color('#58a854'),
+  grass3: new THREE.Color('#87cd6e'),
+  rock:   new THREE.Color('#b6b3a2'),
+  deep:   new THREE.Color('#3f9b95'),
+  dry1:   new THREE.Color('#d9c477'),
+  dry2:   new THREE.Color('#c1a95d'),
 };
 
 const tmpColor = new THREE.Color();
 function terrainColor(h, slope, jitter, dry) {
-  const shade = 0.96 + jitter * 0.08;   // leichtes Flackern für den Patchwork-Look
+  const shade = 0.93 + jitter * 0.15;   // leichtes Flackern für den Patchwork-Look
 
-  // Gras: zwei Grüntöne weich ineinander, etwas heller mit der Höhe
+  // Gras: zwei Grüntöne weich ineinander, dazu große, helle Wiesenflecken
   const t = clamp((jitter - 0.32) * 2.2, 0, 1);
   tmpColor.copy(C.grass2).lerp(C.grass1, t);
-  tmpColor.lerp(C.grass3, clamp((h - 1) * 0.05, 0, 0.3));
+  tmpColor.lerp(C.grass3, clamp((h - 1) * 0.05, 0, 0.3) + clamp((jitter - 0.55) * 1.6, 0, 0.45));
 
   // in trockenen Gegenden zieht dasselbe Grün ins Goldene
   if (dry > 0) tmpColor.lerp(t > 0.5 ? C.dry1 : C.dry2, dry * 0.85);
@@ -106,34 +106,79 @@ function terrainColor(h, slope, jitter, dry) {
 /* ------------------------------------------------------------------ */
 const mat = (hex, opts = {}) => new THREE.MeshLambertMaterial({ color: hex, flatShading: true, ...opts });
 
+// Ein einziger Zeitwert treibt den Wind in allen Blattmaterialien.
+export const windTime = { value: 0 };
+
+/** Lässt ein Material seine Geometrie im Wind wiegen (Stärke aus aSway). */
+function makeWindy(material, strength = 0.32) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = windTime;
+    shader.uniforms.uWind = { value: strength };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aSway;\nuniform float uTime;\nuniform float uWind;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float gust = sin(uTime * 1.3 + transformed.x * 0.14 + transformed.z * 0.11)
+                   + sin(uTime * 2.1 + transformed.z * 0.23) * 0.4;
+        transformed.x += gust * aSway * uWind;
+        transformed.z += gust * aSway * uWind * 0.6;`);
+  };
+  return material;
+}
+
 export const MATS = {
-  trunk:  mat('#6b5643'),
-  leafA:  mat('#87a257'),
-  leafB:  mat('#6b8b45'),
-  leafC:  mat('#4a6633'),
-  leafD:  mat('#2f4423'),
-  leafE:  mat('#84884a'),
-  leafF:  mat('#5f6836'),
-  rock:   mat('#a3a18b'),
-  wall:   mat('#eee1c0'),
-  roof:   mat('#df8a5c'),
-  tent:   mat('#e2915f'),
-  flower: mat('#f1e5c2'),
+  trunk:  mat('#a9713f'),
+  leafA:  mat('#5aab58'),
+  leafB:  mat('#469149'),
+  leafC:  mat('#357a40'),
+  leafD:  mat('#2a6338'),
+  leafE:  mat('#9bb257'),
+  leafF:  mat('#7d9a45'),
+  rock:   mat('#b3b0a0'),
+  shroom: mat('#cf5340'),
+  shroomStem: mat('#f6ead0'),
+  reed:   mat('#8cb355'),
+  pad:    mat('#4f9b55'),
+  wall:   mat('#f6e6c6'),
+  trim:   mat('#fdf6e4'),
+  roof:   mat('#c9563f'),
+  roofDark: mat('#a8412d'),
+  wood:   mat('#a9713f'),
+  woodDark: mat('#7d4f2e'),
+  glass:  mat('#79c6c0'),
+  path:   mat('#e4cd98'),
+  tent:   mat('#d9603f'),
+  flower: mat('#fbead2'),
 };
+
+for (const key of ['leafA', 'leafB', 'leafC', 'leafD', 'leafE', 'leafF', 'reed']) makeWindy(MATS[key]);
 
 const G = {
   trunk:  new THREE.CylinderGeometry(0.16, 0.24, 1.1, 5).toNonIndexed(),
   cone1:  new THREE.ConeGeometry(1.25, 2.4, 7).toNonIndexed(),
   cone2:  new THREE.ConeGeometry(0.9, 2.0, 7).toNonIndexed(),
   rock:   new THREE.IcosahedronGeometry(0.7, 0).toNonIndexed(),
-  wall:   new THREE.BoxGeometry(2.6, 1.9, 2.3).toNonIndexed(),
-  roof:   new THREE.ConeGeometry(2.25, 1.5, 4).toNonIndexed(),
+  wall:   new THREE.BoxGeometry(2.6, 1.7, 2.2).toNonIndexed(),
+  sockel: new THREE.BoxGeometry(2.8, 0.22, 2.4).toNonIndexed(),
+  dach:   new THREE.BoxGeometry(3.1, 0.16, 1.65).toNonIndexed(),
+  first:  new THREE.BoxGeometry(3.15, 0.16, 0.2).toNonIndexed(),
+  balken: new THREE.BoxGeometry(0.14, 1.7, 0.14).toNonIndexed(),
+  tuer:   new THREE.BoxGeometry(0.55, 0.85, 0.1).toNonIndexed(),
+  fenster: new THREE.BoxGeometry(0.42, 0.42, 0.1).toNonIndexed(),
+  kamin:  new THREE.BoxGeometry(0.3, 0.9, 0.3).toNonIndexed(),
+  stufe:  new THREE.BoxGeometry(0.8, 0.12, 0.3).toNonIndexed(),
+  platte: new THREE.BoxGeometry(0.85, 0.09, 0.85).toNonIndexed(),
+  zaunPfosten: new THREE.BoxGeometry(0.13, 0.9, 0.13).toNonIndexed(),
+  zaunLatte: new THREE.BoxGeometry(1.5, 0.11, 0.09).toNonIndexed(),
   pillar: new THREE.BoxGeometry(0.75, 2.6, 0.6).toNonIndexed(),
   lintel: new THREE.BoxGeometry(1.9, 0.5, 0.6).toNonIndexed(),
   bud:    new THREE.SphereGeometry(0.22, 5, 4).toNonIndexed(),
   blob:   new THREE.IcosahedronGeometry(1.0, 0).toNonIndexed(),
   tent:   new THREE.CylinderGeometry(1.0, 1.0, 1.9, 3, 1).rotateZ(Math.PI / 2).toNonIndexed(),
   ember:  new THREE.ConeGeometry(0.3, 0.45, 5).toNonIndexed(),
+  cap:    new THREE.SphereGeometry(0.3, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.55).toNonIndexed(),
+  stem:   new THREE.CylinderGeometry(0.07, 0.1, 0.32, 5).toNonIndexed(),
+  reed:   new THREE.ConeGeometry(0.09, 1.5, 4).toNonIndexed(),
+  pad:    new THREE.CylinderGeometry(0.5, 0.5, 0.06, 7).toNonIndexed(),
 };
 
 const _m = new THREE.Matrix4();
@@ -142,20 +187,155 @@ const _e = new THREE.Euler();
 const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 
-function push(bucket, key, geo, x, y, z, rotY = 0, sx = 1, sy = 1, sz = 1, rotX = 0) {
-  _e.set(rotX, rotY, 0);
+function push(bucket, key, geo, x, y, z, rotY = 0, sx = 1, sy = 1, sz = 1, rotX = 0, sway = 0, rotZ = 0) {
+  _e.set(rotX, rotY, rotZ, 'YXZ');
   _q.setFromEuler(_e);
   _p.set(x, y, z);
   _s.set(sx, sy, sz);
   _m.compose(_p, _q, _s);
-  const g = geo.clone().applyMatrix4(_m);
+  const g = geo.clone();
+
+  // Wie stark wiegt sich welcher Punkt? Oben mehr als unten.
+  const posAttr = g.attributes.position;
+  const sways = new Float32Array(posAttr.count);
+  if (sway > 0) {
+    g.computeBoundingBox();
+    const minY = g.boundingBox.min.y, spanY = Math.max(0.001, g.boundingBox.max.y - minY);
+    for (let i = 0; i < posAttr.count; i++) {
+      const t = (posAttr.getY(i) - minY) / spanY;
+      sways[i] = t * t * sway;
+    }
+  }
+  g.setAttribute('aSway', new THREE.BufferAttribute(sways, 1));
+  g.applyMatrix4(_m);
   (bucket[key] || (bucket[key] = [])).push(g);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Abbaubare Fundstellen: Birken (Holz), Findlinge (Stein), Beeren     */
+/*  Sie liegen getrennt von den verschmolzenen Requisiten, damit eine   */
+/*  einzelne Fundstelle verschwinden kann.                              */
+/* ------------------------------------------------------------------ */
+export const NODE_KINDS = {
+  birke:    { label: 'Birke',       icon: '🪓', hits: 3, res: 'holz',   amount: 3, radius: 0.5 },
+  findling: { label: 'Findling',    icon: '⛏️', hits: 3, res: 'stein',  amount: 2, radius: 0.8 },
+  beere:    { label: 'Beerenbusch', icon: '🫐', hits: 1, res: 'beeren', amount: 2, radius: 0.5 },
+};
+
+const NODE_MATS = {
+  birkeStamm: mat('#e4ddc6'),
+  birkeLaub:  makeWindy(mat('#9dbf6a'), 0.3),
+  findling:   mat('#b5b3a0'),
+  busch:      makeWindy(mat('#5d8043'), 0.22),
+  beere:      mat('#c4504a'),
+};
+
+const NG = {
+  stamm: new THREE.CylinderGeometry(0.17, 0.22, 2.3, 6).toNonIndexed(),
+  laub:  new THREE.IcosahedronGeometry(0.95, 0).toNonIndexed(),
+  fels:  new THREE.IcosahedronGeometry(1.0, 0).toNonIndexed(),
+  busch: new THREE.SphereGeometry(0.8, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.62).toNonIndexed(),
+  beere: new THREE.SphereGeometry(0.13, 5, 4).toNonIndexed(),
+};
+
+function nodeGeometry(node, bucket) {
+  const { x, y, z, s, rot } = node;
+  if (node.kind === 'birke') {
+    push(bucket, 'birkeStamm', NG.stamm, x, y + 1.15 * s, z, rot, s, s, s);
+    push(bucket, 'birkeLaub', NG.laub, x, y + 2.5 * s, z, rot, s, s * 0.9, s, 0, 0.9);
+    push(bucket, 'birkeLaub', NG.laub, x + 0.4 * s, y + 3.1 * s, z - 0.25 * s, rot * 2, s * 0.6, s * 0.6, s * 0.6, 0, 1);
+  } else if (node.kind === 'findling') {
+    push(bucket, 'findling', NG.fels, x, y + 0.55 * s, z, rot, s, s * 0.8, s);
+    push(bucket, 'findling', NG.fels, x + 0.8 * s, y + 0.25 * s, z + 0.3 * s, rot * 1.7, s * 0.45, s * 0.4, s * 0.45);
+  } else {
+    push(bucket, 'busch', NG.busch, x, y, z, rot, s, s, s, 0, 0.5);
+    for (let i = 0; i < 5; i++) {
+      const a = rot + i * 1.3;
+      push(bucket, 'beere', NG.beere,
+           x + Math.cos(a) * 0.55 * s, y + 0.35 * s + (i % 2) * 0.2 * s, z + Math.sin(a) * 0.55 * s, 0, s, s, s);
+    }
+  }
+}
+
+/** Baut die Meshes aller Fundstellen eines Chunks neu auf. */
+export function buildNodeMeshes(nodes) {
+  const group = new THREE.Group();
+  const bucket = {};
+  for (const node of nodes) nodeGeometry(node, bucket);
+  for (const key in bucket) {
+    const merged = mergeGeometries(bucket[key], false);
+    if (merged) group.add(new THREE.Mesh(merged, NODE_MATS[key]));
+    bucket[key].forEach((g) => g.dispose());
+  }
+  return group;
+}
+
+/**
+ * Ein kleines Haus aus Einzelteilen: heller Putz, rotes Giebeldach mit
+ * Überstand, Holztür mit Stufe, ein Fenster und ein Kamin.
+ */
+function buildHouse(bucket, x, y, z, rot, sc, rand) {
+  const s2 = sc;
+  push(bucket, 'trim', G.sockel, x, y + 0.11 * s2, z, rot, s2, s2, s2);
+  push(bucket, 'wall', G.wall, x, y + 1.07 * s2, z, rot, s2, s2, s2);
+
+  // Eckbalken geben dem Haus Fachwerk-Charakter
+  for (const [ox2, oz2] of [[-1.28, -1.08], [1.28, -1.08], [-1.28, 1.08], [1.28, 1.08]]) {
+    const px = x + (Math.cos(rot) * ox2 - Math.sin(rot) * oz2) * s2;
+    const pz = z + (Math.sin(rot) * ox2 + Math.cos(rot) * oz2) * s2;
+    push(bucket, 'wood', G.balken, px, y + 1.07 * s2, pz, rot, s2, s2, s2);
+  }
+
+  // zwei geneigte Dachflächen plus Firstbalken
+  // Die beiden Dachflächen liegen vor und hinter dem First, also entlang der
+  // lokalen Z-Achse des Hauses – nicht entlang des Firsts.
+  const tilt = 0.56;
+  const fwdX = Math.sin(rot), fwdZ = Math.cos(rot);
+  push(bucket, 'roof', G.dach, x + fwdX * 0.68 * s2, y + 2.28 * s2, z + fwdZ * 0.68 * s2,
+       rot, s2, s2, s2, tilt);
+  push(bucket, 'roof', G.dach, x - fwdX * 0.68 * s2, y + 2.28 * s2, z - fwdZ * 0.68 * s2,
+       rot, s2, s2, s2, -tilt);
+  push(bucket, 'roofDark', G.first, x, y + 2.68 * s2, z, rot, s2, s2, s2);
+
+  // Front: Tür mit Stufe, daneben ein Fenster
+  const fx2 = Math.sin(rot) * 1.13 * s2, fz2 = Math.cos(rot) * 1.13 * s2;
+  const sx2 = Math.cos(rot), sz2 = -Math.sin(rot);
+  push(bucket, 'woodDark', G.tuer, x + fx2, y + 0.53 * s2, z + fz2, rot, s2, s2, s2);
+  push(bucket, 'trim', G.stufe, x + fx2 * 1.2, y + 0.06 * s2, z + fz2 * 1.2, rot, s2, s2, s2);
+  push(bucket, 'glass', G.fenster, x + fx2 + sx2 * 0.8 * s2, y + 1.15 * s2, z + fz2 + sz2 * 0.8 * s2, rot, s2, s2, s2);
+  push(bucket, 'trim', G.fenster, x + fx2 * 0.98 + sx2 * 0.8 * s2, y + 1.15 * s2,
+       z + fz2 * 0.98 + sz2 * 0.8 * s2, rot, s2 * 1.2, s2 * 1.2, s2 * 0.5);
+
+  if (rand() < 0.7) {
+    push(bucket, 'roofDark', G.kamin, x - sx2 * 0.85 * s2, y + 2.6 * s2, z - sz2 * 0.85 * s2, rot, s2, s2, s2);
+  }
+}
+
+/** Trittsteine vom Dorfplatz zu einem Haus. */
+function buildPath(bucket, ax, az, bx, bz, rand) {
+  const steps = Math.max(2, Math.round(Math.hypot(bx - ax, bz - az) / 1.1));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const px = ax + (bx - ax) * t + (rand() - 0.5) * 0.35;
+    const pz = az + (bz - az) * t + (rand() - 0.5) * 0.35;
+    push(bucket, 'path', G.platte, px, heightAt(px, pz) + 0.05, pz, rand() * 6.28,
+         0.8 + rand() * 0.35, 1, 0.8 + rand() * 0.35);
+  }
+}
+
+/** Ein Zaunstück aus zwei Pfosten und zwei Latten. */
+function buildFence(bucket, x, y, z, rot, colliders) {
+  push(bucket, 'wood', G.zaunPfosten, x - Math.cos(rot) * 0.72, y + 0.45, z + Math.sin(rot) * 0.72, rot);
+  push(bucket, 'wood', G.zaunPfosten, x + Math.cos(rot) * 0.72, y + 0.45, z - Math.sin(rot) * 0.72, rot);
+  push(bucket, 'wood', G.zaunLatte, x, y + 0.66, z, rot);
+  push(bucket, 'wood', G.zaunLatte, x, y + 0.34, z, rot);
+  colliders.push({ x, z, r: 0.75 });
 }
 
 /* ------------------------------------------------------------------ */
 /*  Requisiten eines Chunks                                            */
 /* ------------------------------------------------------------------ */
-function buildProps(cx, cz, bucket, colliders, fires, shrines, villages) {
+function buildProps(cx, cz, bucket, colliders, fires, shrines, villages, nodes) {
   const rand = rngFor(cx, cz, SEED);
   const ox = cx * CHUNK, oz = cz * CHUNK;
 
@@ -166,17 +346,28 @@ function buildProps(cx, cz, bucket, colliders, fires, shrines, villages) {
     const vz = oz + 8 + rand() * (CHUNK - 16);
     if (isLand(vx, vz) && slopeAt(vx, vz) < 0.5) {
       villages.push({ x: vx, y: heightAt(vx, vz), z: vz });
+      const houses = [];
       const n = 3 + Math.floor(rand() * 4);
       for (let i = 0; i < n; i++) {
         const a = rand() * Math.PI * 2, d = 2.5 + rand() * 7;
         const hx = vx + Math.cos(a) * d, hz = vz + Math.sin(a) * d;
         const hy = heightAt(hx, hz);
         if (hy < WATER_LEVEL + 1.0 || slopeAt(hx, hz) > 0.7) continue;
-        const rot = Math.round(rand() * 4) * (Math.PI / 2) + (rand() - 0.5) * 0.3;
-        const sc = 0.8 + rand() * 0.45;
-        push(bucket, 'wall', G.wall, hx, hy + 0.95 * sc - 0.15, hz, rot, sc, sc, sc);
-        push(bucket, 'roof', G.roof, hx, hy + 1.9 * sc + 0.6, hz, rot + Math.PI / 4, sc, sc, sc);
-        colliders.push({ x: hx, z: hz, r: 1.9 * sc });
+        const rot = Math.round(rand() * 4) * (Math.PI / 2) + (rand() - 0.5) * 0.25;
+        const sc = 0.8 + rand() * 0.4;
+        buildHouse(bucket, hx, hy, hz, rot, sc, rand);
+        colliders.push({ x: hx, z: hz, r: 1.8 * sc });
+        houses.push({ x: hx, z: hz, rot });
+      }
+
+      // Trittsteinwege vom Platz zu jedem Haus, dazu ein paar Zäune
+      for (const h of houses) buildPath(bucket, vx, vz, h.x, h.z, rand);
+      const fences = 2 + Math.floor(rand() * 4);
+      for (let i = 0; i < fences; i++) {
+        const a = rand() * Math.PI * 2, d = 7 + rand() * 5;
+        const fx3 = vx + Math.cos(a) * d, fz3 = vz + Math.sin(a) * d;
+        if (heightAt(fx3, fz3) < WATER_LEVEL + 1) continue;
+        buildFence(bucket, fx3, heightAt(fx3, fz3), fz3, -a + Math.PI / 2, colliders);
       }
     }
   }
@@ -233,13 +424,62 @@ function buildProps(cx, cz, bucket, colliders, fires, shrines, villages) {
     }
   }
 
+  // --- Fundstellen zum Abbauen ---
+  for (let i = 0; i < 26; i++) {
+    const nx = ox + rand() * CHUNK;
+    const nz = oz + rand() * CHUNK;
+    const ny = heightAt(nx, nz);
+    if (ny < WATER_LEVEL + 1.0 || slopeAt(nx, nz) > 0.6) continue;
+
+    let blocked = false;
+    for (const c of colliders) {
+      if ((nx - c.x) ** 2 + (nz - c.z) ** 2 < (c.r + 2.4) ** 2) { blocked = true; break; }
+    }
+    if (blocked) continue;
+
+    const dryHere = drynessAt(nx, nz);
+    const r = rand();
+    const kind = r < 0.45 ? 'birke' : r < 0.75 ? 'findling' : 'beere';
+    if (kind === 'birke' && dryHere > 0.7) continue;      // in der Heide wachsen kaum Birken
+    if (nodes.length >= 9) break;
+
+    const node = {
+      kind, x: nx, y: ny, z: nz,
+      s: kind === 'findling' ? 0.7 + rand() * 0.5 : 0.85 + rand() * 0.4,
+      rot: rand() * 6.28,
+      hp: NODE_KINDS[kind].hits,
+    };
+    node.collider = { x: nx, z: nz, r: NODE_KINDS[kind].radius * node.s };
+    colliders.push(node.collider);
+    nodes.push(node);
+  }
+
   // --- Bäume, Steine, Blumen ---
   const tries = 260;
   for (let i = 0; i < tries; i++) {
     const x = ox + rand() * CHUNK;
     const z = oz + rand() * CHUNK;
     const y = heightAt(x, z);
-    if (y < WATER_LEVEL + 0.8) continue;
+
+    // Uferzone: Schilf im flachen Wasser, Seerosen auf dem Wasser
+    if (y < WATER_LEVEL + 0.8) {
+      if (y > WATER_LEVEL - 0.9 && rand() < 0.35) {
+        const n = 3 + Math.floor(rand() * 4);
+        for (let k = 0; k < n; k++) {
+          const rx = x + (rand() - 0.5) * 1.8, rz = z + (rand() - 0.5) * 1.8;
+          const rs = 0.7 + rand() * 0.7;
+          push(bucket, 'reed', G.reed, rx, Math.max(heightAt(rx, rz), WATER_LEVEL - 0.2) + 0.7 * rs, rz,
+               rand() * 6.28, rs, rs, rs, (rand() - 0.5) * 0.25, 1);
+        }
+      } else if (y < WATER_LEVEL - 0.4 && rand() < 0.12) {
+        const n = 1 + Math.floor(rand() * 3);
+        for (let k = 0; k < n; k++) {
+          push(bucket, 'pad', G.pad, x + (rand() - 0.5) * 2.4, WATER_LEVEL + 0.04, z + (rand() - 0.5) * 2.4,
+               rand() * 6.28, 0.7 + rand() * 0.6, 1, 0.7 + rand() * 0.6);
+        }
+      }
+      continue;
+    }
 
     const slope = slopeAt(x, z);
     if (slope > 0.9) continue;
@@ -270,22 +510,34 @@ function buildProps(cx, cz, bucket, colliders, fires, shrines, villages) {
       if (rand() < 0.26) {
         // runder Laubbaum als Auflockerung
         push(bucket, 'trunk', G.trunk, x, y + 0.6 * sc, z, 0, sc * 1.1, sc * 1.3, sc * 1.1);
-        push(bucket, leaf, G.blob, x, y + 1.9 * sc, z, rand() * 6.28, sc * 1.05, sc * 0.95, sc * 1.05);
-        push(bucket, leaf, G.blob, x + 0.35 * sc, y + 2.5 * sc, z - 0.2 * sc, rand() * 6.28, sc * 0.6, sc * 0.6, sc * 0.6);
+        push(bucket, leaf, G.blob, x, y + 1.9 * sc, z, rand() * 6.28, sc * 1.05, sc * 0.95, sc * 1.05, 0, 0.9);
+        push(bucket, leaf, G.blob, x + 0.35 * sc, y + 2.5 * sc, z - 0.2 * sc, rand() * 6.28, sc * 0.6, sc * 0.6, sc * 0.6, 0, 1);
       } else {
         // Nadelbaum aus zwei Kegeln; ein Teil davon schlank und hoch
         const slim = rand() < 0.45;
         const w = slim ? sc * 0.62 : sc;
         const hgt = slim ? sc * 1.7 : sc;
         push(bucket, 'trunk', G.trunk, x, y + 0.5 * sc, z, 0, sc * 0.8, sc, sc * 0.8);
-        push(bucket, leaf, G.cone1, x, y + 1.5 * hgt, z, rand() * 6.28, w, hgt, w);
-        push(bucket, leaf, G.cone2, x, y + 2.7 * hgt, z, rand() * 6.28, w, hgt, w);
+        const spin = rand() * 6.28;
+        push(bucket, leaf, G.cone1, x, y + 1.35 * hgt, z, spin, w * 1.12, hgt * 0.9, w * 1.12, 0, 0.35);
+        push(bucket, leaf, G.cone1, x, y + 2.15 * hgt, z, spin + 0.5, w * 0.86, hgt * 0.8, w * 0.86, 0, 0.6);
+        push(bucket, leaf, G.cone2, x, y + 2.95 * hgt, z, spin + 1.0, w * 0.75, hgt * 0.75, w * 0.75, 0, 0.9);
       }
       colliders.push({ x, z, r: 0.55 * sc });
     } else if (roll < 0.16 + dry * 0.1) {
       const sc = 0.5 + rand() * 0.9;
       push(bucket, 'rock', G.rock, x, y + 0.25 * sc, z, rand() * 6.28, sc, sc * 0.8, sc, rand() * 0.4);
       if (sc > 0.9) colliders.push({ x, z, r: 0.6 * sc });
+    } else if (roll < 0.30 && dry < 0.6 && wood > 0.3) {
+      // Pilzgruppe im Schatten der Bäume
+      const n = 2 + Math.floor(rand() * 3);
+      for (let k = 0; k < n; k++) {
+        const mx2 = x + (rand() - 0.5) * 1.4, mz2 = z + (rand() - 0.5) * 1.4;
+        const my = heightAt(mx2, mz2);
+        const ms = 0.7 + rand() * 0.6;
+        push(bucket, 'shroomStem', G.stem, mx2, my + 0.16 * ms, mz2, 0, ms, ms, ms);
+        push(bucket, 'shroom', G.cap, mx2, my + 0.3 * ms, mz2, rand() * 6.28, ms, ms, ms);
+      }
     } else if (roll < 0.40 && dry < 0.5) {
       // kleine Blütenbüschel
       const n = 2 + Math.floor(rand() * 4);
@@ -363,6 +615,16 @@ function buildGround(cx, cz) {
 
 const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 
+function pushOut(pos, radius, c) {
+  const dx = pos.x - c.x, dz = pos.z - c.z;
+  const min = c.r + radius;
+  const d2 = dx * dx + dz * dz;
+  if (d2 > min * min || d2 === 0) return;
+  const d = Math.sqrt(d2);
+  pos.x = c.x + (dx / d) * min;
+  pos.z = c.z + (dz / d) * min;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Welt: lädt Chunks rund um den Spieler und wirft ferne wieder weg    */
 /* ------------------------------------------------------------------ */
@@ -372,6 +634,7 @@ export class World {
     this.radius = radius;
     this.chunks = new Map();
     this.queue = [];
+    this.extraColliders = [];      // z. B. selbst gebautes Lager
     this.castShadows = false;
 
     const waterGeo = new THREE.PlaneGeometry(CHUNK * (radius * 2 + 3), CHUNK * (radius * 2 + 3));
@@ -411,7 +674,12 @@ export class World {
     for (const [k, chunk] of this.chunks) {
       if (Math.abs(chunk.cx - ccx) > this.radius + 1 || Math.abs(chunk.cz - ccz) > this.radius + 1) {
         this.disposeChunk(k, chunk);
+        continue;
       }
+      // Fundstellen nur im direkten Umfeld als Meshes halten – spart Draw Calls
+      const near = Math.abs(chunk.cx - ccx) <= 1 && Math.abs(chunk.cz - ccz) <= 1;
+      if (near && !chunk.nodeGroup) this.rebuildNodes(chunk);
+      else if (!near && chunk.nodeGroup) this.dropNodeMeshes(chunk);
     }
   }
 
@@ -427,7 +695,8 @@ export class World {
     const fires = [];
     const shrines = [];
     const villages = [];
-    buildProps(cx, cz, bucket, colliders, fires, shrines, villages);
+    const nodes = [];
+    buildProps(cx, cz, bucket, colliders, fires, shrines, villages, nodes);
 
     for (const sh of shrines) {
       const beacon = new THREE.Mesh(beaconGeo, beaconMat);
@@ -446,7 +715,8 @@ export class World {
     }
 
     this.scene.add(group);
-    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders, fires, shrines, villages });
+    // Die Meshes der Fundstellen entstehen erst, wenn der Chunk nah genug ist.
+    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders, fires, shrines, villages, nodes, nodeGroup: null });
   }
 
   disposeChunk(k, chunk) {
@@ -490,22 +760,59 @@ export class World {
   // Nächster Steinkreis im Umkreis – dort wartet ein Wächter.
   nearestShrine(pos, radius) { return this.nearestOf('shrines', pos, radius); }
 
+  /** Nächste abbaubare Fundstelle – für den Aktionsknopf. */
+  nearestNode(pos, radius) {
+    const ccx = Math.floor(pos.x / CHUNK), ccz = Math.floor(pos.z / CHUNK);
+    let best = null, bestD = radius * radius;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const chunk = this.chunks.get(this.key(ccx + dx, ccz + dz));
+        if (!chunk) continue;
+        for (const node of chunk.nodes) {
+          const d = (node.x - pos.x) ** 2 + (node.z - pos.z) ** 2;
+          if (d < bestD) { bestD = d; best = { chunk, node, dist: Math.sqrt(d) }; }
+        }
+      }
+    }
+    return best;
+  }
+
+  /** Ein Schlag auf eine Fundstelle. Gibt zurück, ob sie dabei umgefallen ist. */
+  hitNode(chunk, node) {
+    node.hp -= 1;
+    if (node.hp > 0) return false;
+
+    chunk.nodes.splice(chunk.nodes.indexOf(node), 1);
+    const ci = chunk.colliders.indexOf(node.collider);
+    if (ci >= 0) chunk.colliders.splice(ci, 1);
+    this.rebuildNodes(chunk);
+    return true;
+  }
+
+  dropNodeMeshes(chunk) {
+    if (!chunk.nodeGroup) return;
+    chunk.group.remove(chunk.nodeGroup);
+    chunk.nodeGroup.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    chunk.nodeGroup = null;
+  }
+
+  rebuildNodes(chunk) {
+    this.dropNodeMeshes(chunk);
+    chunk.nodeGroup = buildNodeMeshes(chunk.nodes);
+    chunk.nodeGroup.traverse((o) => { if (o.isMesh) { o.castShadow = this.castShadows; o.receiveShadow = this.castShadows; } });
+    chunk.group.add(chunk.nodeGroup);
+  }
+
   // Schiebt eine Position aus Bäumen/Häusern heraus.
   resolveCollisions(pos, radius) {
+    for (const c of this.extraColliders) pushOut(pos, radius, c);
+
     const ccx = Math.floor(pos.x / CHUNK), ccz = Math.floor(pos.z / CHUNK);
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
         const chunk = this.chunks.get(this.key(ccx + dx, ccz + dz));
         if (!chunk) continue;
-        for (const c of chunk.colliders) {
-          const ddx = pos.x - c.x, ddz = pos.z - c.z;
-          const min = c.r + radius;
-          const d2 = ddx * ddx + ddz * ddz;
-          if (d2 > min * min || d2 === 0) continue;
-          const d = Math.sqrt(d2);
-          pos.x = c.x + (ddx / d) * min;
-          pos.z = c.z + (ddz / d) * min;
-        }
+        for (const c of chunk.colliders) pushOut(pos, radius, c);
       }
     }
   }

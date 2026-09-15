@@ -1,12 +1,14 @@
 import * as THREE from 'three';
-import { World, heightAt, setSeed, regionName } from './world.js';
+import { World, heightAt, setSeed, regionName, windTime, NODE_KINDS, WATER_LEVEL } from './world.js';
 import { Input } from './input.js';
 import { Player, EnemyManager, ProjectileManager, Particles, Gems, EnemyShots, Boss } from './entities.js';
 import { TiltShift } from './postfx.js';
 import { freshStats, pickThree, applyUpgrade, xpForLevel } from './upgrades.js';
 import { GameAudio } from './audio.js';
 import { Villagers } from './villagers.js';
+import { Critters } from './critters.js';
 import * as Save from './save.js';
+import { Camp, BUILDINGS, canAfford, payFor, costText } from './camp.js';
 
 /* --------------------------------- Setup --------------------------------- */
 const canvas = document.getElementById('scene');
@@ -21,22 +23,22 @@ try {
     'Auf dem Handy hilft meist Chrome oder Safari in einem normalen Tab.</p></div></div>';
   throw err;
 }
-renderer.setClearColor('#cdd6ad');
+renderer.setClearColor('#ece0c0');
 
 const isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 let quality = isTouch ? 'low' : 'high';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#cdd6ad');
-scene.fog = new THREE.Fog('#d3dab4', 62, 150);
+scene.background = new THREE.Color('#ece0c0');
+scene.fog = new THREE.Fog('#ece0c0', 54, 132);
 
 const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 320);
-const CAM_OFFSET = new THREE.Vector3(0, 33, 25);
+const CAM_OFFSET = new THREE.Vector3(0, 29, 30);
 
-const hemi = new THREE.HemisphereLight('#e7ecc9', '#6c7a49', 0.52);
+const hemi = new THREE.HemisphereLight('#fff2d8', '#7fa860', 0.7);
 scene.add(hemi);
 
-const sun = new THREE.DirectionalLight('#fff2d2', 1.4);
+const sun = new THREE.DirectionalLight('#fff6e2', 1.55);
 sun.position.set(26, 42, 16);
 scene.add(sun, sun.target);
 
@@ -57,7 +59,10 @@ const boss = new Boss(scene);
 const fx = new Particles(scene);
 const audio = new GameAudio();
 const villagers = new Villagers(scene);
+const critters = new Critters(scene);
 const saveData = Save.load();
+const camp = new Camp(scene);
+world.extraColliders = camp.colliders;
 
 /* ------------------------------ Bildschirm ------------------------------- */
 function resize() {
@@ -68,7 +73,7 @@ function resize() {
   renderer.setSize(w, h, false);
   post.setSize(w, h, pr, quality === 'high' ? 4 : 2);
   // im Hochformat ist das scharfe Band etwas breiter, sonst verschwindet zu viel Spielfeld
-  post.compositeMat.uniforms.uBand.value = h > w ? 0.2 : 0.16;
+  post.compositeMat.uniforms.uBand.value = h > w ? 0.17 : 0.13;
   camera.aspect = w / h;
   // im Hochformat etwas weiter rauszoomen, damit man genug Umgebung sieht
   camera.fov = h > w ? 48 : 40;
@@ -101,13 +106,13 @@ function applyQuality() {
 const DAY_LENGTH = 320;   // Sekunden
 
 const SKY_KEYS = [
-  { t: 0.00, sky: '#f0cfa2', sun: '#ffc08a', sunI: 0.55, hemi: 0.42, name: 'Morgen', icon: '🌅' },
-  { t: 0.18, sky: '#cdd6ad', sun: '#fff2d2', sunI: 1.40, hemi: 0.52, name: 'Tag',    icon: '☀️' },
-  { t: 0.52, sky: '#cdd6ad', sun: '#fff2d2', sunI: 1.40, hemi: 0.52, name: 'Tag',    icon: '☀️' },
-  { t: 0.66, sky: '#e8b98c', sun: '#ff9e6b', sunI: 0.85, hemi: 0.45, name: 'Abend',  icon: '🌇' },
-  { t: 0.78, sky: '#5b6479', sun: '#8aa0c8', sunI: 0.30, hemi: 0.34, name: 'Nacht',  icon: '🌙' },
-  { t: 0.94, sky: '#5b6479', sun: '#8aa0c8', sunI: 0.30, hemi: 0.34, name: 'Nacht',  icon: '🌙' },
-  { t: 1.00, sky: '#f0cfa2', sun: '#ffc08a', sunI: 0.55, hemi: 0.42, name: 'Morgen', icon: '🌅' },
+  { t: 0.00, sky: '#f6d9ac', sun: '#ffcd96', sunI: 0.75, hemi: 0.55, name: 'Morgen', icon: '🌅' },
+  { t: 0.18, sky: '#ece0c0', sun: '#fff6e2', sunI: 1.55, hemi: 0.70, name: 'Tag',    icon: '☀️' },
+  { t: 0.52, sky: '#ece0c0', sun: '#fff6e2', sunI: 1.55, hemi: 0.70, name: 'Tag',    icon: '☀️' },
+  { t: 0.66, sky: '#f0c091', sun: '#ffa472', sunI: 1.00, hemi: 0.58, name: 'Abend',  icon: '🌇' },
+  { t: 0.78, sky: '#4e5c78', sun: '#93aad2', sunI: 0.34, hemi: 0.36, name: 'Nacht',  icon: '🌙' },
+  { t: 0.94, sky: '#4e5c78', sun: '#93aad2', sunI: 0.34, hemi: 0.36, name: 'Nacht',  icon: '🌙' },
+  { t: 1.00, sky: '#f6d9ac', sun: '#ffcd96', sunI: 0.75, hemi: 0.55, name: 'Morgen', icon: '🌅' },
 ];
 
 const skyA = new THREE.Color();
@@ -157,23 +162,26 @@ const state = {
   bosses: 0,
   saveTimer: 0,
   tradeOpen: false,
+  nightness: 0,
 };
 
 let stats = freshStats();
+let res = saveData.res;
 
 const hintEl = document.getElementById('hint');
 let hintTimer = null;
-function showHint() {
+function showHint(ms = 6000) {
   hintEl.classList.remove('hidden');
   clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => hintEl.classList.add('hidden'), 6000);
+  hintTimer = setTimeout(() => hintEl.classList.add('hidden'), ms);
 }
 
-function newRun() {
-  setSeed((Math.random() * 1e9) | 0);
+function newRun(keepPlace = false) {
+  setSeed(Save.worldSeed(saveData));          // eine Welt pro Spielstand
   for (const [k, c] of [...world.chunks]) world.disposeChunk(k, c);
   world.queue.length = 0;
 
+  const home = keepPlace ? camp.home(player.pos) : null;
   player.reset();
   enemies.reset();
   arrows.reset();
@@ -184,6 +192,7 @@ function newRun() {
   fx.reset();
   stats = freshStats();
   Save.applyPerks(saveData, stats, player);
+  res = saveData.res;
   state.cleared.clear();
   state.bosses = 0;
   state.time = 0.22;
@@ -198,6 +207,8 @@ function newRun() {
   shopEl.classList.add('hidden');
   tradeBtn.classList.add('hidden');
 
+  camp.load(saveData.camp);
+  if (home) { player.pos.set(home.x + 1.6, 0, home.z + 1.6); }
   world.update(player.pos.x, player.pos.z, 60);   // Startgebiet sofort bauen
   player.pos.y = heightAt(player.pos.x, player.pos.z);
   state.camPos.copy(player.pos).add(CAM_OFFSET);
@@ -205,6 +216,7 @@ function newRun() {
   camera.lookAt(player.pos.x, player.pos.y + 1.2, player.pos.z);
   updateHUD(true);
   state.running = true;
+  hintEl.textContent = 'Loslassen → schießen';
   showHint();
 }
 
@@ -319,6 +331,10 @@ function levelUp() {
 
 function gameOver() {
   state.running = false;
+  const home = camp.home(player.pos);
+  document.getElementById('deadWhere').textContent = home
+    ? 'Du wachst in deinem Zelt wieder auf.'
+    : 'Ohne Zelt beginnt der Weg von vorn. Bau dir eins!';
   document.getElementById('deadScore').textContent = state.score + ' 💎';
   document.getElementById('deadLevel').textContent = 'Stufe ' + stats.level + ' erreicht';
   Save.recordRun(saveData, stats.level, state.score, state.bosses);
@@ -362,6 +378,101 @@ function combat(dt) {
     player.bow.rotation.z = player.bowRest + 0.5;   // kleines Zucken beim Schuss
   }
 }
+
+/* --------------------------- Sammeln & Bauen ----------------------------- */
+const actionBtn = document.getElementById('actionBtn');
+const buildBtn = document.getElementById('buildBtn');
+const eatBtn = document.getElementById('eatBtn');
+const buildEl = document.getElementById('build');
+const buildList = document.getElementById('buildList');
+const buildRes = document.getElementById('buildRes');
+const resEls = {
+  holz: document.getElementById('resHolz'),
+  stein: document.getElementById('resStein'),
+  beeren: document.getElementById('resBeeren'),
+};
+
+let nearNode = null;
+
+function floatText(pos, text) {
+  fx.burst(pos, '#f2dda2', 4);
+  hintEl.textContent = text;
+  showHint(1400);
+}
+
+actionBtn.addEventListener('click', () => {
+  if (!nearNode) return;
+  audio.unlock();
+  const { chunk, node } = nearNode;
+  const def = NODE_KINDS[node.kind];
+  audio.hit();
+  fx.burst({ x: node.x, y: node.y + 0.6, z: node.z }, node.kind === 'findling' ? '#b5b3a0' : '#9dbf6a', 5);
+
+  if (world.hitNode(chunk, node)) {
+    const amount = def.amount + (Math.random() < 0.3 ? 1 : 0);
+    res[def.res] += amount;
+    saveData.res = res;
+    state.saveTimer = Math.min(state.saveTimer, 2);
+    audio.kill();
+    floatText({ x: node.x, y: node.y, z: node.z }, `+${amount} ${def.res === 'holz' ? '🪵' : def.res === 'stein' ? '🪨' : '🫐'}`);
+    nearNode = null;
+    actionBtn.classList.add('hidden');
+    updateHUD(true);
+  }
+});
+
+function renderBuild() {
+  buildRes.textContent = `${res.holz} 🪵 · ${res.stein} 🪨`;
+  buildList.replaceChildren();
+  for (const [type, def] of Object.entries(BUILDINGS)) {
+    const btn = document.createElement('button');
+    btn.className = 'upgrade buy';
+    btn.disabled = !canAfford(def, res);
+    btn.innerHTML =
+      `<span class="ic">${def.icon}</span>` +
+      `<span><b>${def.title}</b><small>${def.text}</small></span>` +
+      `<span class="cost">${costText(def)}</span>`;
+    btn.addEventListener('click', () => {
+      if (!canAfford(def, res)) return;
+      payFor(def, res);
+      // zwei Schritte vor der Figur aufstellen
+      const bx = player.pos.x + Math.sin(player.facing) * 2.2;
+      const bz = player.pos.z + Math.cos(player.facing) * 2.2;
+      camp.place(type, bx, bz, player.facing + Math.PI);
+      saveData.camp = camp.serialize();
+      saveData.res = res;
+      Save.save(saveData);
+      audio.levelUp();
+      closeBuild();
+      updateHUD(true);
+    });
+    buildList.append(btn);
+  }
+}
+
+function openBuild() {
+  state.paused = true;
+  renderBuild();
+  buildEl.classList.remove('hidden');
+}
+
+function closeBuild() {
+  buildEl.classList.add('hidden');
+  state.paused = false;
+}
+
+buildBtn.addEventListener('click', () => { audio.unlock(); openBuild(); });
+document.getElementById('buildClose').addEventListener('click', closeBuild);
+
+eatBtn.addEventListener('click', () => {
+  if (res.beeren <= 0 || player.hp >= player.hpMax) return;
+  res.beeren -= 1;
+  player.hp = Math.min(player.hpMax, player.hp + 30);
+  saveData.res = res;
+  audio.gem(2);
+  fx.burst(player.pos, '#c4504a', 6);
+  updateHUD(true);
+});
 
 /* ------------------------------ Krämerstand ------------------------------ */
 const shopEl = document.getElementById('shop');
@@ -438,6 +549,10 @@ function updateHUD(force) {
   scoreEl.textContent = state.score;
   areaEl.textContent = regionName(player.pos.x, player.pos.z);
   restEl.classList.toggle('hidden', !state.resting);
+  resEls.holz.textContent = res.holz;
+  resEls.stein.textContent = res.stein;
+  resEls.beeren.textContent = res.beeren;
+  eatBtn.classList.toggle('hidden', res.beeren <= 0);
   if (force) hudTimer = 0;
 }
 
@@ -468,13 +583,20 @@ function frame() {
 
     if (state.streakTimer > 0) state.streakTimer -= dt;
 
-    // Lagerfeuer: in der Nähe erholt man sich spürbar
-    const fire = world.nearestFire(player.pos, 34);
+    // Lagerfeuer: in der Nähe erholt man sich spürbar – eigene zählen mit
+    const nightness = Math.max(0, Math.min(1, (state.time - 0.66) * 6, (0.96 - state.time) * 6));
+    state.nightness = nightness;
+    camp.update(dt, nightness, player.pos);
+
+    const worldFire = world.nearestFire(player.pos, 34);
+    const campFire = camp.nearestFire(player.pos, 34);
+    const fire = !worldFire ? campFire : !campFire ? worldFire
+      : (campFire.x - player.pos.x) ** 2 + (campFire.z - player.pos.z) ** 2
+        < (worldFire.x - player.pos.x) ** 2 + (worldFire.z - player.pos.z) ** 2 ? campFire : worldFire;
     if (fire) {
       const d = Math.hypot(fire.x - player.pos.x, fire.z - player.pos.z);
       fireLight.position.set(fire.x, fire.y + 1.1, fire.z);
-      const night = Math.max(0, Math.min(1, (state.time - 0.66) * 6, (0.96 - state.time) * 6));
-      fireLight.intensity = (2.2 + night * 3.4) + Math.sin(state.idleTime * 9 + fire.x) * 0.4;
+      fireLight.intensity = (2.2 + nightness * 3.4) + Math.sin(state.idleTime * 9 + fire.x) * 0.4;
       state.resting = d < 4.2;
       if (state.resting) player.hp = Math.min(player.hpMax, player.hp + 16 * dt);
       audio.setFireDistance(d);
@@ -494,6 +616,18 @@ function frame() {
 
     world.update(player.pos.x, player.pos.z, 1);   // höchstens ein Chunk pro Frame
     villagers.update(dt, player, world);
+    critters.update(dt, player, world, state.nightness);
+    windTime.value += dt;
+
+    // Fundstelle in Reichweite? Dann den Aktionsknopf anbieten
+    nearNode = world.nearestNode(player.pos, 3.2);
+    if (nearNode && !state.paused) {
+      const def = NODE_KINDS[nearNode.node.kind];
+      actionBtn.textContent = `${def.icon} ${def.label}`;
+      actionBtn.classList.remove('hidden');
+    } else {
+      actionBtn.classList.add('hidden');
+    }
 
     // Tageszeit weiterdrehen
     state.time = (state.time + dt / DAY_LENGTH) % 1;
@@ -507,10 +641,11 @@ function frame() {
     // Händler in Reichweite?
     const canTrade = villagers.nearTrader(player.pos) && !state.paused;
     tradeBtn.classList.toggle('hidden', !canTrade);
+    actionBtn.classList.toggle('hidden', !nearNode || canTrade);
 
     // Vorrat gelegentlich sichern
     state.saveTimer -= dt;
-    if (state.saveTimer <= 0) { state.saveTimer = 12; Save.save(saveData); }
+    if (state.saveTimer <= 0) { state.saveTimer = 12; saveData.res = res; saveData.camp = camp.serialize(); Save.save(saveData); }
 
     audio.ambient(dt);
 
@@ -558,7 +693,7 @@ document.getElementById('startBtn').addEventListener('click', () => {
 document.getElementById('againBtn').addEventListener('click', () => {
   audio.unlock();
   document.getElementById('dead').classList.add('hidden');
-  newRun();
+  newRun(true);        // gleiche Welt, Aufwachen im eigenen Zelt
 });
 
 document.getElementById('qualityBtn').addEventListener('click', () => {
@@ -567,11 +702,17 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, arrows, shots, gems, boss, audio, villagers, saveData, Save, openShop, world, renderer, scene, camera, sun, post,
+window.__game = { state, player, enemies, arrows, shots, gems, boss, audio, villagers, critters, camp, saveData, Save, openShop, openBuild, world,
+  get res() { return res; }, get nearNode() { return nearNode; }, renderer, scene, camera, sun, post,
   get stats() { return stats; }, levelUp };
 
-window.addEventListener('pagehide', () => Save.save(saveData));
-document.addEventListener('visibilitychange', () => { if (document.hidden) Save.save(saveData); });
+function persist() {
+  saveData.res = res;
+  saveData.camp = camp.serialize();
+  Save.save(saveData);
+}
+window.addEventListener('pagehide', persist);
+document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
 
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());

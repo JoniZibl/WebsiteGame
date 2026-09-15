@@ -32,9 +32,17 @@
         <div class="chip"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
         <div class="chip"><span class="ic" id="timeIcon">☀️</span><span id="timeText">Morgen</span></div>
       </div>
+      <div class="chips res">
+        <div class="chip"><span class="ic">🪵</span><span id="resHolz">0</span></div>
+        <div class="chip"><span class="ic">🪨</span><span id="resStein">0</span></div>
+        <div class="chip"><span class="ic">🫐</span><span id="resBeeren">0</span></div>
+      </div>
       <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du rastest</span></div>
     </div>
+    <button id="actionBtn" class="action-btn hidden">🪓 Hacken</button>
     <button id="tradeBtn" class="trade-btn hidden">🧺 Handeln</button>
+    <button id="buildBtn" class="round-btn">⛺</button>
+    <button id="eatBtn" class="round-btn eat hidden">🫐</button>
     <div class="side-btns">
       <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
       <button id="soundBtn" class="ghost-btn" title="Ton an/aus">🔊</button>
@@ -62,7 +70,8 @@
         <li>Edelsteine sammeln &rarr; neue F&auml;higkeiten</li>
         <li>Am <b>Lagerfeuer</b> erholst du dich</li>
         <li>Lichts&auml;ulen f&uuml;hren zu den <b>W&auml;chtern</b></li>
-        <li>Im Dorf kauft der <b>Kr&auml;mer</b> dir Dauerhaftes</li>
+        <li>Holz &amp; Stein sammeln &rarr; <b>eigenes Lager bauen</b></li>
+        <li>Deine Welt bleibt &mdash; auch dein Lager</li>
       </ul>
       <p class="sub" id="startStash">Vorrat: 0 💎</p>
       <button id="startBtn" class="primary">Losziehen</button>
@@ -74,6 +83,15 @@
       <h1 id="levelTitle">Stufe 2</h1>
       <p class="sub">Such dir etwas aus</p>
       <div id="cards" class="cards"></div>
+    </div>
+  </div>
+
+  <div id="build" class="overlay hidden">
+    <div class="card">
+      <h1>Lager bauen</h1>
+      <p class="sub">Vorrat: <b id="buildRes">0 🪵 · 0 🪨</b></p>
+      <div id="buildList" class="cards"></div>
+      <button id="buildClose" class="primary">Zurück</button>
     </div>
   </div>
 
@@ -89,11 +107,11 @@
   <div id="dead" class="overlay hidden">
     <div class="card">
       <h1>Ausgeruht</h1>
-      <p class="sub">Du wachst wieder am Lagerfeuer auf.</p>
+      <p class="sub" id="deadWhere">Du wachst wieder am Lagerfeuer auf.</p>
       <p class="big" id="deadScore">0 💎</p>
       <p class="sub" id="deadLevel">Stufe 1</p>
       <p class="sub" id="deadStash">Vorrat: 0 💎</p>
-      <button id="againBtn" class="primary">Nochmal</button>
+      <button id="againBtn" class="primary">Weiter</button>
     </div>
   </div>
 

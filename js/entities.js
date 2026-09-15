@@ -68,7 +68,18 @@ export class Player {
     this.bowRest = bow.rotation.z;
 
     this.blob = makeBlob(1.05);
-    scene.add(this.group, this.blob);
+
+    // Wellenring, sobald man im Wasser steht oder schwimmt
+    this.ripple = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.95, 18).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: '#e8f2e0', transparent: true, opacity: 0.32, depthWrite: false })
+    );
+    this.ripple.visible = false;
+    this.ripple.renderOrder = 3;
+
+    scene.add(this.group, this.blob, this.ripple);
+    this.wading = false;
+    this.swimming = false;
 
     this.pos = new THREE.Vector3(0, 0, 0);
     this.vel = new THREE.Vector3();
@@ -102,20 +113,27 @@ export class Player {
     this.sinceHit += dt;
     this.moving = move.active;
 
-    const want = new THREE.Vector3(move.x, 0, move.y).multiplyScalar(this.speed * move.strength);
-    this.vel.lerp(want, 1 - Math.pow(0.0008, dt));   // weiches Anfahren/Bremsen
+    // Wasser bremst, sperrt aber nichts ab: man watet und schwimmt hinaus.
+    const ground = heightAt(this.pos.x, this.pos.z);
+    const depth = WATER_LEVEL - ground;
+    const wasSwimming = this.swimming;
+    this.wading = depth > 0.15;
+    this.swimming = depth > 0.9;
+    const drag = this.swimming ? 0.55 : this.wading ? 0.72 : 1;
+
+    const want = new THREE.Vector3(move.x, 0, move.y).multiplyScalar(this.speed * move.strength * drag);
+    this.vel.lerp(want, 1 - Math.pow(this.swimming ? 0.02 : 0.0008, dt));   // im Wasser träger
 
     const next = this.pos.clone().addScaledVector(this.vel, dt);
-
-    // nicht ins tiefe Wasser laufen
-    if (heightAt(next.x, next.z) < WATER_LEVEL + 0.1) {
-      if (heightAt(next.x, this.pos.z) > WATER_LEVEL + 0.1) next.z = this.pos.z;
-      else if (heightAt(this.pos.x, next.z) > WATER_LEVEL + 0.1) next.x = this.pos.x;
-      else { next.x = this.pos.x; next.z = this.pos.z; }
-    }
     world.resolveCollisions(next, this.radius);
     this.pos.x = next.x; this.pos.z = next.z;
-    this.pos.y = heightAt(this.pos.x, this.pos.z);
+
+    const newGround = heightAt(this.pos.x, this.pos.z);
+    this.swimming = WATER_LEVEL - newGround > 0.9;
+    this.wading = WATER_LEVEL - newGround > 0.15;
+    // beim Schwimmen treibt man an der Oberfläche, sonst steht man auf dem Grund
+    this.pos.y = this.swimming ? WATER_LEVEL - 0.45 : newGround;
+    this.justEnteredWater = this.swimming && !wasSwimming;
 
     if (move.active && move.strength > 0.05) this.facing = Math.atan2(move.x, move.y);
 
@@ -125,12 +143,22 @@ export class Player {
     // Animation
     const sp = this.vel.length();
     const bob = this.moving ? Math.sin(this.t * 14) * 0.07 * Math.min(1, sp / 4) : Math.sin(this.t * 2.2) * 0.02;
-    this.rig.position.y = bob;
-    this.rig.rotation.x = Math.min(sp / this.speed, 1) * 0.16;
-    this.rig.rotation.z = this.moving ? Math.sin(this.t * 14) * 0.05 : 0;
+    this.rig.position.y = bob - (this.swimming ? 0.45 : this.wading ? 0.18 : 0);
+    this.rig.rotation.x = this.swimming ? 0.05 : Math.min(sp / this.speed, 1) * 0.16;
+    this.rig.rotation.z = this.moving && !this.swimming ? Math.sin(this.t * 14) * 0.05 : 0;
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.facing;
 
+    // Wellenring im Wasser statt Schatten am Boden
+    const inWater = this.wading || this.swimming;
+    this.ripple.visible = inWater;
+    this.blob.visible = !inWater;
+    if (inWater) {
+      const puls = 1 + Math.sin(this.t * 3.4) * 0.12 + (this.moving ? 0.25 : 0);
+      this.ripple.position.set(this.pos.x, WATER_LEVEL + 0.06, this.pos.z);
+      this.ripple.scale.setScalar(puls);
+      this.ripple.material.opacity = 0.34 - (this.moving ? 0 : 0.1);
+    }
     this.blob.position.set(this.pos.x, this.pos.y + 0.03, this.pos.z);
   }
 
