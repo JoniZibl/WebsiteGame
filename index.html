@@ -26,10 +26,12 @@
   <div id="hud">
     <div class="top-left">
       <div class="bar" id="hpBar"><div class="fill" id="hpFill"></div><span id="hpText">100</span></div>
+      <div class="bar xp" id="xpBar"><div class="fill" id="xpFill"></div><span id="xpText">Stufe 1</span></div>
       <div class="chips">
         <div class="chip"><span class="ic">💎</span><span id="score">0</span></div>
-        <div class="chip"><span class="ic">🗺️</span><span id="area">0, 0</span></div>
+        <div class="chip"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
       </div>
+      <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du rastest</span></div>
     </div>
     <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
   </div>
@@ -47,9 +49,18 @@
       <ul class="how">
         <li><b>Ziehen</b> (oder <b>WASD</b>) &rarr; laufen</li>
         <li><b>Loslassen</b> &rarr; du zielst &amp; schie&szlig;t automatisch</li>
-        <li>Die Welt wird endlos neu erzeugt</li>
+        <li>Edelsteine sammeln &rarr; neue F&auml;higkeiten</li>
+        <li>Am <b>Lagerfeuer</b> erholst du dich</li>
       </ul>
       <button id="startBtn" class="primary">Losziehen</button>
+    </div>
+  </div>
+
+  <div id="levelup" class="overlay hidden">
+    <div class="card">
+      <h1 id="levelTitle">Stufe 2</h1>
+      <p class="sub">Such dir etwas aus</p>
+      <div id="cards" class="cards"></div>
     </div>
   </div>
 
@@ -58,6 +69,7 @@
       <h1>Ausgeruht</h1>
       <p class="sub">Du wachst wieder am Lagerfeuer auf.</p>
       <p class="big" id="deadScore">0 💎</p>
+      <p class="sub" id="deadLevel">Stufe 1</p>
       <button id="againBtn" class="primary">Nochmal</button>
     </div>
   </div>

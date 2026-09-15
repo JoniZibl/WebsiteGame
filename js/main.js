@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { World, CHUNK, heightAt, setSeed } from './world.js';
+import { World, heightAt, setSeed, regionName } from './world.js';
 import { Input } from './input.js';
-import { Player, EnemyManager, ProjectileManager, Particles, Gems } from './entities.js';
+import { Player, EnemyManager, ProjectileManager, Particles, Gems, EnemyShots } from './entities.js';
 import { TiltShift } from './postfx.js';
+import { freshStats, pickThree, applyUpgrade, xpForLevel } from './upgrades.js';
 
 /* --------------------------------- Setup --------------------------------- */
 const canvas = document.getElementById('scene');
@@ -36,12 +37,18 @@ const sun = new THREE.DirectionalLight('#fff2d2', 1.4);
 sun.position.set(26, 42, 16);
 scene.add(sun, sun.target);
 
+// Ein einziges warmes Licht wandert zur nächsten Feuerstelle – das reicht,
+// damit Lager aus der Ferne einladend glimmen.
+const fireLight = new THREE.PointLight('#ffb069', 0, 12, 2);
+scene.add(fireLight);
+
 const post = new TiltShift(renderer);
 const world = new World(scene, 2);
 const input = new Input();
 const player = new Player(scene);
 const enemies = new EnemyManager(scene);
 const arrows = new ProjectileManager(scene);
+const shots = new EnemyShots(scene);
 const gems = new Gems(scene);
 const fx = new Particles(scene);
 
@@ -83,13 +90,15 @@ function applyQuality() {
 /* --------------------------------- Spiel --------------------------------- */
 const state = {
   running: false,
+  paused: false,          // während der Upgrade-Wahl
   score: 0,
   idleTime: 0,
   fireTimer: 0,
-  fireRate: 0.42,
+  resting: false,
   camPos: new THREE.Vector3(),
-  started: false,
 };
+
+let stats = freshStats();
 
 const hintEl = document.getElementById('hint');
 let hintTimer = null;
@@ -105,13 +114,19 @@ function newRun() {
   world.queue.length = 0;
 
   player.reset();
+  player.hpMax = 100;
+  player.hp = 100;
   enemies.reset();
   arrows.reset();
+  shots.reset();
   gems.reset();
   fx.reset();
+  stats = freshStats();
   state.score = 0;
   state.idleTime = 0;
   state.fireTimer = 0;
+  state.paused = false;
+  document.getElementById('levelup').classList.add('hidden');
 
   world.update(player.pos.x, player.pos.z, 60);   // Startgebiet sofort bauen
   player.pos.y = heightAt(player.pos.x, player.pos.z);
@@ -141,11 +156,50 @@ function onKill(enemy) {
 
 function onCollect() {
   state.score += 1;
+  stats.xp += 1;
+  if (stats.xp >= stats.xpNeed) levelUp();
+}
+
+function onShotHit(damage) {
+  fx.burst(player.pos, '#8a4a33', 5);
+  if (player.hurt(damage)) gameOver();
+}
+
+/* ------------------------- Stufenaufstieg ------------------------------- */
+const cardsEl = document.getElementById('cards');
+const levelupEl = document.getElementById('levelup');
+
+function levelUp() {
+  stats.xp -= stats.xpNeed;
+  stats.level += 1;
+  stats.xpNeed = xpForLevel(stats.level);
+  enemies.tough = stats.level - 1;
+
+  document.getElementById('levelTitle').textContent = 'Stufe ' + stats.level;
+  cardsEl.replaceChildren();
+  for (const up of pickThree(stats)) {
+    const taken = stats.taken[up.id] || 0;
+    const btn = document.createElement('button');
+    btn.className = 'upgrade';
+    btn.innerHTML =
+      `<span class="ic">${up.icon}</span><span><b>${up.title}</b><small>${up.text}</small></span>` +
+      (up.max < 99 ? `<span class="lvl">${taken}/${up.max}</span>` : '');
+    btn.addEventListener('click', () => {
+      applyUpgrade(up, stats, player);
+      levelupEl.classList.add('hidden');
+      state.paused = false;
+      updateHUD(true);
+    }, { once: true });
+    cardsEl.append(btn);
+  }
+  state.paused = true;
+  levelupEl.classList.remove('hidden');
 }
 
 function gameOver() {
   state.running = false;
   document.getElementById('deadScore').textContent = state.score + ' 💎';
+  document.getElementById('deadLevel').textContent = 'Stufe ' + stats.level + ' erreicht';
   document.getElementById('dead').classList.remove('hidden');
 }
 
@@ -161,14 +215,20 @@ function combat(dt) {
   state.idleTime += dt;
   if (state.idleTime < 0.1) return;
 
-  const target = enemies.nearest(player.pos, 17);
+  const target = enemies.nearest(player.pos, stats.range);
   if (!target) return;
 
   player.aimAt(target.pos.x, target.pos.z);
   state.fireTimer -= dt;
   if (state.fireTimer <= 0) {
-    state.fireTimer = state.fireRate;
-    arrows.fire(player.pos, target.pos.x - player.pos.x, target.pos.z - player.pos.z);
+    state.fireTimer = stats.fireRate;
+    arrows.damage = stats.damage;
+    const dx = target.pos.x - player.pos.x, dz = target.pos.z - player.pos.z;
+    const base = Math.atan2(dx, dz);
+    for (let i = 0; i < stats.arrows; i++) {
+      const a = base + (i - (stats.arrows - 1) / 2) * stats.spread;
+      arrows.fire(player.pos, Math.sin(a), Math.cos(a), stats.pierce);
+    }
     player.bow.rotation.z = player.bowRest + 0.5;   // kleines Zucken beim Schuss
   }
 }
@@ -178,14 +238,19 @@ const hpFill = document.getElementById('hpFill');
 const hpText = document.getElementById('hpText');
 const scoreEl = document.getElementById('score');
 const areaEl = document.getElementById('area');
+const xpFill = document.getElementById('xpFill');
+const xpText = document.getElementById('xpText');
+const restEl = document.getElementById('rest');
 let hudTimer = 0;
 
 function updateHUD(force) {
-  const pct = player.hp / player.hpMax;
-  hpFill.style.transform = `scaleX(${pct})`;
+  hpFill.style.transform = `scaleX(${player.hp / player.hpMax})`;
   hpText.textContent = Math.ceil(player.hp);
+  xpFill.style.transform = `scaleX(${Math.min(1, stats.xp / stats.xpNeed)})`;
+  xpText.textContent = 'Stufe ' + stats.level;
   scoreEl.textContent = state.score;
-  areaEl.textContent = `${Math.floor(player.pos.x / CHUNK)}, ${Math.floor(player.pos.z / CHUNK)}`;
+  areaEl.textContent = regionName(player.pos.x, player.pos.z);
+  restEl.classList.toggle('hidden', !state.resting);
   if (force) hudTimer = 0;
 }
 
@@ -196,13 +261,27 @@ function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 1 / 20);
 
-  if (state.running) {
+  if (state.running && !state.paused) {
     const move = input.read();
     player.update(dt, move, world);
     combat(dt);
-    enemies.update(dt, player, world, onPlayerHit);
+    enemies.update(dt, player, world, onPlayerHit, shots);
+
+    // Lagerfeuer: in der Nähe erholt man sich spürbar
+    const fire = world.nearestFire(player.pos, 34);
+    if (fire) {
+      const d = Math.hypot(fire.x - player.pos.x, fire.z - player.pos.z);
+      fireLight.position.set(fire.x, fire.y + 1.1, fire.z);
+      fireLight.intensity = 2.4 + Math.sin(state.idleTime * 9 + fire.x) * 0.4;
+      state.resting = d < 4.2;
+      if (state.resting) player.hp = Math.min(player.hpMax, player.hp + 16 * dt);
+    } else {
+      fireLight.intensity = 0;
+      state.resting = false;
+    }
     arrows.update(dt, enemies, onKill);
-    gems.update(dt, player, onCollect);
+    shots.update(dt, player, onShotHit);
+    gems.update(dt, player, onCollect, stats.magnet);
     fx.update(dt);
     player.bow.rotation.z += (player.bowRest - player.bow.rotation.z) * Math.min(1, dt * 10);
 
@@ -241,7 +320,8 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, arrows, gems, world, renderer, scene, camera, sun, post };
+window.__game = { state, player, enemies, arrows, shots, gems, world, renderer, scene, camera, sun, post,
+  get stats() { return stats; }, levelUp };
 
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());

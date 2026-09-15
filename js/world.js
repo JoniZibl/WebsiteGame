@@ -34,6 +34,26 @@ export function heightAt(x, z) {
 
 export function isLand(x, z) { return heightAt(x, z) > WATER_LEVEL + 0.45; }
 
+/* ------------------------------------------------------------------ */
+/*  Zwei Biom-Felder statt harter Grenzen: wie trocken und wie bewaldet */
+/*  eine Stelle ist. Beides blendet weich ineinander.                   */
+/* ------------------------------------------------------------------ */
+export function drynessAt(x, z) {
+  return smoothstep(0.44, 0.72, fbm(x * 0.0028, z * 0.0028, SEED + 201, 3));
+}
+
+export function woodinessAt(x, z) {
+  return smoothstep(0.34, 0.66, fbm(x * 0.0035, z * 0.0035, SEED + 311, 3));
+}
+
+export function regionName(x, z) {
+  const dry = drynessAt(x, z), wood = woodinessAt(x, z);
+  if (dry > 0.6) return wood > 0.5 ? 'Trockenwald' : 'Heide';
+  if (wood > 0.6) return 'Tiefer Wald';
+  if (wood > 0.3) return 'Hain';
+  return 'Wiesen';
+}
+
 function slopeAt(x, z) {
   const d = 1.2;
   const hx = heightAt(x + d, z) - heightAt(x - d, z);
@@ -54,23 +74,28 @@ const C = {
   grass3: new THREE.Color('#7d9455'),
   rock:   new THREE.Color('#a6a48d'),
   deep:   new THREE.Color('#7ea184'),
+  dry1:   new THREE.Color('#cdbf83'),
+  dry2:   new THREE.Color('#b3a566'),
 };
 
 const tmpColor = new THREE.Color();
-function terrainColor(h, slope, jitter) {
-  const shade = 0.95 + jitter * 0.11;   // leichtes Flackern für den Patchwork-Look
+function terrainColor(h, slope, jitter, dry) {
+  const shade = 0.96 + jitter * 0.08;   // leichtes Flackern für den Patchwork-Look
 
   // Gras: zwei Grüntöne weich ineinander, etwas heller mit der Höhe
   const t = clamp((jitter - 0.32) * 2.2, 0, 1);
   tmpColor.copy(C.grass2).lerp(C.grass1, t);
   tmpColor.lerp(C.grass3, clamp((h - 1) * 0.05, 0, 0.3));
 
+  // in trockenen Gegenden zieht dasselbe Grün ins Goldene
+  if (dry > 0) tmpColor.lerp(t > 0.5 ? C.dry1 : C.dry2, dry * 0.85);
+
   // Fels an steilen Hängen und auf Gipfeln
   tmpColor.lerp(C.rock, clamp((slope - 0.6) * 0.9, 0, 0.45) + clamp((h - 11) * 0.12, 0, 0.4));
 
-  // Strand als weicher Verlauf zum Wasser hin (keine harten Flecken)
-  const shore = smoothstep(WATER_LEVEL + 1.4, WATER_LEVEL + 0.2, h);
-  tmpColor.lerp(C.sand, shore * 0.85);
+  // Strand: schmaler Saum am Wasser, die Kante wird vom Noise leicht ausgefranst
+  const shoreH = WATER_LEVEL + 1.0 + (jitter - 0.5) * 0.7;
+  tmpColor.lerp(C.sand, smoothstep(shoreH, WATER_LEVEL + 0.05, h) * 0.9);
   if (h < WATER_LEVEL) tmpColor.lerp(C.deep, smoothstep(WATER_LEVEL, WATER_LEVEL - 1.2, h));
 
   return tmpColor.multiplyScalar(shade);
@@ -87,6 +112,8 @@ export const MATS = {
   leafB:  mat('#6b8b45'),
   leafC:  mat('#4a6633'),
   leafD:  mat('#2f4423'),
+  leafE:  mat('#84884a'),
+  leafF:  mat('#5f6836'),
   rock:   mat('#a3a18b'),
   wall:   mat('#eee1c0'),
   roof:   mat('#df8a5c'),
@@ -128,7 +155,7 @@ function push(bucket, key, geo, x, y, z, rotY = 0, sx = 1, sy = 1, sz = 1, rotX 
 /* ------------------------------------------------------------------ */
 /*  Requisiten eines Chunks                                            */
 /* ------------------------------------------------------------------ */
-function buildProps(cx, cz, bucket, colliders) {
+function buildProps(cx, cz, bucket, colliders, fires) {
   const rand = rngFor(cx, cz, SEED);
   const ox = cx * CHUNK, oz = cz * CHUNK;
 
@@ -167,6 +194,23 @@ function buildProps(cx, cz, bucket, colliders) {
       push(bucket, 'rock', G.rock, fx2, heightAt(fx2, fz2) + 0.12, fz2, 0, 0.7, 0.4, 0.7);
       push(bucket, 'tent', G.ember, fx2, heightAt(fx2, fz2) + 0.3, fz2, rand() * 6.28, 0.8, 0.8, 0.8);
       colliders.push({ x: tx, z: tz, r: 1.5 * sc });
+      fires.push({ x: fx2, y: heightAt(fx2, fz2), z: fz2 });
+    }
+  }
+
+  // --- einzelne Feuerstelle auf einer Lichtung ---
+  if (rand() < 0.3) {
+    const fx0 = ox + 6 + rand() * (CHUNK - 12);
+    const fz0 = oz + 6 + rand() * (CHUNK - 12);
+    const fy0 = heightAt(fx0, fz0);
+    if (fy0 > WATER_LEVEL + 1.0 && slopeAt(fx0, fz0) < 0.45) {
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        push(bucket, 'rock', G.rock, fx0 + Math.cos(a) * 0.7, fy0 + 0.1, fz0 + Math.sin(a) * 0.7,
+             rand() * 6.28, 0.45, 0.35, 0.45);
+      }
+      push(bucket, 'tent', G.ember, fx0, fy0 + 0.32, fz0, rand() * 6.28, 0.85, 0.9, 0.85);
+      fires.push({ x: fx0, y: fy0, z: fz0 });
     }
   }
 
@@ -205,12 +249,22 @@ function buildProps(cx, cz, bucket, colliders) {
     }
     if (blocked) continue;
 
-    const forest = fbm(x * 0.018, z * 0.018, SEED + 91, 3);
+    const dry = drynessAt(x, z);
+    const wood = woodinessAt(x, z);
+    const forest = fbm(x * 0.018, z * 0.018, SEED + 91, 3) * (0.45 + wood * 1.5) * (1 - dry * 0.65);
     const roll = rand();
 
     if (roll < forest * forest * 1.9 && slope < 0.75) {
       const sc = 0.75 + rand() * 0.75;
-      const leaf = ['leafA', 'leafB', 'leafC', 'leafD'][(rand() * 4) | 0];
+      // im tiefen Wald dunkle Nadeln, in der Heide ausgetrocknetes Oliv
+      let leaf;
+      if (dry > 0.5 && rand() < dry) {
+        leaf = rand() < 0.5 ? 'leafE' : 'leafF';
+      } else {
+        const shift = clamp(wood + (rand() - 0.5) * 0.6, 0, 0.999);
+        const leaf4 = ['leafA', 'leafB', 'leafC', 'leafD'];
+        leaf = leaf4[(shift * 4) | 0];
+      }
       if (rand() < 0.26) {
         // runder Laubbaum als Auflockerung
         push(bucket, 'trunk', G.trunk, x, y + 0.6 * sc, z, 0, sc * 1.1, sc * 1.3, sc * 1.1);
@@ -226,11 +280,11 @@ function buildProps(cx, cz, bucket, colliders) {
         push(bucket, leaf, G.cone2, x, y + 2.7 * hgt, z, rand() * 6.28, w, hgt, w);
       }
       colliders.push({ x, z, r: 0.55 * sc });
-    } else if (roll < 0.28) {
+    } else if (roll < 0.16 + dry * 0.1) {
       const sc = 0.5 + rand() * 0.9;
       push(bucket, 'rock', G.rock, x, y + 0.25 * sc, z, rand() * 6.28, sc, sc * 0.8, sc, rand() * 0.4);
       if (sc > 0.9) colliders.push({ x, z, r: 0.6 * sc });
-    } else if (roll < 0.40) {
+    } else if (roll < 0.40 && dry < 0.5) {
       // kleine Blütenbüschel
       const n = 2 + Math.floor(rand() * 4);
       for (let k = 0; k < n; k++) {
@@ -274,7 +328,7 @@ function buildGround(cx, cz) {
       const hAvg = (h00 + h10 + h01 + h11) * 0.25;
       const slope = (Math.abs(h00 - h11) + Math.abs(h10 - h01)) / (2 * STEP);
       const jitter = fbm(mx * 0.035, mz * 0.035, SEED + 3, 2);
-      const color = terrainColor(hAvg, slope, jitter).clone();
+      const color = terrainColor(hAvg, slope, jitter, drynessAt(mx, mz)).clone();
 
       // Diagonale abwechselnd kippen -> kein Streifenmuster im Licht
       if ((i + j) & 1) {
@@ -357,7 +411,8 @@ export class World {
     group.add(ground);
 
     const bucket = {};
-    buildProps(cx, cz, bucket, colliders);
+    const fires = [];
+    buildProps(cx, cz, bucket, colliders, fires);
     for (const key in bucket) {
       const merged = mergeGeometries(bucket[key], false);
       if (!merged) continue;
@@ -369,7 +424,7 @@ export class World {
     }
 
     this.scene.add(group);
-    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders });
+    this.chunks.set(this.key(cx, cz), { cx, cz, group, colliders, fires });
   }
 
   disposeChunk(k, chunk) {
@@ -387,6 +442,23 @@ export class World {
         o.receiveShadow = on;
       });
     }
+  }
+
+  // Nächste Feuerstelle im Umkreis – Rastplatz zum Heilen.
+  nearestFire(pos, radius) {
+    const ccx = Math.floor(pos.x / CHUNK), ccz = Math.floor(pos.z / CHUNK);
+    let best = null, bestD = radius * radius;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const chunk = this.chunks.get(this.key(ccx + dx, ccz + dz));
+        if (!chunk) continue;
+        for (const f of chunk.fires) {
+          const d = (f.x - pos.x) ** 2 + (f.z - pos.z) ** 2;
+          if (d < bestD) { bestD = d; best = f; }
+        }
+      }
+    }
+    return best;
   }
 
   // Schiebt eine Position aus Bäumen/Häusern heraus.

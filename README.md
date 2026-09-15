@@ -42,7 +42,8 @@ css/style.css       cozy UI (abgerundet, cremefarben, safe-area-tauglich)
 js/noise.js         deterministisches Value-Noise + fbm (gleiche Koordinate = gleicher Wert)
 js/world.js         Höhenfeld, Chunk-Streaming, Gelände-Mesh, Bäume/Häuser/Steinkreise
 js/input.js         Touch-Joystick + Tastatur
-js/entities.js      Spielfigur, Gegner, Pfeile, Edelsteine, Partikel
+js/entities.js      Spielfigur, Gegner, Pfeile, Geschosse, Edelsteine, Partikel
+js/upgrades.js      Upgrade-Karten, Erfahrungskurve
 js/postfx.js        Tilt-Shift (Miniatureffekt) als eigener Render-Pass
 js/main.js          Szene, Licht, Kamera, Spielschleife, Kampf-Regel
 vendor/three/       three.js (MIT) lokal eingebunden
@@ -75,16 +76,49 @@ Terrakotta `#df8a5c` ist der einzige Fremdton und bleibt den Dingen vorbehalten,
 die auffallen sollen: Dächer, Zelte, Gegner und die Kapuze der Figur. Die Figur
 selbst ist das hellste Objekt im Bild, damit man sie im Wald immer findet.
 
+### Regionen
+
+Statt harter Biomgrenzen gibt es zwei weiche Felder: `drynessAt` und
+`woodinessAt`. Trockenheit zieht dasselbe Grün ins Goldene, lichtet den Wald
+und streut mehr Steine; Bewaldung verdichtet ihn und verschiebt die Nadeln ins
+Dunkle. Daraus ergeben sich Wiesen, Hain, Tiefer Wald, Heide und Trockenwald —
+der Name der Gegend steht im HUD.
+
+### Fortschritt
+
+Jeder eingesammelte Edelstein ist ein Erfahrungspunkt. Bei einem Stufenaufstieg
+hält das Spiel an und bietet drei zufällige Karten an: Doppelschuss, Schnelle
+Hand, Scharfe Spitzen, Durchschlag, Weitsicht, Zäh, Leichte Schuhe,
+Sammlerglück oder Warme Suppe. Jede Karte hat ein Maximum und stapelt bis
+dahin. Mit jeder Stufe werden auch die Gegner zäher.
+
+### Lagerfeuer
+
+Zelte und einzelne Feuerstellen sind Rastplätze: In 4 m Umkreis heilt man
+16 Leben pro Sekunde, das HUD zeigt „Du rastest". Ein einziges wanderndes
+Punktlicht sitzt immer auf der nächstgelegenen Feuerstelle — deshalb glimmen
+Lager schon von Weitem warm, ohne dass es Dutzende Lichter kostet.
+
 ### Kampf
 
 Stehen bleiben → nach 0,1 s zielt die Figur automatisch auf den nächsten Gegner in
-17 m Umkreis und schießt alle 0,42 s einen Pfeil. Sobald man wieder läuft, hört das
-Schießen auf. Gegner werden in 17–28 m Entfernung nachgeschoben; je weiter man vom
-Startpunkt wegläuft, desto zäher und schneller werden sie.
+Reichweite und schießt. Sobald man wieder läuft, hört das Schießen auf.
+
+Drei Gegnersorten, die zu unterschiedlichem Verhalten zwingen:
+
+| Sorte | Verhalten |
+| --- | --- |
+| **Hüpfer** | rennt stur heran und beißt |
+| **Brocken** | langsam, zäh, trifft hart |
+| **Spucker** | hält 11 m Abstand, bläht sich vorm Schuss sichtbar auf und spuckt — dagegen hilft nur Laufen |
+
+Gegner werden in 17–28 m Entfernung nachgeschoben; je weiter man vom Startpunkt
+wegläuft und je höher die eigene Stufe, desto mehr und zähere kommen.
 
 ## Nächste Ideen
 
-- Items & kleine Upgrades nach jedem Level (mehr Pfeile, Rückstoß, Heilung)
-- Biome (Wüste, Schnee) über eine zweite Noise-Ebene
-- Lagerfeuer als Speicherpunkt, kleine NPC-Dörfer mit Aufträgen
 - Sounds und Musik
+- Bosse an Wahrzeichen (Steinkreis) mit eigener Beute
+- Dörfer beleben: NPCs, kleine Aufträge, Händler für Edelsteine
+- Ausrüstung, die einen Lauf überdauert
+- Tag- und Nachtwechsel

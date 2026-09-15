@@ -77,6 +77,7 @@ export class Player {
     this.radius = 0.45;
     this.hpMax = 100;
     this.hp = 100;
+    this.baseSpeed = 8.5;
     this.sinceHit = 99;
     this.t = 0;
     this.moving = false;
@@ -92,6 +93,7 @@ export class Player {
     this.pos.set(x, heightAt(x, z), z);
     this.hp = this.hpMax;
     this.sinceHit = 99;
+    this.speed = this.baseSpeed;
     this.vel.set(0, 0, 0);
   }
 
@@ -142,23 +144,36 @@ export class Player {
 }
 
 /* =========================================================================== */
-/*  Gegner — kleine hüpfende Würfelwesen                                       */
+/*  Gegner — drei Sorten mit unterschiedlichem Verhalten                       */
 /* =========================================================================== */
 const enemyGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+const hornGeo = new THREE.ConeGeometry(0.3, 0.45, 5);
 const eyeGeo = new THREE.BoxGeometry(0.13, 0.16, 0.08);
 const eyeMat = new THREE.MeshBasicMaterial({ color: '#3b3226' });
-const ENEMY_COLORS = ['#d4764a', '#bf6040', '#e0a061', '#a9713f'];
+
+export const KINDS = {
+  // hüpft stur auf einen zu und beißt
+  hopper:  { hp: 3, speed: 2.7, damage: 8,  scale: 1.0, colors: ['#d4764a', '#bf6040'], keep: 0 },
+  // langsam und zäh, tut richtig weh
+  brute:   { hp: 10, speed: 1.7, damage: 18, scale: 1.7, colors: ['#a9713f', '#8f5c38'], keep: 0 },
+  // hält Abstand und spuckt — dagegen muss man laufen
+  spitter: { hp: 4, speed: 2.3, damage: 0,  scale: 1.05, colors: ['#e0a061', '#cf9050'], keep: 11,
+             shot: { damage: 9, speed: 13, cooldown: 2.1 } },
+};
 
 class Enemy {
   constructor(scene) {
     this.group = new THREE.Group();
-    this.mat = new THREE.MeshLambertMaterial({ color: ENEMY_COLORS[0], flatShading: true });
+    this.mat = new THREE.MeshLambertMaterial({ color: KINDS.hopper.colors[0], flatShading: true });
     this.body = new THREE.Mesh(enemyGeo, this.mat);
     this.body.position.y = 0.4;
     this.body.castShadow = true;
+    this.horn = new THREE.Mesh(hornGeo, this.mat);
+    this.horn.position.y = 1.0;
+    this.horn.visible = false;
     const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.17, 0.5, 0.41);
     const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.17, 0.5, 0.41);
-    this.group.add(this.body, eyeL, eyeR);
+    this.group.add(this.body, this.horn, eyeL, eyeR);
     this.blob = makeBlob(0.8);
     scene.add(this.group, this.blob);
     this.alive = false;
@@ -168,60 +183,90 @@ class Enemy {
 
   setVisible(v) { this.group.visible = v; this.blob.visible = v; }
 
-  spawn(x, z, tier) {
+  spawn(x, z, tier, kindName, tough = 0) {
+    const k = KINDS[kindName];
+    this.kind = kindName;
+    this.def = k;
     this.pos.set(x, heightAt(x, z), z);
-    this.hp = 3 + tier;
+    this.hp = k.hp + tier + tough;
     this.hpMax = this.hp;
-    this.speed = 2.6 + Math.min(tier * 0.25, 1.8);
-    this.damage = 8 + tier * 2;
-    this.radius = 0.45;
-    this.cooldown = 0;
+    this.speed = k.speed + Math.min(tier * 0.22, 1.4);
+    this.damage = k.damage + tier * 2;
+    this.radius = 0.45 * k.scale;
+    this.cooldown = 0.8 + Math.random() * 0.8;
     this.flash = 0;
     this.phase = Math.random() * 6.28;
+    this.strafe = Math.random() < 0.5 ? 1 : -1;
     this.dying = 0;
     this.alive = true;
-    this.mat.color.set(ENEMY_COLORS[(Math.random() * ENEMY_COLORS.length) | 0]);
-    this.group.scale.setScalar(1);
+    this.mat.color.set(k.colors[(Math.random() * k.colors.length) | 0]);
+    this.horn.visible = kindName === 'spitter';
+    this.group.scale.setScalar(k.scale);
     this.setVisible(true);
   }
 
-  update(dt, player, world, onHitPlayer) {
+  update(dt, player, world, onHitPlayer, shots) {
     if (this.dying > 0) {
       this.dying -= dt;
-      const s = Math.max(0.001, this.dying / 0.25);
+      const s = Math.max(0.001, (this.dying / 0.25) * this.def.scale);
       this.group.scale.setScalar(s);
       if (this.dying <= 0) { this.alive = false; this.setVisible(false); }
       return;
     }
-    this.phase += dt * 7;
+    this.phase += dt * (7 / this.def.scale);
     this.cooldown -= dt;
     if (this.flash > 0) this.flash -= dt;
 
     const dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z;
     const dist = Math.hypot(dx, dz) || 1;
+    const next = this.pos.clone();
+    let moved = false;
 
-    if (dist > 1.1) {
-      const step = this.speed * dt;
-      const next = this.pos.clone();
-      next.x += (dx / dist) * step;
-      next.z += (dz / dist) * step;
-      if (heightAt(next.x, next.z) > WATER_LEVEL) {
-        world.resolveCollisions(next, this.radius);
-        this.pos.x = next.x; this.pos.z = next.z;
+    if (this.def.keep > 0) {
+      // Fernkämpfer: Wunschabstand halten und dabei seitlich ausweichen
+      const wish = this.def.keep;
+      let ax = 0, az = 0;
+      if (dist > wish) { ax = dx / dist; az = dz / dist; }
+      else if (dist < wish * 0.7) { ax = -dx / dist; az = -dz / dist; }
+      ax += (-dz / dist) * this.strafe * 0.5;
+      az += (dx / dist) * this.strafe * 0.5;
+      const len = Math.hypot(ax, az) || 1;
+      next.x += (ax / len) * this.speed * dt;
+      next.z += (az / len) * this.speed * dt;
+      moved = true;
+
+      if (this.cooldown <= 0 && dist < wish * 1.5) {
+        this.cooldown = this.def.shot.cooldown;
+        shots.fire(this.pos, dx / dist, dz / dist, this.def.shot.damage + Math.floor(this.damage * 0.2));
+        this.phase = 0;
       }
+    } else if (dist > 1.0 * this.def.scale) {
+      next.x += (dx / dist) * this.speed * dt;
+      next.z += (dz / dist) * this.speed * dt;
+      moved = true;
     } else if (this.cooldown <= 0) {
       this.cooldown = 0.9;
       onHitPlayer(this);
     }
 
+    if (moved && heightAt(next.x, next.z) > WATER_LEVEL) {
+      world.resolveCollisions(next, this.radius);
+      this.pos.x = next.x; this.pos.z = next.z;
+    }
+
     this.pos.y = heightAt(this.pos.x, this.pos.z);
     const hop = Math.abs(Math.sin(this.phase)) * 0.22;
-    this.group.position.set(this.pos.x, this.pos.y + hop, this.pos.z);
+    this.group.position.set(this.pos.x, this.pos.y + hop * this.def.scale, this.pos.z);
     this.group.rotation.y = Math.atan2(dx, dz);
-    this.body.scale.set(1 + hop * 0.35, 1 - hop * 0.3, 1 + hop * 0.35);
+    if (this.def.keep > 0) {
+      const wind = this.cooldown < 0.35 ? 1.2 : 1;   // kurz vorm Spucken bläht er sich auf
+      this.body.scale.set(wind, wind, wind);
+    } else {
+      this.body.scale.set(1 + hop * 0.35, 1 - hop * 0.3, 1 + hop * 0.35);
+    }
     this.mat.emissive.setScalar(this.flash > 0 ? 0.55 : 0);
     this.blob.position.set(this.pos.x, this.pos.y + 0.03, this.pos.z);
-    this.blob.scale.setScalar(0.8 - hop * 0.5);
+    this.blob.scale.setScalar((0.8 - hop * 0.5) * this.def.scale);
   }
 
   hurt(dmg) {
@@ -233,19 +278,32 @@ class Enemy {
 }
 
 export class EnemyManager {
-  constructor(scene, max = 14) {
+  constructor(scene, max = 16) {
     this.pool = Array.from({ length: max }, () => new Enemy(scene));
     this.spawnTimer = 1.5;
+    this.tough = 0;          // wächst mit dem Level des Spielers mit
   }
 
-  reset() { this.pool.forEach((e) => { e.alive = false; e.setVisible(false); }); this.spawnTimer = 2; }
+  reset() {
+    this.pool.forEach((e) => { e.alive = false; e.setVisible(false); });
+    this.spawnTimer = 2;
+    this.tough = 0;
+  }
 
   get living() { return this.pool.filter((e) => e.alive && e.dying <= 0); }
 
-  update(dt, player, world, onHitPlayer) {
+  pickKind(tier) {
+    const r = Math.random();
+    if (tier >= 1 && r < 0.28) return 'spitter';
+    if (tier >= 2 && r < 0.42) return 'brute';
+    if (tier >= 1 && r < 0.5) return 'brute';
+    return 'hopper';
+  }
+
+  update(dt, player, world, onHitPlayer, shots) {
     // Schwierigkeit wächst mit der Entfernung vom Startpunkt
     const tier = Math.floor(Math.hypot(player.pos.x, player.pos.z) / 90);
-    const target = Math.min(4 + tier * 2, this.pool.length);
+    const target = Math.min(4 + tier * 2 + Math.floor(this.tough * 0.6), this.pool.length);
 
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && this.living.length < target) {
@@ -257,12 +315,12 @@ export class EnemyManager {
           const d = 17 + Math.random() * 11;
           const x = player.pos.x + Math.cos(a) * d;
           const z = player.pos.z + Math.sin(a) * d;
-          if (isLand(x, z)) { free.spawn(x, z, tier); break; }
+          if (isLand(x, z)) { free.spawn(x, z, tier, this.pickKind(tier), this.tough); break; }
         }
       }
     }
 
-    for (const e of this.pool) if (e.alive) e.update(dt, player, world, onHitPlayer);
+    for (const e of this.pool) if (e.alive) e.update(dt, player, world, onHitPlayer, shots);
   }
 
   nearest(pos, maxDist) {
@@ -272,6 +330,54 @@ export class EnemyManager {
       if (d < bestD) { bestD = d; best = e; }
     }
     return best;
+  }
+}
+
+/* =========================================================================== */
+/*  Geschosse der Fernkämpfer — davor muss man weglaufen                       */
+/* =========================================================================== */
+export class EnemyShots {
+  constructor(scene, max = 24) {
+    // gut sichtbar: im grünen Wald ist Warmrot die einzige Farbe, die "Gefahr" sagt
+    const geo = new THREE.IcosahedronGeometry(0.32, 0);
+    const mat = new THREE.MeshLambertMaterial({ color: '#e2643c', flatShading: true, emissive: '#6d2412' });
+    this.items = Array.from({ length: max }, () => {
+      const m = new THREE.Mesh(geo, mat);
+      m.visible = false;
+      scene.add(m);
+      return { mesh: m, alive: false, dir: new THREE.Vector3(), life: 0, damage: 8 };
+    });
+    this.speed = 13;
+  }
+
+  reset() { this.items.forEach((p) => { p.alive = false; p.mesh.visible = false; }); }
+
+  fire(from, dirX, dirZ, damage) {
+    const p = this.items.find((i) => !i.alive);
+    if (!p) return;
+    p.alive = true;
+    p.life = 2.6;
+    p.damage = damage;
+    p.dir.set(dirX, 0, dirZ).normalize();
+    p.mesh.position.set(from.x, from.y + 0.7, from.z);
+    p.mesh.visible = true;
+  }
+
+  update(dt, player, onHit) {
+    for (const p of this.items) {
+      if (!p.alive) continue;
+      p.life -= dt;
+      p.mesh.position.addScaledVector(p.dir, this.speed * dt);
+      p.mesh.rotation.x += dt * 5;
+      p.mesh.rotation.y += dt * 4;
+      const dx = player.pos.x - p.mesh.position.x, dz = player.pos.z - p.mesh.position.z;
+      if (dx * dx + dz * dz < 0.75 * 0.75) {
+        p.alive = false; p.mesh.visible = false;
+        onHit(p.damage);
+      } else if (p.life <= 0) {
+        p.alive = false; p.mesh.visible = false;
+      }
+    }
   }
 }
 
@@ -286,7 +392,7 @@ export class ProjectileManager {
       const m = new THREE.Mesh(shaft, mat);
       m.visible = false;
       scene.add(m);
-      return { mesh: m, alive: false, dir: new THREE.Vector3(), life: 0 };
+      return { mesh: m, alive: false, dir: new THREE.Vector3(), life: 0, pierce: 0, hit: [] };
     });
     this.speed = 30;
     this.damage = 1;
@@ -294,11 +400,13 @@ export class ProjectileManager {
 
   reset() { this.items.forEach((p) => { p.alive = false; p.mesh.visible = false; }); }
 
-  fire(from, dirX, dirZ) {
+  fire(from, dirX, dirZ, pierce = 0) {
     const p = this.items.find((i) => !i.alive);
     if (!p) return;
     p.alive = true;
     p.life = 1.0;
+    p.pierce = pierce;
+    p.hit.length = 0;
     p.dir.set(dirX, 0, dirZ).normalize();
     p.mesh.position.set(from.x, from.y + 0.85, from.z);
     p.mesh.rotation.y = Math.atan2(p.dir.x, p.dir.z);
@@ -313,10 +421,14 @@ export class ProjectileManager {
       if (p.life <= 0) { p.alive = false; p.mesh.visible = false; continue; }
 
       for (const e of enemies.living) {
+        if (p.hit.includes(e)) continue;
+        const r = 0.55 * e.def.scale;
         const dx = e.pos.x - p.mesh.position.x, dz = e.pos.z - p.mesh.position.z;
-        if (dx * dx + dz * dz < 0.55 * 0.55) {
-          p.alive = false; p.mesh.visible = false;
+        if (dx * dx + dz * dz < r * r) {
+          p.hit.push(e);
           if (e.hurt(this.damage)) onKill(e);
+          if (p.pierce > 0) p.pierce -= 1;
+          else { p.alive = false; p.mesh.visible = false; }
           break;
         }
       }
@@ -350,7 +462,7 @@ export class Gems {
     g.mesh.visible = true;
   }
 
-  update(dt, player, onCollect) {
+  update(dt, player, onCollect, magnet = 4.5) {
     for (const g of this.items) {
       if (!g.alive) continue;
       g.t += dt * 3;
@@ -358,8 +470,8 @@ export class Gems {
       const dx = player.pos.x - p.x, dz = player.pos.z - p.z;
       const d = Math.hypot(dx, dz);
 
-      if (d < 4.5) {                       // sanfter Magnet
-        const pull = Math.min(1, (4.5 - d) / 4.5) * 14 * dt;
+      if (d < magnet) {                    // sanfter Magnet
+        const pull = Math.min(1, (magnet - d) / magnet) * 14 * dt;
         p.x += dx * pull; p.z += dz * pull;
       }
       if (d < 0.9) {
