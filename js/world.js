@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { fbm, noise2, rngFor, smoothstep, clamp } from './noise.js';
 
 export const CHUNK = 56;        // Kantenlänge eines Chunks in Weltmetern
-const RES = 28;                 // Quads pro Chunk-Kante (Auflösung des Bodens)
+const RES = 20;                 // Quads pro Chunk-Kante (bewusst grob, große Flächen)
 const STEP = CHUNK / RES;
 export const WATER_LEVEL = -1.2;
 
@@ -21,14 +21,15 @@ export function heightAt(x, z) {
   let h = (fbm(x * 0.014, z * 0.014, SEED, 4) - 0.45) * 17 * relief;
 
   // mittlere Wellen, damit nie eine tote Fläche entsteht
-  h += (fbm(x * 0.045, z * 0.045, SEED + 21, 2) - 0.5) * 3.2;
+  h += (fbm(x * 0.038, z * 0.038, SEED + 21, 2) - 0.5) * 3.0;
 
   // gewundene Flüsse
   const r = Math.abs(noise2(x * 0.0065, z * 0.0065, SEED + 31) - 0.5);
   h -= smoothstep(0.07, 0.0, r) * 7.0;
 
-  // feine Unebenheiten
-  h += (fbm(x * 0.11, z * 0.11, SEED + 13, 2) - 0.5) * 1.1;
+  // nur ganz feine Unebenheiten: große Flächen sollen ruhig bleiben,
+  // damit die Facetten als klare Flächen lesen statt als Geflimmer
+  h += (fbm(x * 0.08, z * 0.08, SEED + 13, 2) - 0.5) * 0.45;
   return h;
 }
 
@@ -74,13 +75,13 @@ const C = {
   grass3: new THREE.Color('#93d878'),
   rock:   new THREE.Color('#b6b3a2'),
   deep:   new THREE.Color('#45a89e'),
-  dry1:   new THREE.Color('#d9c477'),
-  dry2:   new THREE.Color('#c1a95d'),
+  dry1:   new THREE.Color('#e3cd7e'),
+  dry2:   new THREE.Color('#cdb768'),
 };
 
 const tmpColor = new THREE.Color();
 function terrainColor(h, slope, jitter, dry) {
-  const shade = 0.93 + jitter * 0.15;   // leichtes Flackern für den Patchwork-Look
+  const shade = 0.975 + jitter * 0.05;   // leichtes Flackern für den Patchwork-Look
 
   // Gras: zwei Grüntöne weich ineinander, dazu große, helle Wiesenflecken
   const t = clamp((jitter - 0.32) * 2.2, 0, 1);
@@ -88,7 +89,7 @@ function terrainColor(h, slope, jitter, dry) {
   tmpColor.lerp(C.grass3, clamp((h - 1) * 0.05, 0, 0.3) + clamp((jitter - 0.55) * 1.6, 0, 0.45));
 
   // in trockenen Gegenden zieht dasselbe Grün ins Goldene
-  if (dry > 0) tmpColor.lerp(t > 0.5 ? C.dry1 : C.dry2, dry * 0.85);
+  if (dry > 0) tmpColor.lerp(t > 0.5 ? C.dry1 : C.dry2, dry * 0.95);
 
   // Fels an steilen Hängen und auf Gipfeln
   tmpColor.lerp(C.rock, clamp((slope - 0.6) * 0.9, 0, 0.45) + clamp((h - 11) * 0.12, 0, 0.4));
@@ -581,75 +582,64 @@ const beaconMat = new THREE.MeshBasicMaterial({
 });
 
 /* ------------------------------------------------------------------ */
-/*  Boden-Mesh eines Chunks                                            */
+/*  Boden-Mesh eines Chunks (facettiert — das ist gewollt)              */
 /*                                                                     */
-/*  Der Boden wird weich schattiert: die Normalen kommen aus der        */
-/*  Ableitung der Höhenfunktion (nicht aus den Dreiecken), deshalb      */
-/*  passen sie über Chunkgrenzen hinweg nahtlos zusammen. Farben        */
-/*  liegen auf den Eckpunkten und laufen dadurch ineinander, statt      */
-/*  kachelweise umzuspringen.                                          */
+/*  Jede Kachel bekommt eine eigene Farbe und eine eigene Normale, die  */
+/*  Flächen sollen sichtbar bleiben. Damit daraus kein Karomuster wird, */
+/*  variiert die Farbe nur sehr langsam über die Landschaft und die     */
+/*  Diagonale der Kacheln kippt abwechselnd.                            */
 /* ------------------------------------------------------------------ */
-function groundNormal(x, z, out) {
-  const e = 1.2;
-  const hx = heightAt(x + e, z) - heightAt(x - e, z);
-  const hz = heightAt(x, z + e) - heightAt(x, z - e);
-  return out.set(-hx, 2 * e, -hz).normalize();
-}
-
-const _n = new THREE.Vector3();
-
 function buildGround(cx, cz) {
   const ox = cx * CHUNK, oz = cz * CHUNK;
+  const quads = RES * RES;
+  const pos = new Float32Array(quads * 6 * 3);
+  const col = new Float32Array(quads * 6 * 3);
+
   const side = RES + 1;
-  const count = side * side;
-
-  const pos = new Float32Array(count * 3);
-  const nor = new Float32Array(count * 3);
-  const col = new Float32Array(count * 3);
-  const idx = new Uint16Array(RES * RES * 6);
-
+  const hs = new Float32Array(side * side);
   for (let j = 0; j < side; j++) {
-    for (let i = 0; i < side; i++) {
-      const k = j * side + i;
-      const x = ox + i * STEP, z = oz + j * STEP;
-      const h = heightAt(x, z);
-
-      pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
-
-      groundNormal(x, z, _n);
-      nor[k * 3] = _n.x; nor[k * 3 + 1] = _n.y; nor[k * 3 + 2] = _n.z;
-
-      const slope = 1 - _n.y;
-      const jitter = fbm(x * 0.022, z * 0.022, SEED + 3, 2);
-      const c = terrainColor(h, slope * 1.8, jitter, drynessAt(x, z));
-      col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
-    }
+    for (let i = 0; i < side; i++) hs[j * side + i] = heightAt(ox + i * STEP, oz + j * STEP);
   }
 
-  let t = 0;
+  let p = 0, c = 0;
+  const writeTri = (ax, ay, az, bx, by, bz, cx2, cy, cz2, color) => {
+    pos[p++] = ax; pos[p++] = ay; pos[p++] = az;
+    pos[p++] = bx; pos[p++] = by; pos[p++] = bz;
+    pos[p++] = cx2; pos[p++] = cy; pos[p++] = cz2;
+    for (let k = 0; k < 3; k++) { col[c++] = color.r; col[c++] = color.g; col[c++] = color.b; }
+  };
+
   for (let j = 0; j < RES; j++) {
     for (let i = 0; i < RES; i++) {
-      const a = j * side + i, b = a + 1, c2 = a + side, d = c2 + 1;
-      // Diagonale abwechselnd kippen, damit keine Richtung im Relief dominiert
+      const x0 = ox + i * STEP, z0 = oz + j * STEP, x1 = x0 + STEP, z1 = z0 + STEP;
+      const h00 = hs[j * side + i], h10 = hs[j * side + i + 1];
+      const h01 = hs[(j + 1) * side + i], h11 = hs[(j + 1) * side + i + 1];
+
+      const mx = x0 + STEP * 0.5, mz = z0 + STEP * 0.5;
+      const hAvg = (h00 + h10 + h01 + h11) * 0.25;
+      const slope = (Math.abs(h00 - h11) + Math.abs(h10 - h01)) / (2 * STEP);
+      // große, ruhige Farbflächen statt kachelweisem Flimmern
+      const jitter = fbm(mx * 0.012, mz * 0.012, SEED + 3, 2);
+      const color = terrainColor(hAvg, slope, jitter, drynessAt(mx, mz)).clone();
+
       if ((i + j) & 1) {
-        idx[t++] = a; idx[t++] = c2; idx[t++] = d;
-        idx[t++] = a; idx[t++] = d; idx[t++] = b;
+        writeTri(x0, h00, z0, x0, h01, z1, x1, h11, z1, color);
+        writeTri(x0, h00, z0, x1, h11, z1, x1, h10, z0, color);
       } else {
-        idx[t++] = a; idx[t++] = c2; idx[t++] = b;
-        idx[t++] = b; idx[t++] = c2; idx[t++] = d;
+        writeTri(x0, h00, z0, x0, h01, z1, x1, h10, z0, color);
+        writeTri(x1, h10, z0, x0, h01, z1, x1, h11, z1, color);
       }
     }
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
   return geo;
 }
 
-const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 
 function pushOut(pos, radius, c) {
   const dx = pos.x - c.x, dz = pos.z - c.z;

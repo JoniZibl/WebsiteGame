@@ -109,15 +109,35 @@ genau der Trick, der echte Landschaften wie Modellbau aussehen lässt. Dazu eine
 Spur mehr Sättigung. Die Unschärfe läuft in halber Auflösung, auf dem Handy mit
 einem Durchgang statt zwei.
 
-### Weicher Boden
+### Facetten ja, Karomuster nein
 
-Der Boden ist bewusst nicht facettiert: Die Normalen kommen aus der Ableitung
-der Höhenfunktion statt aus den Dreiecken, deshalb passen sie über
-Chunkgrenzen hinweg nahtlos zusammen und das Gelände wird weich schattiert.
-Die Farben liegen auf den Eckpunkten und laufen ineinander, statt kachelweise
-umzuspringen — kein Karomuster, keine sichtbaren Kanten. Als indiziertes
-Gitter braucht ein Chunk dabei nur 841 statt 2904 Eckpunkte, was ein feineres
-Raster (28 statt 22 Quads je Kante) erlaubt.
+Der Boden ist bewusst facettiert — jede Kachel hat ihre eigene Normale und
+ihre eigene Farbe, die Flächen sollen sichtbar bleiben. Damit daraus kein
+Karomuster wird, greifen drei Dinge ineinander:
+
+- die Farbe variiert nur sehr langsam über die Landschaft (Noise-Wellenlänge
+  rund 80 m statt 30 m) und die Helligkeit pro Kachel schwankt nur um ±2,5 %
+- die Diagonale jeder Kachel kippt abwechselnd, damit keine Richtung im
+  Relief dominiert
+- das Höhenfeld ist im Detail ruhig gehalten, damit große Flächen als klare
+  Ebenen lesen statt als Geflimmer
+
+### Bildlook statt Geometrie
+
+Das Weiche kommt aus dem Post-Processing, nicht aus der Geometrie. Der
+Composite-Pass in `js/postfx.js` macht in einem Durchgang:
+
+| Schritt | Wirkung |
+| --- | --- |
+| Tilt-Shift | scharfes Band in der Mitte, alles andere weich (Miniatureffekt) |
+| Bloom aus demselben Unschärfe-Puffer | lässt harte Facettenkanten sanft ineinander laufen |
+| Belichtung + Rolloff | Lichter laufen weich aus statt abzuschneiden |
+| S-Kurve und Sättigung | gibt den Spielzeugfarben Biss |
+| Lift/Gain | leicht angehobene Schatten, warme Lichter — Filmlook |
+| Vignette und feines Korn | die Anmutung einer Aufnahme vom Modell |
+
+Dazu ein hoher Anteil Umgebungslicht: die Facetten unterscheiden sich in der
+Helligkeit nur wenig, wirken dadurch weich, bleiben aber sichtbar.
 
 ### Zwei Materialien für alles
 

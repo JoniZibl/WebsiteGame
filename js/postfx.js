@@ -39,6 +39,17 @@ const COMPOSITE_FRAG = /* glsl */`
   uniform float uAmount;     // Stärke insgesamt
   uniform float uTilt;       // leichte Neigung der Schärfeebene
   uniform float uSaturation; // Miniaturen wirken eine Spur farbiger
+
+  uniform float uBloom;      // weicher Lichtschein
+  uniform float uBloomCut;   // ab welcher Helligkeit er einsetzt
+  uniform float uExposure;
+  uniform float uSoftness;   // Rolloff der Lichter: macht harte Kanten mild
+  uniform float uContrast;   // sanfte S-Kurve
+  uniform vec3  uLift;       // hebt die Schatten an (Filmlook)
+  uniform vec3  uGain;       // färbt die Lichter
+  uniform float uVignette;
+  uniform float uGrain;
+  uniform float uTime;
   varying vec2 vUv;
 
   // Die Render-Targets liegen in sRGB, die Hardware gibt beim Lesen lineare
@@ -48,15 +59,42 @@ const COMPOSITE_FRAG = /* glsl */`
     return mix(pow(c, vec3(0.41666)) * 1.055 - 0.055, c * 12.92, step(c, vec3(0.0031308)));
   }
 
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
   void main() {
     float y = vUv.y + (vUv.x - 0.5) * uTilt;
     float m = smoothstep(uBand, uBand + uFeather, abs(y - uFocus));
     m = pow(m, 1.25) * uAmount;
 
-    vec3 color = mix(texture2D(tSharp, vUv).rgb, texture2D(tBlur, vUv).rgb, m);
+    vec3 sharp = texture2D(tSharp, vUv).rgb;
+    vec3 blurred = texture2D(tBlur, vUv).rgb;
+    vec3 color = mix(sharp, blurred, m);
+
+    // Der weichgezeichnete Puffer ist schon da – daraus wird der Lichtschein,
+    // der die harten Facettenkanten sanft ineinander blendet.
+    color += max(blurred - uBloomCut, 0.0) * uBloom;
+
+    // Belichtung und weiches Ausrollen der Lichter
+    color *= uExposure;
+    color = color / (1.0 + color * uSoftness);
+
+    color = toSRGB(color);
+
+    // sanfte S-Kurve: gibt den Farben wieder Biss, ohne hart zu werden
+    color = mix(color, color * color * (3.0 - 2.0 * color), uContrast);
+
     float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
     color = mix(vec3(lum), color, uSaturation);
-    gl_FragColor = vec4(toSRGB(color), 1.0);
+    color = uLift + color * (uGain - uLift);        // leicht angehobene Schatten, warme Lichter
+
+    float d = distance(vUv, vec2(0.5, 0.5));
+    color *= 1.0 - smoothstep(0.52, 1.05, d) * uVignette;
+
+    color += (hash(vUv * 600.0 + uTime) - 0.5) * uGrain;
+
+    gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
   }
 `;
 
@@ -93,7 +131,19 @@ export class TiltShift {
         uFeather: { value: 0.24 },
         uAmount: { value: 1.0 },
         uTilt: { value: 0.03 },
-        uSaturation: { value: 1.14 },
+        uSaturation: { value: 1.22 },
+
+        // Bildlook: weicher Schein, Filmkurve, warme Lichter, leichte Vignette
+        uBloom: { value: 0.2 },
+        uBloomCut: { value: 0.72 },
+        uExposure: { value: 1.04 },
+        uSoftness: { value: 0.16 },
+        uContrast: { value: 0.3 },
+        uLift: { value: new THREE.Vector3(0.012, 0.014, 0.02) },
+        uGain: { value: new THREE.Vector3(1.02, 1.0, 0.955) },
+        uVignette: { value: 0.3 },
+        uGrain: { value: 0.016 },
+        uTime: { value: 0 },
       },
       vertexShader: VERT,
       fragmentShader: COMPOSITE_FRAG,
@@ -150,6 +200,7 @@ export class TiltShift {
       this._blit(this.blurMat, this.b);
     }
 
+    this.compositeMat.uniforms.uTime.value = (performance.now() % 10000) * 0.001;
     this.compositeMat.uniforms.tSharp.value = this.scene.texture;
     this.compositeMat.uniforms.tBlur.value = this.b.texture;
     this._blit(this.compositeMat, null);

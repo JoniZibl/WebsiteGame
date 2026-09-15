@@ -35,10 +35,10 @@ scene.fog = new THREE.Fog('#ece0c0', 54, 132);
 const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 320);
 const CAM_OFFSET = new THREE.Vector3(0, 29, 30);
 
-const hemi = new THREE.HemisphereLight('#fff6e4', '#8fb96c', 0.78);
+const hemi = new THREE.HemisphereLight('#fff6e4', '#9dc178', 0.8);
 scene.add(hemi);
 
-const sun = new THREE.DirectionalLight('#fff6e2', 1.55);
+const sun = new THREE.DirectionalLight('#fff6e2', 1.2);
 sun.position.set(26, 42, 16);
 scene.add(sun, sun.target);
 
@@ -110,13 +110,13 @@ function applyQuality() {
 const DAY_LENGTH = 320;   // Sekunden
 
 const SKY_KEYS = [
-  { t: 0.00, sky: '#f6d9ac', sun: '#ffcd96', sunI: 0.75, hemi: 0.55, name: 'Morgen', icon: '🌅' },
-  { t: 0.18, sky: '#ece0c0', sun: '#fff6e2', sunI: 1.55, hemi: 0.70, name: 'Tag',    icon: '☀️' },
-  { t: 0.52, sky: '#ece0c0', sun: '#fff6e2', sunI: 1.55, hemi: 0.70, name: 'Tag',    icon: '☀️' },
-  { t: 0.66, sky: '#f0c091', sun: '#ffa472', sunI: 1.00, hemi: 0.58, name: 'Abend',  icon: '🌇' },
-  { t: 0.78, sky: '#4e5c78', sun: '#93aad2', sunI: 0.34, hemi: 0.36, name: 'Nacht',  icon: '🌙' },
-  { t: 0.94, sky: '#4e5c78', sun: '#93aad2', sunI: 0.34, hemi: 0.36, name: 'Nacht',  icon: '🌙' },
-  { t: 1.00, sky: '#f6d9ac', sun: '#ffcd96', sunI: 0.75, hemi: 0.55, name: 'Morgen', icon: '🌅' },
+  { t: 0.00, sky: '#f6d9ac', sun: '#ffcd96', sunI: 0.75, hemi: 0.68, name: 'Morgen', icon: '🌅' },
+  { t: 0.18, sky: '#ece0c0', sun: '#fff6e2', sunI: 1.20, hemi: 0.80, name: 'Tag',    icon: '☀️' },
+  { t: 0.52, sky: '#ece0c0', sun: '#fff6e2', sunI: 1.20, hemi: 0.80, name: 'Tag',    icon: '☀️' },
+  { t: 0.66, sky: '#f0c091', sun: '#ffa472', sunI: 0.95, hemi: 0.70, name: 'Abend',  icon: '🌇' },
+  { t: 0.78, sky: '#4e5c78', sun: '#93aad2', sunI: 0.28, hemi: 0.48, name: 'Nacht',  icon: '🌙' },
+  { t: 0.94, sky: '#4e5c78', sun: '#93aad2', sunI: 0.28, hemi: 0.48, name: 'Nacht',  icon: '🌙' },
+  { t: 1.00, sky: '#f6d9ac', sun: '#ffcd96', sunI: 0.75, hemi: 0.68, name: 'Morgen', icon: '🌅' },
 ];
 
 const skyA = new THREE.Color();
