@@ -23,6 +23,14 @@ python3 -m http.server 8000
 
 Am Handy im gleichen WLAN: `http://<IP-des-Rechners>:8000`.
 
+## Am Handy testen (GitHub Pages)
+
+Der Workflow `.github/workflows/pages.yml` veröffentlicht den Stand automatisch.
+Einmalig nötig: in GitHub unter **Settings → Pages → Build and deployment → Source**
+auf **GitHub Actions** stellen. Danach liegt das Spiel unter
+`https://jonizibl.github.io/WebsiteGame/` und lässt sich am Handy wie eine App
+zum Startbildschirm hinzufügen.
+
 ## Aufbau
 
 ```
