@@ -50,6 +50,8 @@ const COMPOSITE_FRAG = /* glsl */`
   uniform float uVignette;
   uniform float uGrain;
   uniform float uTime;
+  uniform float uDark;       // 0 = volles Licht, 1 = tiefe Dunkelheit
+  uniform vec3  uDarkTint;
   varying vec2 vUv;
 
   // Die Render-Targets liegen in sRGB, die Hardware gibt beim Lesen lineare
@@ -89,8 +91,16 @@ const COMPOSITE_FRAG = /* glsl */`
     color = mix(vec3(lum), color, uSaturation);
     color = uLift + color * (uGain - uLift);        // leicht angehobene Schatten, warme Lichter
 
+    // Die Dunkelheit nimmt der Welt die Farbe und zieht sie ins Kalte.
+    if (uDark > 0.001) {
+      float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      vec3 cold = mix(vec3(grey), uDarkTint * grey * 1.7, 0.55);
+      color = mix(color, cold, uDark * 0.85);
+      color *= 1.0 - uDark * 0.32;
+    }
+
     float d = distance(vUv, vec2(0.5, 0.5));
-    color *= 1.0 - smoothstep(0.52, 1.05, d) * uVignette;
+    color *= 1.0 - smoothstep(0.52 - uDark * 0.34, 1.05 - uDark * 0.4, d) * (uVignette + uDark * 0.55);
 
     color += (hash(vUv * 600.0 + uTime) - 0.5) * uGrain;
 
@@ -144,6 +154,8 @@ export class TiltShift {
         uVignette: { value: 0.3 },
         uGrain: { value: 0.016 },
         uTime: { value: 0 },
+        uDark: { value: 0 },
+        uDarkTint: { value: new THREE.Vector3(0.42, 0.5, 0.78) },
       },
       vertexShader: VERT,
       fragmentShader: COMPOSITE_FRAG,

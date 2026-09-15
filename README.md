@@ -1,18 +1,51 @@
-# Cozy Grove — Prototyp
+# Glut
 
-Ein kleiner Top-Down-Prototyp im Browser: prozedural erzeugte, endlose Low-Poly-Welt,
-eine Figur in der Mitte, Steuerung wie in *Archero* — **laufen oder schießen, nie beides**.
-Die Welt sieht durch einen Tilt-Shift-Pass aus wie eine Miniaturlandschaft.
+> Du bist ein Kind mit einer Laterne als Kopf. Deine Flamme ist Leben,
+> Munition und Licht — alles in einem einzigen Balken. Jeder Schuss kostet
+> dich Helligkeit. Jedes Feuer, das du entzündest, holt ein Stück Welt aus
+> dem Dunkel zurück.
 
-Gebaut mit [three.js](https://threejs.org) als reine statische Seite. Kein Build-Schritt,
-kein npm install, kein CDN: three.js liegt mit im Repo unter `vendor/`.
+Ein Top-Down-Spiel im Browser, prozedural erzeugt, in einer Welt, die bleibt.
+Gebaut mit [three.js](https://threejs.org) als reine statische Seite. Kein
+Build-Schritt, kein npm install, kein CDN: three.js liegt mit im Repo unter
+`vendor/`.
+
+## Die eine Regel
+
+Es gibt keinen Lebensbalken, keine Munition und keine Ausdauer — nur die
+Flamme in deiner Laterne.
+
+| | |
+| --- | --- |
+| **Schießen** | kostet Flamme; je voller die Laterne, desto stärker die Pfeile |
+| **Getroffen werden** | kostet Flamme |
+| **Dunkelheit** | zehrt sie aus — je finsterer, desto schneller |
+| **Tageslicht** | speist sie langsam |
+| **Feuer** | füllt sie schnell wieder auf |
+| **Glut einsammeln** | gibt einen Schluck zurück |
+| **Flamme leer** | du erlischst und wachst in deinem Zelt wieder auf |
+
+Daraus entsteht die eigentliche Frage des Spiels: *Schieße ich noch einmal —
+oder reicht mein Licht dann nicht mehr bis zum Lager?*
+
+## Die Dunkelheit ist der Gegner
+
+Weit weg von jedem Feuer verliert die Welt ihre Farben, der Nebel zieht zu,
+das Bild wird kalt und eng. Dort werden Schatten geboren, und dort zehrt die
+Laterne am schnellsten. Im hellen Feuerlicht dagegen **zerfallen Schatten von
+selbst** — sie meiden es schon beim Erscheinen.
+
+Damit ist das Lager keine Verzierung, sondern die Waffe: Ein Lagerfeuer
+befriedet seine Umgebung dauerhaft, eine Laterne sichert einen Weg. Man
+gewinnt nicht, indem man mehr trifft, sondern indem man mehr Licht in die
+Welt setzt.
 
 ## Steuerung
 
 | Aktion | Handy | Desktop |
 | --- | --- | --- |
 | Laufen | irgendwo auf dem Bildschirm ziehen (Joystick erscheint unter dem Finger) | `WASD` / Pfeiltasten |
-| Angreifen | Finger loslassen → automatisches Zielen & Schießen | Tasten loslassen |
+| Angreifen | Finger loslassen → automatisches Zielen & Schießen (kostet Flamme) | Tasten loslassen |
 | Grafik umschalten | ✨-Knopf oben rechts (Schatten an/aus) | ✨-Knopf |
 
 ## Lokal starten
@@ -42,7 +75,7 @@ css/style.css       cozy UI (abgerundet, cremefarben, safe-area-tauglich)
 js/noise.js         deterministisches Value-Noise + fbm (gleiche Koordinate = gleicher Wert)
 js/world.js         Höhenfeld, Chunk-Streaming, Gelände-Mesh, Bäume/Häuser/Steinkreise
 js/input.js         Touch-Joystick + Tastatur
-js/entities.js      Spielfigur, Gegner, Wächter, Pfeile, Geschosse, Edelsteine, Partikel
+js/entities.js      Laternenkind, Schatten, Wächter, Pfeile, Geschosse, Glut, Partikel
 js/upgrades.js      Upgrade-Karten, Erfahrungskurve
 js/audio.js         synthetisierter Klang (Wind, Feuer, Effekte, Untermalung)
 js/villagers.js     Dorfbewohner und Krämerstand
@@ -226,6 +259,18 @@ Zelte und einzelne Feuerstellen sind Rastplätze: In 4 m Umkreis heilt man
 16 Leben pro Sekunde, das HUD zeigt „Du rastest". Ein einziges wanderndes
 Punktlicht sitzt immer auf der nächstgelegenen Feuerstelle — deshalb glimmen
 Lager schon von Weitem warm, ohne dass es Dutzende Lichter kostet.
+
+### Lichtkarte
+
+`fireLightAt()` fragt, wie viel **echtes Feuerlicht** an einer Stelle ankommt
+(gebaute Feuer und Laternen, Feuerstellen der Welt, zur Hälfte die eigene
+Laterne). Daran hängen die Regeln: Schatten zerfallen ab 0,5 und erscheinen
+nur unter 0,45.
+
+`ambientAt()` fragt, wie hell es **wirkt** (Tageslicht plus Feuer, die eigene
+Laterne nur zu einem Sechstel). Daran hängen Farbe, Nebel und die Brennrate.
+Die Trennung ist wichtig: sonst würde die eigene Laterne die Nacht wegleuchten
+und das Bild nie dunkel werden.
 
 ### Kampf
 

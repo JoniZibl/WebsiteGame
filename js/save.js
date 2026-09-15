@@ -5,11 +5,11 @@
 const KEY = 'cozy-grove-save-1';
 
 export const PERKS = [
-  { id: 'leben',   icon: '🫀', title: 'Zähe Haut',      text: '+20 Leben zu Beginn',              max: 5, cost: (n) => 12 + n * 10 },
+  { id: 'leben',   icon: '🏮', title: 'Größere Laterne', text: '+20 Fassungsvermögen',              max: 5, cost: (n) => 12 + n * 10 },
   { id: 'schaden', icon: '🔪', title: 'Harter Kern',    text: '+1 Grundschaden',                  max: 4, cost: (n) => 18 + n * 14 },
   { id: 'pfeil',   icon: '🏹', title: 'Zweiter Pfeil',  text: 'Ein Pfeil mehr von Anfang an',     max: 1, cost: () => 70 },
   { id: 'tempo',   icon: '🥾', title: 'Wanderstiefel',  text: '+6 % Lauftempo',                   max: 4, cost: (n) => 15 + n * 10 },
-  { id: 'glueck',  icon: '🍀', title: 'Glückssteine',   text: 'Gegner lassen öfter zwei Steine fallen', max: 3, cost: (n) => 25 + n * 18 },
+  { id: 'glueck',  icon: '🍀', title: 'Reiche Glut',     text: 'Schatten lassen öfter zwei Glut fallen', max: 3, cost: (n) => 25 + n * 18 },
 ];
 
 const EMPTY = {

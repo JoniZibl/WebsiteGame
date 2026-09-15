@@ -41,6 +41,19 @@ html, body {
   background: linear-gradient(180deg, #a8bd78, #7d9455);
   transform-origin: left center; transition: transform .18s ease-out;
 }
+
+/* Die Laterne: der einzige Balken des Spiels */
+.bar.flame .fill {
+  background: linear-gradient(180deg, #ffe9a6, #ff9f45);
+  box-shadow: 0 0 14px rgba(255, 168, 72, .75);
+}
+.bar.flame.low .fill {
+  background: linear-gradient(180deg, #ff9f6a, #e2542f);
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: .55; } }
+
+.card .claim { font-size: 15px; opacity: .8; line-height: 1.45; margin-bottom: 18px; }
 .bar span {
   position: absolute; inset: 0; display: grid; place-items: center;
   font-weight: 800; font-size: 13px; letter-spacing: .3px; color: #34411f;

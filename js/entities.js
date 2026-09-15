@@ -23,49 +23,73 @@ export class Player {
     this.group.add(this.rig);
     this.rig.scale.setScalar(1.7);   // gut lesbar aus der Vogelperspektive
 
-    // Die Figur ist das hellste Ding im Bild, die Kapuze der warme Akzent.
-    const cloak = new THREE.MeshLambertMaterial({ color: '#f2e7cc', flatShading: true });
-    const cloakDark = new THREE.MeshLambertMaterial({ color: '#df8a5c', flatShading: true });
-    const skin = new THREE.MeshLambertMaterial({ color: '#e8cba6', flatShading: true });
-    const cream = new THREE.MeshLambertMaterial({ color: '#fbf4e2', flatShading: true });
-    const pack = new THREE.MeshLambertMaterial({ color: '#7d8f56', flatShading: true });
-    const wood = new THREE.MeshLambertMaterial({ color: '#6b5643', flatShading: true });
+    // ---------------------------------------------------------------
+    //  Das Laternenkind: ein kleiner Mantel, darauf eine Laterne statt
+    //  eines Kopfes. Die Flamme darin ist zugleich Lebensbalken, Munition
+    //  und Lichtquelle — die Silhouette ist das Spielprinzip.
+    // ---------------------------------------------------------------
+    const cloak = new THREE.MeshLambertMaterial({ color: '#4b5a74', flatShading: true });
+    const cloakLight = new THREE.MeshLambertMaterial({ color: '#68789a', flatShading: true });
+    const scarf = new THREE.MeshLambertMaterial({ color: '#df6a4a', flatShading: true });
+    const metal = new THREE.MeshLambertMaterial({ color: '#8f7b52', flatShading: true });
+    const metalDark = new THREE.MeshLambertMaterial({ color: '#5e4f34', flatShading: true });
 
-    // Silhouette von oben: breite Schultern, davor der Kopf, hinten die Kapuze.
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.4, 3, 9), cloak);
-    torso.scale.set(1.3, 1, 0.95);
-    torso.position.y = 0.55;
-
-    const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.17, 7, 5), cream);
-    shoulderL.position.set(-0.36, 0.8, 0.02);
-    const shoulderR = shoulderL.clone();
-    shoulderR.position.x = 0.36;
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.29, 9, 7), skin);
-    head.position.set(0, 1.12, 0.06);
-
-    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.33, 0.55, 8), cloakDark);
-    hood.position.set(0, 1.3, -0.16);
-    hood.rotation.x = -0.45;                       // Zipfel zeigt nach hinten
-
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 5), skin);
-    nose.position.set(0, 1.08, 0.3);
-    nose.rotation.x = Math.PI / 2;
-
-    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.26), pack);
-    bag.position.set(0, 0.62, -0.38);
-
-    // Bogen liegt flach vor der Brust – von oben ein klarer Richtungspfeil
-    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 4, 9, Math.PI * 0.9), wood);
-    bow.position.set(0.3, 0.62, 0.26);
-    bow.rotation.set(Math.PI / 2, 0, -Math.PI / 2);
-
-    [torso, shoulderL, shoulderR, head, hood, nose, bag, bow].forEach((m) => {
-      m.castShadow = true;
-      this.rig.add(m);
+    // Das Glas glüht von innen — die Helligkeit folgt der Flamme.
+    this.glassMat = new THREE.MeshLambertMaterial({
+      color: '#ffd89a', emissive: '#ffae4d', transparent: true, opacity: 0.92, flatShading: true,
     });
-    this.bow = bow;
-    this.bowRest = bow.rotation.z;
+    this.flameMat = new THREE.MeshBasicMaterial({ color: '#fff0c4' });
+
+    const cape = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.95, 8), cloak);
+    cape.position.y = 0.48;
+    const capeTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.47, 0.1, 8), cloakLight);
+    capeTrim.position.y = 0.06;
+
+    const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.22, 2, 6), cloakLight);
+    armL.position.set(-0.36, 0.62, 0.05);
+    armL.rotation.z = 0.25;
+    const armR = armL.clone();
+    armR.position.x = 0.36;
+    armR.rotation.z = -0.25;
+
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.16, 8), scarf);
+    collar.position.y = 0.96;
+    const scarfEnd = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.1), scarf);
+    scarfEnd.position.set(0.02, 0.76, -0.3);
+    scarfEnd.rotation.x = 0.35;
+
+    // Laternenkopf: Boden, Glas, Deckel, Bügel
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.12, 8), metal);
+    base.position.y = 1.08;
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.46, 8), this.glassMat);
+    glass.position.y = 1.36;
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 5), this.flameMat);
+    flame.position.y = 1.32;
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.33, 0.24, 8), metal);
+    cap.position.y = 1.7;
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 4, 10, Math.PI), metalDark);
+    handle.position.y = 1.84;
+    handle.rotation.y = Math.PI / 2;
+
+    // zwei Streben geben der Laterne Kanten statt einer glatten Röhre
+    const bars = [0, 1].map((i) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.48, 0.05), metalDark);
+      b.position.set(Math.cos(i * Math.PI / 2) * 0.26, 1.36, Math.sin(i * Math.PI / 2) * 0.26);
+      return b;
+    });
+
+    // kleines Windlicht in der Hand zeigt die Blickrichtung an
+    const docht = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.3), metalDark);
+    docht.position.set(0, 0.7, 0.42);
+
+    [cape, capeTrim, armL, armR, collar, scarfEnd, base, cap, handle, ...bars, docht]
+      .forEach((m) => { m.castShadow = true; this.rig.add(m); });
+    this.rig.add(glass, flame);
+
+    this.glass = glass;
+    this.flameMesh = flame;
+    this.bow = docht;                 // trägt weiter das Zucken beim Schuss
+    this.bowRest = docht.rotation.z;
 
     this.blob = makeBlob(1.05);
 
@@ -86,8 +110,9 @@ export class Player {
     this.facing = 0;
     this.speed = 8.5;
     this.radius = 0.45;
-    this.hpMax = 100;
-    this.hp = 100;
+    this.hpMax = 100;          // Fassungsvermögen der Laterne
+    this.hp = 70;              // aktuelle Flamme
+    this.burn = 1.1;           // wie schnell sie herunterbrennt (pro Sekunde)
     this.baseSpeed = 8.5;
     this.sinceHit = 99;
     this.t = 0;
@@ -102,7 +127,7 @@ export class Player {
       x = Math.cos(a) * r; z = Math.sin(a) * r;
     }
     this.pos.set(x, heightAt(x, z), z);
-    this.hp = this.hpMax;
+    this.hp = this.hpMax * 0.7;
     this.sinceHit = 99;
     this.speed = this.baseSpeed;
     this.vel.set(0, 0, 0);
@@ -137,8 +162,8 @@ export class Player {
 
     if (move.active && move.strength > 0.05) this.facing = Math.atan2(move.x, move.y);
 
-    // ruhige Regeneration, wenn man kurz nicht getroffen wurde
-    if (this.sinceHit > 4) this.hp = Math.min(this.hpMax, this.hp + 5 * dt);
+    // Die Flamme brennt herunter (oder wächst im Tageslicht), nie über den Rand.
+    this.hp = Math.min(this.hpMax, Math.max(0, this.hp - this.burn * dt));
 
     // Animation
     const sp = this.vel.length();
@@ -160,7 +185,28 @@ export class Player {
       this.ripple.material.opacity = 0.34 - (this.moving ? 0 : 0.1);
     }
     this.blob.position.set(this.pos.x, this.pos.y + 0.03, this.pos.z);
+
+    // Die Laterne lebt: Flackern, Höhe der Flamme, Farbe nach Füllstand
+    const f = this.flame;
+    const flicker = 0.88 + Math.sin(this.t * 11) * 0.06 + Math.sin(this.t * 23.7) * 0.04;
+    this.glassMat.emissiveIntensity = (0.25 + f * 1.15) * flicker;
+    this.glassMat.emissive.setRGB(1, 0.42 + f * 0.36, 0.12 + f * 0.36);
+    this.flameMat.color.setRGB(1, 0.62 + f * 0.33, 0.3 + f * 0.5);
+    this.flameMesh.scale.set(0.5 + f * 0.6, (0.35 + f * 0.9) * flicker, 0.5 + f * 0.6);
+    this.flameMesh.rotation.y += dt * 2.4;
   }
+
+  /** Füllstand der Laterne, 0..1 — Leben, Munition und Licht in einem. */
+  get flame() { return this.hp / this.hpMax; }
+
+  /** Kostet Licht. Gibt false zurück, wenn nichts mehr da ist. */
+  spend(amount) {
+    if (this.hp <= 0) return false;
+    this.hp = Math.max(0, this.hp - amount);
+    return true;
+  }
+
+  feed(amount) { this.hp = Math.min(this.hpMax, this.hp + amount); }
 
   aimAt(x, z) { this.facing = Math.atan2(x - this.pos.x, z - this.pos.z); }
 
@@ -177,15 +223,15 @@ export class Player {
 const enemyGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
 const hornGeo = new THREE.ConeGeometry(0.3, 0.45, 5);
 const eyeGeo = new THREE.BoxGeometry(0.13, 0.16, 0.08);
-const eyeMat = new THREE.MeshBasicMaterial({ color: '#3b3226' });
+const eyeMat = new THREE.MeshBasicMaterial({ color: '#ffd27a' });   // glühende Augen im Dunkeln
 
 export const KINDS = {
-  // hüpft stur auf einen zu und beißt
-  hopper:  { hp: 3, speed: 2.7, damage: 8,  scale: 1.0, colors: ['#d4764a', '#bf6040'], keep: 0 },
-  // langsam und zäh, tut richtig weh
-  brute:   { hp: 10, speed: 1.7, damage: 18, scale: 1.7, colors: ['#a9713f', '#8f5c38'], keep: 0 },
-  // hält Abstand und spuckt — dagegen muss man laufen
-  spitter: { hp: 4, speed: 2.3, damage: 0,  scale: 1.05, colors: ['#e0a061', '#cf9050'], keep: 11,
+  // huscht stur auf einen zu
+  hopper:  { hp: 3, speed: 2.7, damage: 8,  scale: 1.0, colors: ['#2f3346', '#3a3f56'], keep: 0 },
+  // schwer und zäh, frisst viel Licht
+  brute:   { hp: 10, speed: 1.7, damage: 18, scale: 1.7, colors: ['#23273a', '#2c3147'], keep: 0 },
+  // hält Abstand und spuckt Dunkelheit
+  spitter: { hp: 4, speed: 2.3, damage: 0,  scale: 1.05, colors: ['#3b3352', '#463c61'], keep: 11,
              shot: { damage: 9, speed: 13, cooldown: 2.1 } },
 };
 
@@ -233,7 +279,7 @@ class Enemy {
     this.setVisible(true);
   }
 
-  update(dt, player, world, onHitPlayer, shots) {
+  update(dt, player, world, onHitPlayer, shots, brightness = 0) {
     if (this.dying > 0) {
       this.dying -= dt;
       const s = Math.max(0.001, (this.dying / 0.25) * this.def.scale);
@@ -244,6 +290,16 @@ class Enemy {
     this.phase += dt * (7 / this.def.scale);
     this.cooldown -= dt;
     if (this.flash > 0) this.flash -= dt;
+
+    // Im hellen Licht zerfallen Schatten – das Lager ist die eigentliche Waffe.
+    if (brightness > 0.5) {
+      this.burning = (brightness - 0.5) * 7;
+      this.hp -= this.burning * dt;
+      this.flash = Math.max(this.flash, 0.05);
+      if (this.hp <= 0) { this.dying = 0.25; this.onBurn?.(this); return; }
+    } else {
+      this.burning = 0;
+    }
 
     const dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z;
     const dist = Math.hypot(dx, dz) || 1;
@@ -311,6 +367,8 @@ export class EnemyManager {
     this.spawnTimer = 1.5;
     this.tough = 0;          // wächst mit dem Level des Spielers mit
     this.nightBonus = 0;     // nachts sind mehr unterwegs
+    this.lightHere = 1;      // Helligkeit beim Spieler (0 = finster)
+    this.onBurn = null;      // Rückruf, wenn ein Schatten im Licht zerfällt
   }
 
   reset() {
@@ -329,10 +387,14 @@ export class EnemyManager {
     return 'hopper';
   }
 
-  update(dt, player, world, onHitPlayer, shots) {
+  update(dt, player, world, onHitPlayer, shots, brightnessAt = () => 1) {
     // Schwierigkeit wächst mit der Entfernung vom Startpunkt
     const tier = Math.floor(Math.hypot(player.pos.x, player.pos.z) / 90);
-    const target = Math.min(4 + tier * 2 + Math.floor(this.tough * 0.6) + this.nightBonus, this.pool.length);
+    const dark = 1 - (this.lightHere ?? 1);
+    const target = Math.min(
+      Math.round((3 + tier * 2 + this.tough * 0.6 + this.nightBonus) * (0.35 + dark * 1.3)),
+      this.pool.length
+    );
 
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && this.living.length < target) {
@@ -344,12 +406,19 @@ export class EnemyManager {
           const d = 17 + Math.random() * 11;
           const x = player.pos.x + Math.cos(a) * d;
           const z = player.pos.z + Math.sin(a) * d;
-          if (isLand(x, z)) { free.spawn(x, z, tier, this.pickKind(tier), this.tough); break; }
+          if (isLand(x, z) && brightnessAt({ x, z }) < 0.45) {
+            free.spawn(x, z, tier, this.pickKind(tier), this.tough);
+            break;
+          }
         }
       }
     }
 
-    for (const e of this.pool) if (e.alive) e.update(dt, player, world, onHitPlayer, shots);
+    for (const e of this.pool) {
+      if (!e.alive) continue;
+      e.onBurn = this.onBurn;
+      e.update(dt, player, world, onHitPlayer, shots, brightnessAt(e.pos));
+    }
   }
 
   spawnAt(x, z, kind, tier) {

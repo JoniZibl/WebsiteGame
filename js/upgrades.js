@@ -33,9 +33,9 @@ export const UPGRADES = [
     apply: (s) => { s.range += 3; },
   },
   {
-    id: 'zaeh', icon: '🫀', max: 4,
-    title: 'Zäh',
-    text: '25 Leben mehr, sofort aufgefüllt',
+    id: 'zaeh', icon: '🏮', max: 4,
+    title: 'Tiefe Laterne',
+    text: '25 mehr Fassungsvermögen, sofort gefüllt',
     apply: (s, player) => { player.hpMax += 25; player.hp = player.hpMax; },
   },
   {
@@ -47,13 +47,13 @@ export const UPGRADES = [
   {
     id: 'magnet', icon: '🧲', max: 2,
     title: 'Sammlerglück',
-    text: 'Edelsteine fliegen dir weiter entgegen',
+    text: 'Glut fliegt dir weiter entgegen',
     apply: (s) => { s.magnet += 3; },
   },
   {
-    id: 'rast', icon: '🍲', max: 99,
-    title: 'Warme Suppe',
-    text: 'Heilt dich sofort um 50 Leben',
+    id: 'rast', icon: '🍯', max: 99,
+    title: 'Lampenöl',
+    text: 'Füllt deine Laterne sofort um 50 auf',
     apply: (s, player) => { player.hp = Math.min(player.hpMax, player.hp + 50); },
   },
 ];

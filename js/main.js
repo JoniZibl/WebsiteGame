@@ -47,6 +47,10 @@ scene.add(sun, sun.target);
 const fireLight = new THREE.PointLight('#ffb069', 0, 12, 2);
 scene.add(fireLight);
 
+// Das Licht der Laterne — es wandert mit der Figur und folgt ihrer Flamme.
+const lantern = new THREE.PointLight('#ffc06a', 0, 22, 2);
+scene.add(lantern);
+
 const post = new TiltShift(renderer);
 const world = new World(scene, 2);
 const input = new Input();
@@ -103,6 +107,60 @@ function applyQuality() {
   resize();
 }
 
+/* ------------------------------------------------------------------------- */
+/*  Lichtkarte: wie hell ist es an einer Stelle?                              */
+/*  Tageslicht + jedes Feuer + die eigene Laterne. Sie entscheidet über        */
+/*  Farbe, Nebel, wie viele Schatten kommen und ob sie zerfallen.              */
+/* ------------------------------------------------------------------------- */
+function daylight(t) {
+  // 0 tief in der Nacht, 1 am hellen Tag
+  if (t < 0.12) return 0.25 + (t / 0.12) * 0.6;
+  if (t < 0.6) return 1;
+  if (t < 0.72) return 1 - (t - 0.6) / 0.12 * 0.75;
+  if (t < 0.9) return 0.2;
+  return 0.2 + (t - 0.9) / 0.1 * 0.65;
+}
+
+function fireGlow(pos, x, z, reach) {
+  const d = Math.hypot(pos.x - x, pos.z - z);
+  return Math.max(0, 1 - d / reach);
+}
+
+/**
+ * Echtes Feuerlicht an einer Stelle, 0..1 — ohne Tageslicht.
+ * Daran hängen die Spielregeln: Schatten zerfallen darin, und sie meiden es.
+ * Die eigene Laterne zählt nur zur Hälfte: allein reicht sie nie ganz aus.
+ */
+function placeLightAt(pos) {
+  let light = 0;
+  for (const it of camp.items) {
+    const def = BUILDINGS[it.type];
+    if (!def.light) continue;
+    light += fireGlow(pos, it.x, it.z, it.type === 'laterne' ? 11 : 16) * def.light * 0.95;
+  }
+
+  const wf = world.nearestFire(pos, 22);
+  if (wf) light += fireGlow(pos, wf.x, wf.z, 22) * 0.75;
+
+  return Math.min(1, light);
+}
+
+/** Feuerlicht inklusive der eigenen Laterne — daran zerfallen die Schatten. */
+function fireLightAt(pos) {
+  const dp = Math.hypot(pos.x - player.pos.x, pos.z - player.pos.z);
+  return Math.min(1, placeLightAt(pos) + Math.max(0, 1 - dp / 7) * player.flame * 0.45);
+}
+
+/**
+ * Wie hell die Welt hier wirkt: Tageslicht plus Feuer plus ein wenig eigene
+ * Laterne. Daran hängen Farbe, Nebel und wie schnell die Laterne zehrt.
+ */
+function ambientAt(pos) {
+  const dp = Math.hypot(pos.x - player.pos.x, pos.z - player.pos.z);
+  const own = Math.max(0, 1 - dp / 10) * player.flame * 0.16;
+  return Math.min(1, state.day * 0.95 + placeLightAt(pos) * 0.85 + own);
+}
+
 /* --------------------------------- Spiel --------------------------------- */
 /* ------------------------------------------------------------------------- */
 /*  Tageszeit: ein voller Umlauf dauert gut fünf Minuten                       */
@@ -149,6 +207,9 @@ function applyDaytime(t) {
   return label;
 }
 
+const SHOT_COST = 0.9;          // Licht pro Pfeil
+const EMBER_GAIN = 7;           // Licht aus einer Glut
+
 const state = {
   running: false,
   paused: false,          // während der Upgrade-Wahl
@@ -167,6 +228,9 @@ const state = {
   saveTimer: 0,
   tradeOpen: false,
   nightness: 0,
+  day: 1,
+  light: 1,
+  embers: 0,
 };
 
 let stats = freshStats();
@@ -248,6 +312,12 @@ function onKill(target) {
 const bossBar = document.getElementById('bossBar');
 const bossFill = document.getElementById('bossFill');
 
+enemies.onBurn = (enemy) => {
+  audio.kill();
+  fx.burst(enemy.pos, '#ffd27a', 7);
+  gems.drop(enemy.pos);
+};
+
 const bossCallbacks = {
   onWake: () => {
     audio.bossWake();
@@ -285,6 +355,7 @@ function onBossDown() {
 }
 
 function onCollect() {
+  player.feed(EMBER_GAIN);
   state.score += 1;
   stats.xp += 1;
   saveData.gems += 1;
@@ -334,16 +405,19 @@ function levelUp() {
 }
 
 function gameOver() {
+  if (!state.running) return;
   state.running = false;
+  // Das Lager muss gesichert sein, bevor der nächste Lauf es wieder aufbaut.
+  persist();
   const home = camp.home(player.pos);
   document.getElementById('deadWhere').textContent = home
-    ? 'Du wachst in deinem Zelt wieder auf.'
-    : 'Ohne Zelt beginnt der Weg von vorn. Bau dir eins!';
-  document.getElementById('deadScore').textContent = state.score + ' 💎';
+    ? 'Dein Zelt hat die Glut bewahrt. Du entzündest sie neu.'
+    : 'Ohne Zelt bleibt nur ein Funke. Bau dir eins — dann hast du einen Ort, der dich zurückholt.';
+  document.getElementById('deadScore').textContent = state.score + ' ✨';
   document.getElementById('deadLevel').textContent = 'Stufe ' + stats.level + ' erreicht';
   Save.recordRun(saveData, stats.level, state.score, state.bosses);
-  document.getElementById('deadStash').textContent = `Vorrat: ${saveData.gems} 💎 · Bester Lauf: Stufe ${saveData.best.level}`;
-  document.getElementById('startStash').textContent = `Vorrat: ${saveData.gems} 💎`;
+  document.getElementById('deadStash').textContent = `Glut im Beutel: ${saveData.gems} ✨ · Weiteste Stufe: ${saveData.best.level}`;
+  document.getElementById('startStash').textContent = `Glut im Beutel: ${saveData.gems} ✨`;
   document.getElementById('dead').classList.remove('hidden');
 }
 
@@ -370,8 +444,9 @@ function combat(dt) {
   player.aimAt(target.pos.x, target.pos.z);
   state.fireTimer -= dt;
   if (state.fireTimer <= 0) {
+    if (!player.spend(SHOT_COST * stats.arrows)) return;   // ohne Licht kein Schuss
     state.fireTimer = stats.fireRate;
-    arrows.damage = stats.damage;
+    arrows.damage = stats.damage * (0.55 + player.flame * 0.65);
     const dx = target.pos.x - player.pos.x, dz = target.pos.z - player.pos.z;
     const base = Math.atan2(dx, dz);
     for (let i = 0; i < stats.arrows; i++) {
@@ -496,7 +571,7 @@ function renderShop() {
     btn.innerHTML =
       `<span class="ic">${perk.icon}</span>` +
       `<span><b>${perk.title}</b><small>${perk.text}</small></span>` +
-      `<span class="cost">${cost === null ? `${have}/${perk.max} ✓` : `${cost} 💎`}</span>`;
+      `<span class="cost">${cost === null ? `${have}/${perk.max} ✓` : `${cost} ✨`}</span>`;
     btn.addEventListener('click', () => {
       if (Save.buyPerk(saveData, perk)) {
         audio.levelUp();
@@ -534,6 +609,7 @@ document.getElementById('shopClose').addEventListener('click', () => {
 });
 
 /* --------------------------------- HUD ----------------------------------- */
+const hpBar = document.getElementById('hpBar');
 const hpFill = document.getElementById('hpFill');
 const hpText = document.getElementById('hpText');
 const scoreEl = document.getElementById('score');
@@ -546,8 +622,11 @@ const timeText = document.getElementById('timeText');
 let hudTimer = 0;
 
 function updateHUD(force) {
-  hpFill.style.transform = `scaleX(${player.hp / player.hpMax})`;
-  hpText.textContent = Math.ceil(player.hp);
+  const f = player.flame;
+  hpFill.style.transform = `scaleX(${f})`;
+  hpFill.style.filter = f < 0.25 ? 'saturate(1.3) brightness(0.9)' : '';
+  hpBar.classList.toggle('low', f < 0.25);
+  hpText.textContent = Math.round(f * 100) + '%';
   xpFill.style.transform = `scaleX(${Math.min(1, stats.xp / stats.xpNeed)})`;
   xpText.textContent = 'Stufe ' + stats.level;
   scoreEl.textContent = state.score;
@@ -572,7 +651,31 @@ function frame() {
     const move = input.read();
     player.update(dt, move, world);
     combat(dt);
-    enemies.update(dt, player, world, onPlayerHit, shots);
+    // Wie hell ist es hier? Daran hängt alles: Farbe, Nebel, Gegner, Brennrate.
+    state.day = daylight(state.time);
+    const here = ambientAt(player.pos);
+    state.light += (here - state.light) * Math.min(1, dt * 4);
+    const dark = Math.max(0, 1 - state.light);
+
+    // Tageslicht speist die Laterne langsam, Dunkelheit zehrt sie schnell aus.
+    // Daraus entsteht der Rhythmus: tagsüber sammeln und bauen, nachts zählt,
+    // wie viel Licht man vorher in die Welt gesetzt hat.
+    player.burn = -0.25 + dark * 3.0;
+
+    enemies.lightHere = state.light;
+    enemies.update(dt, player, world, onPlayerHit, shots, fireLightAt);
+
+    // Die Laterne leuchtet so weit, wie sie gefüllt ist
+    lantern.position.set(player.pos.x, player.pos.y + 2.4, player.pos.z);
+    lantern.intensity = (0.5 + player.flame * 3.4) * (0.55 + dark * 0.8);
+    lantern.distance = 12 + player.flame * 14;
+
+    // Bild: je dunkler, desto farbloser und enger
+    post.compositeMat.uniforms.uDark.value = dark * 0.92;
+    scene.fog.near = 54 - dark * 26;
+    scene.fog.far = 132 - dark * 62;
+
+    if (player.hp <= 0) gameOver();
 
     // Wächter: schläft im Steinkreis, bis man hineintritt
     state.shrineCheck -= dt;
@@ -601,8 +704,8 @@ function frame() {
       const d = Math.hypot(fire.x - player.pos.x, fire.z - player.pos.z);
       fireLight.position.set(fire.x, fire.y + 1.1, fire.z);
       fireLight.intensity = (2.2 + nightness * 3.4) + Math.sin(state.idleTime * 9 + fire.x) * 0.4;
-      state.resting = d < 4.2;
-      if (state.resting) player.hp = Math.min(player.hpMax, player.hp + 16 * dt);
+      state.resting = d < 4.6;
+      if (state.resting) player.feed(30 * dt);
       audio.setFireDistance(d);
     } else {
       fireLight.intensity = 0;
@@ -686,7 +789,7 @@ soundBtn.addEventListener('click', () => {
   try { localStorage.setItem('cozy-muted', muted ? '1' : '0'); } catch (err) { /* egal */ }
 });
 
-document.getElementById('startStash').textContent = `Vorrat: ${saveData.gems} 💎`;
+document.getElementById('startStash').textContent = `Glut im Beutel: ${saveData.gems} ✨`;
 
 document.getElementById('startBtn').addEventListener('click', () => {
   audio.unlock();
@@ -706,7 +809,7 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, arrows, shots, gems, boss, audio, villagers, critters, camp, saveData, Save, openShop, openBuild, world,
+window.__game = { state, player, enemies, fireLightAt, ambientAt, arrows, shots, gems, boss, audio, villagers, critters, camp, saveData, Save, openShop, openBuild, world,
   get res() { return res; }, get nearNode() { return nearNode; }, renderer, scene, camera, sun, post,
   get stats() { return stats; }, levelUp };
 

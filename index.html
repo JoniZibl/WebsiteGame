@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#cdd6ad" />
+<meta name="theme-color" content="#2b3347" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Cozy Grove — Prototyp</title>
+<title>Glut</title>
 <link rel="stylesheet" href="css/style.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏕️</text></svg>" />
 <script type="importmap">
@@ -25,10 +25,10 @@
   <!-- HUD -->
   <div id="hud">
     <div class="top-left">
-      <div class="bar" id="hpBar"><div class="fill" id="hpFill"></div><span id="hpText">100</span></div>
+      <div class="bar flame" id="hpBar"><div class="fill" id="hpFill"></div><span id="hpText">70%</span></div>
       <div class="bar xp" id="xpBar"><div class="fill" id="xpFill"></div><span id="xpText">Stufe 1</span></div>
       <div class="chips">
-        <div class="chip"><span class="ic">💎</span><span id="score">0</span></div>
+        <div class="chip"><span class="ic">✨</span><span id="score">0</span></div>
         <div class="chip"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
         <div class="chip"><span class="ic" id="timeIcon">☀️</span><span id="timeText">Morgen</span></div>
       </div>
@@ -37,7 +37,7 @@
         <div class="chip"><span class="ic">🪨</span><span id="resStein">0</span></div>
         <div class="chip"><span class="ic">🫐</span><span id="resBeeren">0</span></div>
       </div>
-      <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du rastest</span></div>
+      <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du entzündest dich neu</span></div>
     </div>
     <button id="actionBtn" class="action-btn hidden">🪓 Hacken</button>
     <button id="tradeBtn" class="trade-btn hidden">🧺 Handeln</button>
@@ -73,7 +73,7 @@
         <li>Holz &amp; Stein sammeln &rarr; <b>eigenes Lager bauen</b></li>
         <li>Deine Welt bleibt &mdash; auch dein Lager</li>
       </ul>
-      <p class="sub" id="startStash">Vorrat: 0 💎</p>
+      <p class="sub" id="startStash">Glut im Beutel: 0 ✨</p>
       <button id="startBtn" class="primary">Losziehen</button>
     </div>
   </div>
@@ -98,7 +98,7 @@
   <div id="shop" class="overlay hidden">
     <div class="card">
       <h1>Krämerstand</h1>
-      <p class="sub">Dein Vorrat: <b id="shopGems">0</b> 💎</p>
+      <p class="sub">Dein Vorrat: <b id="shopGems">0</b> ✨</p>
       <div id="shopList" class="cards"></div>
       <button id="shopClose" class="primary">Weiterziehen</button>
     </div>
@@ -106,11 +106,11 @@
 
   <div id="dead" class="overlay hidden">
     <div class="card">
-      <h1>Ausgeruht</h1>
-      <p class="sub" id="deadWhere">Du wachst wieder am Lagerfeuer auf.</p>
-      <p class="big" id="deadScore">0 💎</p>
+      <h1>Erloschen</h1>
+      <p class="sub" id="deadWhere">Deine Laterne ist ausgegangen.</p>
+      <p class="big" id="deadScore">0 ✨</p>
       <p class="sub" id="deadLevel">Stufe 1</p>
-      <p class="sub" id="deadStash">Vorrat: 0 💎</p>
+      <p class="sub" id="deadStash">Vorrat: 0 ✨</p>
       <button id="againBtn" class="primary">Weiter</button>
     </div>
   </div>
