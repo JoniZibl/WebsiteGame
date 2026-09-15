@@ -109,6 +109,24 @@ genau der Trick, der echte Landschaften wie Modellbau aussehen lässt. Dazu eine
 Spur mehr Sättigung. Die Unschärfe läuft in halber Auflösung, auf dem Handy mit
 einem Durchgang statt zwei.
 
+### Weicher Boden
+
+Der Boden ist bewusst nicht facettiert: Die Normalen kommen aus der Ableitung
+der Höhenfunktion statt aus den Dreiecken, deshalb passen sie über
+Chunkgrenzen hinweg nahtlos zusammen und das Gelände wird weich schattiert.
+Die Farben liegen auf den Eckpunkten und laufen ineinander, statt kachelweise
+umzuspringen — kein Karomuster, keine sichtbaren Kanten. Als indiziertes
+Gitter braucht ein Chunk dabei nur 841 statt 2904 Eckpunkte, was ein feineres
+Raster (28 statt 22 Quads je Kante) erlaubt.
+
+### Zwei Materialien für alles
+
+Jedes zusätzliche Material kostet ein Mesh pro Chunk. Deshalb tragen die
+Requisiten ihre Farbe in den Eckpunkten: `push()` backt die Farbe aus
+`PALETTE` ein und sortiert das Teil nur noch nach „ruhend" oder „im Wind".
+Ein Chunk zeichnet damit zwei Meshes statt bis zu zehn — in dichter Gegend
+sind das rund 120 Draw Calls statt 230.
+
 ### Farbpalette
 
 Bilderbuch statt Tarnfarben: kräftige Wiesengrüne (`#6cba5e` → `#2a6338`),

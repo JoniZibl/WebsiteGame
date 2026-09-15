@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { fbm, noise2, rngFor, smoothstep, clamp } from './noise.js';
 
 export const CHUNK = 56;        // Kantenlänge eines Chunks in Weltmetern
-const RES = 22;                 // Quads pro Chunk-Kante (Auflösung des Bodens)
+const RES = 28;                 // Quads pro Chunk-Kante (Auflösung des Bodens)
 const STEP = CHUNK / RES;
 export const WATER_LEVEL = -1.2;
 
@@ -69,11 +69,11 @@ function slopeAt(x, z) {
 // vorbehalten, die auffallen sollen (Dächer, Zelte, Gegner, die Figur).
 const C = {
   sand:   new THREE.Color('#e9d29b'),
-  grass1: new THREE.Color('#6cba5e'),
-  grass2: new THREE.Color('#58a854'),
-  grass3: new THREE.Color('#87cd6e'),
+  grass1: new THREE.Color('#76c565'),
+  grass2: new THREE.Color('#62b25b'),
+  grass3: new THREE.Color('#93d878'),
   rock:   new THREE.Color('#b6b3a2'),
-  deep:   new THREE.Color('#3f9b95'),
+  deep:   new THREE.Color('#45a89e'),
   dry1:   new THREE.Color('#d9c477'),
   dry2:   new THREE.Color('#c1a95d'),
 };
@@ -125,32 +125,44 @@ function makeWindy(material, strength = 0.32) {
   return material;
 }
 
-export const MATS = {
-  trunk:  mat('#a9713f'),
-  leafA:  mat('#5aab58'),
-  leafB:  mat('#469149'),
-  leafC:  mat('#357a40'),
-  leafD:  mat('#2a6338'),
-  leafE:  mat('#9bb257'),
-  leafF:  mat('#7d9a45'),
-  rock:   mat('#b3b0a0'),
-  shroom: mat('#cf5340'),
-  shroomStem: mat('#f6ead0'),
-  reed:   mat('#8cb355'),
-  pad:    mat('#4f9b55'),
-  wall:   mat('#f6e6c6'),
-  trim:   mat('#fdf6e4'),
-  roof:   mat('#c9563f'),
-  roofDark: mat('#a8412d'),
-  wood:   mat('#a9713f'),
-  woodDark: mat('#7d4f2e'),
-  glass:  mat('#79c6c0'),
-  path:   mat('#e4cd98'),
-  tent:   mat('#d9603f'),
-  flower: mat('#fbead2'),
+// Farben der Requisiten. Sie landen in den Eckpunkten, nicht in Materialien.
+const hex = (h) => new THREE.Color(h);
+
+export const PALETTE = {
+  trunk:  hex('#a9713f'),
+  leafA:  hex('#5aab58'),
+  leafB:  hex('#469149'),
+  leafC:  hex('#3d8746'),
+  leafD:  hex('#2f7040'),
+  leafE:  hex('#9bb257'),
+  leafF:  hex('#7d9a45'),
+  rock:   hex('#b3b0a0'),
+  shroom: hex('#cf5340'),
+  shroomStem: hex('#f6ead0'),
+  reed:   hex('#8cb355'),
+  pad:    hex('#4f9b55'),
+  wall:   hex('#f6e6c6'),
+  trim:   hex('#fdf6e4'),
+  roof:   hex('#c9563f'),
+  roofDark: hex('#a8412d'),
+  wood:   hex('#a9713f'),
+  woodDark: hex('#7d4f2e'),
+  glass:  hex('#79c6c0'),
+  path:   hex('#e4cd98'),
+  tent:   hex('#d9603f'),
+  flower: hex('#fbead2'),
+  // Fundstellen
+  birkeStamm: hex('#e9e2cd'),
+  birkeLaub:  hex('#8fce6a'),
+  findling:   hex('#bcb9a8'),
+  busch:      hex('#4f9b55'),
+  beere:      hex('#cf5340'),
 };
 
-for (const key of ['leafA', 'leafB', 'leafC', 'leafD', 'leafE', 'leafF', 'reed']) makeWindy(MATS[key]);
+// Zwei Materialien für alles: eins ruhend, eins vom Wind bewegt.
+export const PROP_MAT = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+export const PROP_MAT_WIND = makeWindy(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+const SLOT_MAT = { static: PROP_MAT, windy: PROP_MAT_WIND };
 
 const G = {
   trunk:  new THREE.CylinderGeometry(0.16, 0.24, 1.1, 5).toNonIndexed(),
@@ -187,6 +199,11 @@ const _e = new THREE.Euler();
 const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 
+/**
+ * Legt ein Teil in den Chunk. Die Farbe des benannten Materials wird in die
+ * Eckpunkte gebacken — dadurch braucht ein ganzer Chunk nur zwei Meshes
+ * (ruhend und im Wind wiegend) statt eines pro Material.
+ */
 function push(bucket, key, geo, x, y, z, rotY = 0, sx = 1, sy = 1, sz = 1, rotX = 0, sway = 0, rotZ = 0) {
   _e.set(rotX, rotY, rotZ, 'YXZ');
   _q.setFromEuler(_e);
@@ -195,20 +212,31 @@ function push(bucket, key, geo, x, y, z, rotY = 0, sx = 1, sy = 1, sz = 1, rotX 
   _m.compose(_p, _q, _s);
   const g = geo.clone();
 
-  // Wie stark wiegt sich welcher Punkt? Oben mehr als unten.
   const posAttr = g.attributes.position;
-  const sways = new Float32Array(posAttr.count);
+  const count = posAttr.count;
+
+  // Wie stark wiegt sich welcher Punkt? Oben mehr als unten.
+  const sways = new Float32Array(count);
   if (sway > 0) {
     g.computeBoundingBox();
     const minY = g.boundingBox.min.y, spanY = Math.max(0.001, g.boundingBox.max.y - minY);
-    for (let i = 0; i < posAttr.count; i++) {
+    for (let i = 0; i < count; i++) {
       const t = (posAttr.getY(i) - minY) / spanY;
       sways[i] = t * t * sway;
     }
   }
   g.setAttribute('aSway', new THREE.BufferAttribute(sways, 1));
+
+  const c = PALETTE[key] || PALETTE.wall;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
   g.applyMatrix4(_m);
-  (bucket[key] || (bucket[key] = [])).push(g);
+  const slot = sway > 0 ? 'windy' : 'static';
+  (bucket[slot] || (bucket[slot] = [])).push(g);
 }
 
 /* ------------------------------------------------------------------ */
@@ -220,14 +248,6 @@ export const NODE_KINDS = {
   birke:    { label: 'Birke',       icon: '🪓', hits: 3, res: 'holz',   amount: 3, radius: 0.5 },
   findling: { label: 'Findling',    icon: '⛏️', hits: 3, res: 'stein',  amount: 2, radius: 0.8 },
   beere:    { label: 'Beerenbusch', icon: '🫐', hits: 1, res: 'beeren', amount: 2, radius: 0.5 },
-};
-
-const NODE_MATS = {
-  birkeStamm: mat('#e4ddc6'),
-  birkeLaub:  makeWindy(mat('#9dbf6a'), 0.3),
-  findling:   mat('#b5b3a0'),
-  busch:      makeWindy(mat('#5d8043'), 0.22),
-  beere:      mat('#c4504a'),
 };
 
 const NG = {
@@ -264,7 +284,7 @@ export function buildNodeMeshes(nodes) {
   for (const node of nodes) nodeGeometry(node, bucket);
   for (const key in bucket) {
     const merged = mergeGeometries(bucket[key], false);
-    if (merged) group.add(new THREE.Mesh(merged, NODE_MATS[key]));
+    if (merged) group.add(new THREE.Mesh(merged, SLOT_MAT[key]));
     bucket[key].forEach((g) => g.dispose());
   }
   return group;
@@ -561,59 +581,75 @@ const beaconMat = new THREE.MeshBasicMaterial({
 });
 
 /* ------------------------------------------------------------------ */
-/*  Boden-Mesh eines Chunks (facettiert, Farbe pro Dreieck)            */
+/*  Boden-Mesh eines Chunks                                            */
+/*                                                                     */
+/*  Der Boden wird weich schattiert: die Normalen kommen aus der        */
+/*  Ableitung der Höhenfunktion (nicht aus den Dreiecken), deshalb      */
+/*  passen sie über Chunkgrenzen hinweg nahtlos zusammen. Farben        */
+/*  liegen auf den Eckpunkten und laufen dadurch ineinander, statt      */
+/*  kachelweise umzuspringen.                                          */
 /* ------------------------------------------------------------------ */
+function groundNormal(x, z, out) {
+  const e = 1.2;
+  const hx = heightAt(x + e, z) - heightAt(x - e, z);
+  const hz = heightAt(x, z + e) - heightAt(x, z - e);
+  return out.set(-hx, 2 * e, -hz).normalize();
+}
+
+const _n = new THREE.Vector3();
+
 function buildGround(cx, cz) {
   const ox = cx * CHUNK, oz = cz * CHUNK;
-  const quads = RES * RES;
-  const pos = new Float32Array(quads * 6 * 3);
-  const col = new Float32Array(quads * 6 * 3);
+  const side = RES + 1;
+  const count = side * side;
 
-  // Höhen an den Gitterpunkten vorberechnen
-  const hs = new Float32Array((RES + 1) * (RES + 1));
-  for (let j = 0; j <= RES; j++) {
-    for (let i = 0; i <= RES; i++) hs[j * (RES + 1) + i] = heightAt(ox + i * STEP, oz + j * STEP);
+  const pos = new Float32Array(count * 3);
+  const nor = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  const idx = new Uint16Array(RES * RES * 6);
+
+  for (let j = 0; j < side; j++) {
+    for (let i = 0; i < side; i++) {
+      const k = j * side + i;
+      const x = ox + i * STEP, z = oz + j * STEP;
+      const h = heightAt(x, z);
+
+      pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
+
+      groundNormal(x, z, _n);
+      nor[k * 3] = _n.x; nor[k * 3 + 1] = _n.y; nor[k * 3 + 2] = _n.z;
+
+      const slope = 1 - _n.y;
+      const jitter = fbm(x * 0.022, z * 0.022, SEED + 3, 2);
+      const c = terrainColor(h, slope * 1.8, jitter, drynessAt(x, z));
+      col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
+    }
   }
 
-  let p = 0, c = 0;
-  const writeTri = (ax, ay, az, bx, by, bz, cx2, cy, cz2, color) => {
-    pos[p++] = ax; pos[p++] = ay; pos[p++] = az;
-    pos[p++] = bx; pos[p++] = by; pos[p++] = bz;
-    pos[p++] = cx2; pos[p++] = cy; pos[p++] = cz2;
-    for (let k = 0; k < 3; k++) { col[c++] = color.r; col[c++] = color.g; col[c++] = color.b; }
-  };
-
+  let t = 0;
   for (let j = 0; j < RES; j++) {
     for (let i = 0; i < RES; i++) {
-      const x0 = ox + i * STEP, z0 = oz + j * STEP, x1 = x0 + STEP, z1 = z0 + STEP;
-      const h00 = hs[j * (RES + 1) + i], h10 = hs[j * (RES + 1) + i + 1];
-      const h01 = hs[(j + 1) * (RES + 1) + i], h11 = hs[(j + 1) * (RES + 1) + i + 1];
-
-      const mx = x0 + STEP * 0.5, mz = z0 + STEP * 0.5;
-      const hAvg = (h00 + h10 + h01 + h11) * 0.25;
-      const slope = (Math.abs(h00 - h11) + Math.abs(h10 - h01)) / (2 * STEP);
-      const jitter = fbm(mx * 0.035, mz * 0.035, SEED + 3, 2);
-      const color = terrainColor(hAvg, slope, jitter, drynessAt(mx, mz)).clone();
-
-      // Diagonale abwechselnd kippen -> kein Streifenmuster im Licht
+      const a = j * side + i, b = a + 1, c2 = a + side, d = c2 + 1;
+      // Diagonale abwechselnd kippen, damit keine Richtung im Relief dominiert
       if ((i + j) & 1) {
-        writeTri(x0, h00, z0, x0, h01, z1, x1, h11, z1, color);
-        writeTri(x0, h00, z0, x1, h11, z1, x1, h10, z0, color);
+        idx[t++] = a; idx[t++] = c2; idx[t++] = d;
+        idx[t++] = a; idx[t++] = d; idx[t++] = b;
       } else {
-        writeTri(x0, h00, z0, x0, h01, z1, x1, h10, z0, color);
-        writeTri(x1, h10, z0, x0, h01, z1, x1, h11, z1, color);
+        idx[t++] = a; idx[t++] = c2; idx[t++] = b;
+        idx[t++] = b; idx[t++] = c2; idx[t++] = d;
       }
     }
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.computeVertexNormals();
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
   return geo;
 }
 
-const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 
 function pushOut(pos, radius, c) {
   const dx = pos.x - c.x, dz = pos.z - c.z;
@@ -641,7 +677,7 @@ export class World {
     waterGeo.rotateX(-Math.PI / 2);
     this.water = new THREE.Mesh(
       waterGeo,
-      new THREE.MeshLambertMaterial({ color: '#7fa88b', transparent: true, opacity: 0.85 })
+      new THREE.MeshLambertMaterial({ color: '#57bdb0', transparent: true, opacity: 0.8 })
     );
     this.water.position.y = WATER_LEVEL;
     this.water.renderOrder = -1;
@@ -707,7 +743,7 @@ export class World {
     for (const key in bucket) {
       const merged = mergeGeometries(bucket[key], false);
       if (!merged) continue;
-      const mesh = new THREE.Mesh(merged, MATS[key]);
+      const mesh = new THREE.Mesh(merged, SLOT_MAT[key]);
       mesh.castShadow = this.castShadows;
       mesh.receiveShadow = this.castShadows;
       group.add(mesh);

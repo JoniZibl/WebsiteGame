@@ -35,7 +35,7 @@ scene.fog = new THREE.Fog('#ece0c0', 54, 132);
 const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 320);
 const CAM_OFFSET = new THREE.Vector3(0, 29, 30);
 
-const hemi = new THREE.HemisphereLight('#fff2d8', '#7fa860', 0.7);
+const hemi = new THREE.HemisphereLight('#fff6e4', '#8fb96c', 0.78);
 scene.add(hemi);
 
 const sun = new THREE.DirectionalLight('#fff6e2', 1.55);
@@ -88,9 +88,13 @@ function applyQuality() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   sun.castShadow = high;
   if (high) {
-    sun.shadow.mapSize.set(1024, 1024);
+    // Die Schattenkarte muss den ganzen sichtbaren Bereich abdecken, sonst
+    // zeichnet sich ihre Kante als dunkler Streifen in die Wiese.
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0006;
+    sun.shadow.normalBias = 0.035;
     const c = sun.shadow.camera;
-    c.left = -34; c.right = 34; c.top = 34; c.bottom = -34; c.near = 1; c.far = 120;
+    c.left = -62; c.right = 62; c.top = 62; c.bottom = -62; c.near = 1; c.far = 190;
     c.updateProjectionMatrix();
   }
   world.setShadows(high);
