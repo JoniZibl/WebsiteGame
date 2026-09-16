@@ -5,6 +5,7 @@ import {
 import { Player } from './player.js';
 import { Input } from './input.js';
 import { TiltShift } from './postfx.js';
+import { TOOLS, toolFor, CraftPanel } from './craft.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 
@@ -112,8 +113,10 @@ const state = {
   mode: 'dig',            // dig | build
   digTarget: null,
   digProgress: 0,
+  nagTimer: 0,
   inventory: new Map(),
   selected: B.erde,
+  tier: 0,
   time: 0.28,
   depth: 0,
   cut: HEIGHT + 4,
@@ -142,6 +145,8 @@ const hotbar = document.getElementById('hotbar');
 const biomeEl = document.getElementById('biome');
 const depthEl = document.getElementById('depth');
 const clockEl = document.getElementById('clock');
+const toolEl = document.getElementById('tool');
+const toolIconEl = document.getElementById('toolIcon');
 
 function renderHotbar() {
   hotbar.replaceChildren();
@@ -174,6 +179,8 @@ function updateHUD() {
   depthEl.textContent = state.depth > 1 ? `${state.depth} m tief` : 'über Tage';
   const t = state.time;
   clockEl.textContent = t < 0.25 ? '🌅 Morgen' : t < 0.55 ? '☀️ Tag' : t < 0.72 ? '🌇 Abend' : '🌙 Nacht';
+  toolEl.textContent = TOOLS[state.tier].name;
+  toolIconEl.textContent = TOOLS[state.tier].icon;
 }
 
 /* ------------------------------ Graben & Bauen ---------------------------- */
@@ -189,6 +196,21 @@ function digStep(dt, mode) {
     return;
   }
 
+  // Zu hart fuer das, was der Zwerg in der Hand hat
+  if ((def.needs ?? 0) > state.tier) {
+    marker.visible = true;
+    marker.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
+    state.digTarget = null;
+    state.digProgress = 0;
+    if (state.nagTimer <= 0) {
+      state.nagTimer = 1.6;
+      juice.popup({ x: target.x + 0.5, y: target.y + 1, z: target.z + 0.5 },
+        `Braucht ${toolFor(block)}`, '#ffb4a2');
+      audio.thump?.();
+    }
+    return;
+  }
+
   marker.visible = true;
   marker.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
 
@@ -196,14 +218,15 @@ function digStep(dt, mode) {
     && state.digTarget.y === target.y && state.digTarget.z === target.z;
   if (!same) { state.digTarget = target; state.digProgress = 0; }
 
-  state.digProgress += dt;
+  state.digProgress += dt * TOOLS[state.tier].speed;
   player.swing = 0.25;
-  if (state.digProgress % 0.3 < dt) audio.hit();
+  if (state.digProgress % 0.3 < dt * TOOLS[state.tier].speed) audio.hit();
 
   marker.scale.setScalar(1 - Math.min(0.35, state.digProgress / def.hard * 0.35));
 
   if (state.digProgress >= def.hard) {
     world.set(target.x, target.y, target.z, AIR);
+    if (torches.delete(`${target.x},${target.y},${target.z}`)) updateTorchLights();
     give(def.drop ?? block);
     audio.kill();
     juice.shake(0.28);
@@ -227,9 +250,54 @@ function placeBlock(mode) {
 
   if (!take(state.selected)) return;
   world.set(target.x, target.y, target.z, state.selected);
+  if (state.selected === B.fackel) {
+    torches.add(`${target.x},${target.y},${target.z}`);
+    updateTorchLights();
+  }
   audio.gem(1);
   juice.shake(0.15);
   player.swing = 0.25;
+}
+
+/* ------------------------------- Werkbank --------------------------------- */
+const craft = new CraftPanel(document.getElementById('craft'), {
+  state,
+  take,
+  give,
+  onTier(tier) {
+    state.tier = tier;
+    audio.gem(3);
+    juice.shake(0.3);
+    juice.popup({ x: player.pos.x, y: player.pos.y + 2.4, z: player.pos.z },
+      TOOLS[tier].name, '#ffe9a8');
+    updateHUD();
+  },
+  onClose() { renderHotbar(); },
+});
+
+/* -------------------------------- Fackeln ---------------------------------- */
+/* Gesetzte Fackeln merken wir uns, aber nur die naechsten paar bekommen
+   wirklich eine Lampe - mehr vertraegt der Renderer nicht. */
+const torches = new Set();
+const torchLights = [];
+for (let i = 0; i < 6; i++) {
+  const l = new THREE.PointLight('#ffb457', 0, 14, 1.6);
+  scene.add(l);
+  torchLights.push(l);
+}
+
+function updateTorchLights() {
+  const near = [...torches]
+    .map((k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z,
+      d: (x - player.pos.x) ** 2 + (z - player.pos.z) ** 2 + (y - player.pos.y) ** 2 }; })
+    .sort((a, b) => a.d - b.d)
+    .slice(0, torchLights.length);
+  torchLights.forEach((l, i) => {
+    const t = near[i];
+    if (!t || t.d > 60 * 60) { l.intensity = 0; return; }
+    l.position.set(t.x + 0.5, t.y + 0.7, t.z + 0.5);
+    l.intensity = 7;
+  });
 }
 
 /* ------------------------------ Tag und Nacht ----------------------------- */
@@ -329,6 +397,9 @@ function newRun() {
 
   state.inventory.clear();
   state.selected = B.erde;
+  state.tier = 0;
+  torches.clear();
+  updateTorchLights();
   state.time = 0.28;
   state.digTarget = null;
   juice.reset();
@@ -372,6 +443,7 @@ function frame() {
     world.update(player.pos.x, player.pos.z, 1);
 
     state.time = (state.time + dt / DAY) % 1;
+    if (state.nagTimer > 0) state.nagTimer -= dt;
 
     // Graben oder Bauen, solange der Knopf gehalten wird
     if (held.dig) digStep(dt, 'front');
@@ -443,6 +515,7 @@ document.getElementById('upBtn').addEventListener('click', () => {
   audio.gem(2);
 });
 document.getElementById('jumpBtn').addEventListener('click', () => player.jump());
+document.getElementById('craftBtn').addEventListener('click', () => craft.toggle());
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
@@ -450,6 +523,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'e') held.dig = true;
   if (k === 'q') held.down = true;
   if (k === 'f') placeBlock('front');
+  if (k === 'c') craft.toggle();
 });
 window.addEventListener('keyup', (e) => {
   const k = e.key.toLowerCase();
@@ -484,7 +558,8 @@ document.getElementById('startBtn').addEventListener('click', () => {
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
-window.__game = { state, player, world, scene, camera, renderer, juice, audio, post, B, BLOCKS, give };
+window.__game = { state, player, world, scene, camera, renderer, juice, audio, post, B, BLOCKS, give,
+  torchCount: () => torches.size };
 
 resize();
 applyQuality();

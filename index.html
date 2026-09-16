@@ -29,6 +29,7 @@
         <div class="chip"><span class="ic">🗺️</span><span id="biome">Wiese</span></div>
         <div class="chip"><span class="ic">⛏️</span><span id="depth">über Tage</span></div>
         <div class="chip"><span id="clock">☀️ Tag</span></div>
+        <div class="chip"><span class="ic" id="toolIcon">✋</span><span id="tool">Bloße Hände</span></div>
       </div>
     </div>
     <div class="side-btns">
@@ -45,7 +46,10 @@
     <button id="buildBtn" class="act" title="Block setzen">🧱</button>
     <button id="upBtn" class="act" title="Treppe bauen">⬆️</button>
     <button id="jumpBtn" class="act" title="springen">🦘</button>
+    <button id="craftBtn" class="act" title="Werkbank">⚒️</button>
   </div>
+
+  <div id="craft" class="overlay hidden"></div>
 
   <div id="stick" class="hidden"><div id="stickBase"></div><div id="stickNub"></div></div>
 
@@ -58,6 +62,7 @@
         <li><b>⛏️ halten</b> &rarr; den Block vor dir abbauen <i>(Taste E)</i></li>
         <li><b>⬇️ halten</b> &rarr; dich nach unten eingraben <i>(Taste Q)</i></li>
         <li><b>🧱</b> setzt einen Block, <b>⬆️</b> baut dir eine Stufe nach oben</li>
+        <li><b>⚒️</b> Werkbank: aus Holz wird eine Hacke, damit geht Stein &mdash; und so weiter nach unten</li>
         <li>Unter Tage wird die Welt &uuml;ber dir <b>weggeschnitten</b> &mdash; du siehst in deinen Tunnel</li>
       </ul>
       <button id="startBtn" class="primary">Losgraben</button>

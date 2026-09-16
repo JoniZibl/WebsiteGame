@@ -341,3 +341,37 @@ html, body {
 
 /* ---------- Fehlerhinweis ---------- */
 #fatal { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; z-index: 20; }
+
+/* ------------------------------- Werkbank --------------------------------- */
+.craft-box {
+  width: min(420px, 92vw);
+  max-height: 78vh; overflow-y: auto;
+  background: var(--cream); border-radius: 24px;
+  padding: 18px 16px 14px;
+  box-shadow: 0 18px 46px rgba(30, 24, 18, .34);
+}
+.craft-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin: 0 4px 12px; font-size: 19px;
+}
+.craft-head span { font-size: 13px; opacity: .7; }
+
+.craft-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; margin-bottom: 8px; padding: 11px 14px;
+  border: 0; border-radius: 16px; background: rgba(47, 52, 64, .06);
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.craft-row:active { transform: scale(.98); }
+.craft-row.off { opacity: .45; }
+.craft-name { font-weight: 700; font-size: 15px; display: flex; flex-direction: column; }
+.craft-name small { font-weight: 400; font-size: 12px; opacity: .62; margin-top: 2px; }
+.craft-cost { display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-align: right; }
+.craft-cost .has { color: #3f7a4a; }
+.craft-cost .lacks { color: #b5543f; }
+
+.craft-close {
+  width: 100%; margin-top: 6px; padding: 12px;
+  border: 0; border-radius: 16px; background: var(--coral); color: #fff;
+  font: inherit; font-weight: 700; cursor: pointer;
+}

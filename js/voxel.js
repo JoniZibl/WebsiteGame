@@ -34,16 +34,16 @@ export const BLOCKS = {
   [B.laub]:     { name: 'Laub',     color: 0x4fa34f, hard: 0.25 },
   [B.wasser]:   { name: 'Wasser',   color: 0x3fb0a8, liquid: true, hard: 0 },
   [B.kohle]:    { name: 'Kohle',    color: 0x413f45, hard: 1.2, needs: 1 },
-  [B.eisen]:    { name: 'Eisen',    color: 0xc0a58c, hard: 1.8, needs: 1 },
-  [B.gold]:     { name: 'Gold',     color: 0xf0c44a, hard: 2.2, needs: 2 },
-  [B.kristall]: { name: 'Kristall', color: 0x6fd6e8, hard: 2.8, needs: 2, glow: 0.45 },
+  [B.eisen]:    { name: 'Eisen',    color: 0xc0a58c, hard: 1.8, needs: 2 },
+  [B.gold]:     { name: 'Gold',     color: 0xf0c44a, hard: 2.2, needs: 3 },
+  [B.kristall]: { name: 'Kristall', color: 0x6fd6e8, hard: 2.8, needs: 3, glow: 0.45 },
   [B.bretter]:  { name: 'Bretter',  color: 0xc79a5e, hard: 0.5 },
   [B.eis]:      { name: 'Eis',      color: 0xa8dbe8, hard: 0.5 },
   [B.lehm]:     { name: 'Lehm',     color: 0xa8968a, hard: 0.5 },
   [B.kaktus]:   { name: 'Kaktus',   color: 0x4d8c46, hard: 0.4 },
   [B.pilz]:     { name: 'Pilz',     color: 0xcf5340, hard: 0.2 },
   [B.grundstein]: { name: 'Grundstein', color: 0x2e2c33, hard: Infinity },
-  [B.fackel]:   { name: 'Fackel',   color: 0xffc46b, hard: 0.1, glow: 1, thin: true },
+  [B.fackel]:   { name: 'Fackel',   color: 0xffd489, hard: 0.1, glow: 1, thin: true, slim: [0.18, 0.7] },
 };
 
 export const isSolid = (b) => b !== AIR && b !== B.wasser && !BLOCKS[b]?.thin;
@@ -333,9 +333,11 @@ export class VoxelWorld {
             _c.setHex(base).multiplyScalar(shade);
 
             const start = P.length / 3;
-            const top = liquid ? 0.88 : 1;
+            const top = liquid ? 0.88 : def.slim ? def.slim[1] : 1;
+            // Schmale Blöcke (Fackeln) stehen als Pfosten in der Blockmitte
+            const w = def.slim ? def.slim[0] : 1, o = (1 - w) / 2;
             for (const [dx, dy, dz] of face.corners) {
-              P.push(x + dx, y + (dy ? top : 0), z + dz);
+              P.push(x + o + dx * w, y + (dy ? top : 0), z + o + dz * w);
               C.push(_c.r, _c.g, _c.b);
             }
             I.push(start, start + 1, start + 2, start, start + 2, start + 3);

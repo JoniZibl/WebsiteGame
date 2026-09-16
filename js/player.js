@@ -185,10 +185,17 @@ export class Player {
     if (mode === 'down') return { x: bx, y: by - 1, z: bz };
     const fx = Math.round(Math.sin(this.facing));
     const fz = Math.round(Math.cos(this.facing));
-    for (const dy of [0, 1, 2]) {
-      const t = { x: bx + fx, y: by + dy, z: bz + fz };
-      if (!isSolid(world.get(t.x, t.y, t.z))) return t;
+
+    // Erst in Blickrichtung, dann ringsum, zuletzt ueber den Kopf. Ohne den
+    // letzten Ausweg liesse sich im engen Stollen keine Fackel setzen.
+    const spots = [];
+    for (const dy of [0, 1, 2]) spots.push({ x: bx + fx, y: by + dy, z: bz + fz });
+    for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (const dy of [0, 1]) spots.push({ x: bx + ox, y: by + dy, z: bz + oz });
     }
+    spots.push({ x: bx, y: by + 2, z: bz });
+
+    for (const t of spots) if (!isSolid(world.get(t.x, t.y, t.z))) return t;
     return null;
   }
 }
