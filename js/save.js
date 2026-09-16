@@ -19,6 +19,7 @@ const EMPTY = {
   seed: 0,                                  // eine Welt, die bleibt
   res: { holz: 0, stein: 0, beeren: 0 },
   camp: [],
+  lit: [],                                  // Stellen, an denen einmal Licht brannte
 };
 
 export function load() {
@@ -41,6 +42,7 @@ export function load() {
         beeren: Math.max(0, data.res?.beeren | 0),
       },
       camp: Array.isArray(data.camp) ? data.camp.filter((c) => c && typeof c.type === 'string') : [],
+      lit: Array.isArray(data.lit) ? data.lit.filter((z) => z && Number.isFinite(z.x)) : [],
     };
   } catch (err) {
     return structuredClone(EMPTY);

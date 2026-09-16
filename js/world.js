@@ -10,6 +10,20 @@ export const WATER_LEVEL = -1.2;
 let SEED = 1337;
 export function setSeed(s) { SEED = s | 0; }
 
+// Stellen, an denen einmal ein Feuer brannte. Das Land erinnert sich daran,
+// auch wenn das Feuer längst aus ist: dort wächst es dichter und grüner.
+let LIT = [];
+export function setLitZones(list) { LIT = list || []; }
+
+export function bloomAt(x, z) {
+  let best = 0;
+  for (const zone of LIT) {
+    const d = Math.hypot(x - zone.x, z - zone.z);
+    if (d < zone.r) best = Math.max(best, 1 - d / zone.r);
+  }
+  return best;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Höhenfeld — rein aus Noise, damit jeder Chunk nahtlos passt        */
 /* ------------------------------------------------------------------ */
@@ -77,10 +91,11 @@ const C = {
   deep:   new THREE.Color('#45a89e'),
   dry1:   new THREE.Color('#e3cd7e'),
   dry2:   new THREE.Color('#cdb768'),
+  bloom:  new THREE.Color('#7fd464'),
 };
 
 const tmpColor = new THREE.Color();
-function terrainColor(h, slope, jitter, dry) {
+function terrainColor(h, slope, jitter, dry, bloom = 0) {
   const shade = 0.975 + jitter * 0.05;   // leichtes Flackern für den Patchwork-Look
 
   // Gras: zwei Grüntöne weich ineinander, dazu große, helle Wiesenflecken
@@ -90,6 +105,9 @@ function terrainColor(h, slope, jitter, dry) {
 
   // in trockenen Gegenden zieht dasselbe Grün ins Goldene
   if (dry > 0) tmpColor.lerp(t > 0.5 ? C.dry1 : C.dry2, dry * 0.95);
+
+  // wo einmal Licht brannte, wird das Land satter und wärmer
+  if (bloom > 0) tmpColor.lerp(C.bloom, Math.min(0.75, bloom * 0.9));
 
   // Fels an steilen Hängen und auf Gipfeln
   tmpColor.lerp(C.rock, clamp((slope - 0.6) * 0.9, 0, 0.45) + clamp((h - 11) * 0.12, 0, 0.4));
@@ -559,7 +577,7 @@ function buildProps(cx, cz, bucket, colliders, fires, shrines, villages, nodes) 
         push(bucket, 'shroomStem', G.stem, mx2, my + 0.16 * ms, mz2, 0, ms, ms, ms);
         push(bucket, 'shroom', G.cap, mx2, my + 0.3 * ms, mz2, rand() * 6.28, ms, ms, ms);
       }
-    } else if (roll < 0.40 && dry < 0.5) {
+    } else if (roll < 0.40 + bloomAt(x, z) * 0.45 && dry < 0.5) {
       // kleine Blütenbüschel
       const n = 2 + Math.floor(rand() * 4);
       for (let k = 0; k < n; k++) {
@@ -620,7 +638,7 @@ function buildGround(cx, cz) {
       const slope = (Math.abs(h00 - h11) + Math.abs(h10 - h01)) / (2 * STEP);
       // große, ruhige Farbflächen statt kachelweisem Flimmern
       const jitter = fbm(mx * 0.012, mz * 0.012, SEED + 3, 2);
-      const color = terrainColor(hAvg, slope, jitter, drynessAt(mx, mz)).clone();
+      const color = terrainColor(hAvg, slope, jitter, drynessAt(mx, mz), bloomAt(mx, mz)).clone();
 
       if ((i + j) & 1) {
         writeTri(x0, h00, z0, x0, h01, z1, x1, h11, z1, color);
@@ -813,6 +831,19 @@ export class World {
     if (ci >= 0) chunk.colliders.splice(ci, 1);
     this.rebuildNodes(chunk);
     return true;
+  }
+
+  /** Baut alle Chunks neu, die von einer neuen Lichtinsel berührt werden. */
+  refreshArea(x, z, radius) {
+    const reach = Math.ceil(radius / CHUNK) + 1;
+    const ccx = Math.floor(x / CHUNK), ccz = Math.floor(z / CHUNK);
+    for (let dz = -reach; dz <= reach; dz++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        const key = this.key(ccx + dx, ccz + dz);
+        const chunk = this.chunks.get(key);
+        if (chunk) this.disposeChunk(key, chunk);
+      }
+    }
   }
 
   dropNodeMeshes(chunk) {

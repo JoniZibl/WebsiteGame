@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, heightAt, setSeed, regionName, windTime, NODE_KINDS, WATER_LEVEL } from './world.js';
+import { World, heightAt, setSeed, regionName, windTime, NODE_KINDS, WATER_LEVEL, setLitZones } from './world.js';
 import { Input } from './input.js';
 import { Player, EnemyManager, ProjectileManager, Particles, Gems, EnemyShots, Boss } from './entities.js';
 import { TiltShift } from './postfx.js';
@@ -135,8 +135,8 @@ function placeLightAt(pos) {
   let light = 0;
   for (const it of camp.items) {
     const def = BUILDINGS[it.type];
-    if (!def.light) continue;
-    light += fireGlow(pos, it.x, it.z, it.type === 'laterne' ? 11 : 16) * def.light * 0.95;
+    if (!def.light || !camp.burning(it)) continue;
+    light += fireGlow(pos, it.x, it.z, def.reach) * def.light * 0.95 * (0.35 + it.fuel * 0.65);
   }
 
   const wf = world.nearestFire(pos, 22);
@@ -273,8 +273,10 @@ function newRun(keepPlace = false) {
   state.tradeOpen = false;
   document.getElementById('levelup').classList.add('hidden');
   shopEl.classList.add('hidden');
+  mapEl.classList.add('hidden');
   tradeBtn.classList.add('hidden');
 
+  setLitZones(saveData.lit);
   camp.load(saveData.camp);
   if (home) { player.pos.set(home.x + 1.6, 0, home.z + 1.6); }
   world.update(player.pos.x, player.pos.z, 60);   // Startgebiet sofort bauen
@@ -472,6 +474,7 @@ const resEls = {
 };
 
 let nearNode = null;
+let nearFire = null;
 
 function floatText(pos, text) {
   fx.burst(pos, '#f2dda2', 4);
@@ -480,6 +483,19 @@ function floatText(pos, text) {
 }
 
 actionBtn.addEventListener('click', () => {
+  // Am Feuer stehen heißt: Holz nachlegen
+  if (nearFire) {
+    if (res.holz <= 0) return;
+    res.holz -= 1;
+    camp.refuel(nearFire);
+    saveData.res = res;
+    saveData.camp = camp.serialize();
+    Save.save(saveData);
+    audio.gem(1);
+    fx.burst({ x: nearFire.x, y: nearFire.y, z: nearFire.z }, '#ffb347', 7);
+    updateHUD(true);
+    return;
+  }
   if (!nearNode) return;
   audio.unlock();
   const { chunk, node } = nearNode;
@@ -518,6 +534,13 @@ function renderBuild() {
       const bx = player.pos.x + Math.sin(player.facing) * 2.2;
       const bz = player.pos.z + Math.cos(player.facing) * 2.2;
       camp.place(type, bx, bz, player.facing + Math.PI);
+
+      // Feuer und Laternen machen ihre Umgebung dauerhaft grüner
+      if (def.reach) {
+        saveData.lit.push({ x: +bx.toFixed(1), z: +bz.toFixed(1), r: def.reach });
+        setLitZones(saveData.lit);
+        world.refreshArea(bx, bz, def.reach);
+      }
       saveData.camp = camp.serialize();
       saveData.res = res;
       Save.save(saveData);
@@ -551,6 +574,93 @@ eatBtn.addEventListener('click', () => {
   audio.gem(2);
   fx.burst(player.pos, '#c4504a', 6);
   updateHUD(true);
+});
+
+/* ------------------------------ Lichtkarte ------------------------------- */
+const mapEl = document.getElementById('map');
+const mapCanvas = document.getElementById('mapCanvas');
+
+function drawMap() {
+  const ctx = mapCanvas.getContext('2d');
+  const W = mapCanvas.width, H = mapCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#1b2130';
+  ctx.fillRect(0, 0, W, H);
+
+  // Ausschnitt so wählen, dass Spieler und alle Lichter hineinpassen
+  const pts = [{ x: player.pos.x, z: player.pos.z }, ...saveData.lit, ...camp.items];
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p2 of pts) {
+    minX = Math.min(minX, p2.x); maxX = Math.max(maxX, p2.x);
+    minZ = Math.min(minZ, p2.z); maxZ = Math.max(maxZ, p2.z);
+  }
+  const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const span = Math.max(160, (maxX - minX) * 1.35, (maxZ - minZ) * 1.35);
+  const toX = (x) => W / 2 + ((x - cx) / span) * W;
+  const toY = (z) => H / 2 + ((z - cz) / span) * H;
+
+  // Lichtinseln als weicher Schein — das ist die eigentliche Karte
+  for (const zone of saveData.lit) {
+    const r = Math.max(6, (zone.r / span) * W);
+    const g = ctx.createRadialGradient(toX(zone.x), toY(zone.z), 0, toX(zone.x), toY(zone.z), r);
+    g.addColorStop(0, 'rgba(255, 186, 96, .5)');
+    g.addColorStop(1, 'rgba(255, 186, 96, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(toX(zone.x), toY(zone.z), r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // gebautes Lager
+  const marks = { feuer: '#ffb347', laterne: '#ffe08a', zelt: '#e0654a', zaun: '#9a7a52' };
+  for (const it of camp.items) {
+    ctx.fillStyle = camp.burning(it) ? (marks[it.type] || '#fff') : '#6b6f7e';
+    ctx.beginPath();
+    ctx.arc(toX(it.x), toY(it.z), it.type === 'zelt' ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // besiegte Wächter
+  ctx.strokeStyle = 'rgba(210, 225, 255, .55)';
+  ctx.lineWidth = 2;
+  for (const key of state.cleared) {
+    const [sx, sz] = key.split('_').map(Number);
+    ctx.beginPath();
+    ctx.arc(toX(sx), toY(sz), 9, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // der Zwerg selbst, mit Blickrichtung
+  const px = toX(player.pos.x), py = toY(player.pos.z);
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(-player.facing);
+  ctx.fillStyle = '#fff3d8';
+  ctx.beginPath();
+  ctx.moveTo(0, -11);
+  ctx.lineTo(7, 8);
+  ctx.lineTo(0, 4);
+  ctx.lineTo(-7, 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Maßstab
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.font = '600 15px system-ui, sans-serif';
+  ctx.fillText(`${Math.round(span)} m`, 14, H - 14);
+}
+
+function openMap() {
+  state.paused = true;
+  drawMap();
+  mapEl.classList.remove('hidden');
+}
+
+document.getElementById('mapBtn').addEventListener('click', () => { audio.unlock(); openMap(); });
+document.getElementById('mapClose').addEventListener('click', () => {
+  mapEl.classList.add('hidden');
+  state.paused = false;
 });
 
 /* ------------------------------ Krämerstand ------------------------------ */
@@ -693,6 +803,11 @@ function frame() {
     // Lagerfeuer: in der Nähe erholt man sich spürbar – eigene zählen mit
     const nightness = Math.max(0, Math.min(1, (state.time - 0.66) * 6, (0.96 - state.time) * 6));
     state.nightness = nightness;
+    camp.consume(dt, nightness, (it) => {
+      let n = 0;
+      for (const e of enemies.living) if (Math.hypot(e.pos.x - it.x, e.pos.z - it.z) < 9) n++;
+      return n;
+    });
     camp.update(dt, nightness, player.pos);
 
     const worldFire = world.nearestFire(player.pos, 34);
@@ -726,11 +841,13 @@ function frame() {
     critters.update(dt, player, world, state.nightness);
     windTime.value += dt;
 
-    // Fundstelle in Reichweite? Dann den Aktionsknopf anbieten
-    nearNode = world.nearestNode(player.pos, 3.2);
-    if (nearNode && !state.paused) {
-      const def = NODE_KINDS[nearNode.node.kind];
-      actionBtn.textContent = `${def.icon} ${def.label}`;
+    // Aktionsknopf: erst Holz nachlegen, sonst die nächste Fundstelle
+    nearFire = res.holz > 0 ? camp.needsFuel(player.pos, 4) : null;
+    nearNode = nearFire ? null : world.nearestNode(player.pos, 3.2);
+    if ((nearFire || nearNode) && !state.paused) {
+      actionBtn.textContent = nearFire
+        ? `🪵 Nachlegen (${Math.round(nearFire.fuel * 100)} %)`
+        : `${NODE_KINDS[nearNode.node.kind].icon} ${NODE_KINDS[nearNode.node.kind].label}`;
       actionBtn.classList.remove('hidden');
     } else {
       actionBtn.classList.add('hidden');
@@ -748,7 +865,7 @@ function frame() {
     // Händler in Reichweite?
     const canTrade = villagers.nearTrader(player.pos) && !state.paused;
     tradeBtn.classList.toggle('hidden', !canTrade);
-    actionBtn.classList.toggle('hidden', !nearNode || canTrade);
+    actionBtn.classList.toggle('hidden', (!nearNode && !nearFire) || canTrade);
 
     // Vorrat gelegentlich sichern
     state.saveTimer -= dt;

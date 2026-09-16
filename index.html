@@ -46,6 +46,7 @@
     <div class="side-btns">
       <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
       <button id="soundBtn" class="ghost-btn" title="Ton an/aus">🔊</button>
+      <button id="mapBtn" class="ghost-btn" title="Lichtkarte">🗺️</button>
     </div>
   </div>
 
@@ -83,6 +84,15 @@
       <h1 id="levelTitle">Stufe 2</h1>
       <p class="sub">Such dir etwas aus</p>
       <div id="cards" class="cards"></div>
+    </div>
+  </div>
+
+  <div id="map" class="overlay hidden">
+    <div class="card map-card">
+      <h1>Lichtkarte</h1>
+      <p class="sub">Sie zeigt nur, was du erhellt hast.</p>
+      <canvas id="mapCanvas" width="640" height="640"></canvas>
+      <button id="mapClose" class="primary">Zur&uuml;ck</button>
     </div>
   </div>
 

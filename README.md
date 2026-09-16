@@ -1,9 +1,9 @@
 # Glut
 
-> Du bist ein Kind mit einer Laterne als Kopf. Deine Flamme ist Leben,
-> Munition und Licht — alles in einem einzigen Balken. Jeder Schuss kostet
-> dich Helligkeit. Jedes Feuer, das du entzündest, holt ein Stück Welt aus
-> dem Dunkel zurück.
+> Du bist ein Gartenzwerg mit einer Laterne in der Hand. Ihre Flamme ist
+> Leben, Munition und Licht — alles in einem einzigen Balken. Jeder Schuss
+> kostet dich Helligkeit. Jedes Feuer, das du entzündest, holt ein Stück
+> Welt aus dem Dunkel zurück — und dort bleibt es grün.
 
 Ein Top-Down-Spiel im Browser, prozedural erzeugt, in einer Welt, die bleibt.
 Gebaut mit [three.js](https://threejs.org) als reine statische Seite. Kein
@@ -69,11 +69,12 @@ zum Startbildschirm hinzufügen.
 
 ## Die Figur
 
-Vier Teile, mehr nicht: ein sechskantiger Mantel, ein Kragen als einziger
-Farbakzent, ein kleiner Schnabel für die Blickrichtung — und die Laterne als
-Kopf. Sie ist keine Verzierung, sondern die Anzeige: Sie schrumpft, verliert
-ihre Wärme und rötet sich, während die Flamme sinkt, und wirft dabei echtes
-Licht in die Welt.
+Fünf Teile, mehr nicht: Zipfelmütze, Kopf, Bart, Kittel — und die Laterne in
+der Hand. Von oben erkennt man ihn an der roten Spitze und dem weißen Bart,
+der zugleich zeigt, wohin er schaut. Die Laterne ist keine Verzierung,
+sondern die Anzeige: Sie schrumpft, verliert ihre Wärme und rötet sich,
+während die Flamme sinkt, pendelt beim Laufen in der Hand und wirft dabei
+echtes Licht in die Welt.
 
 Damit die Figur nachts nicht mit der Welt verblasst, verschont der
 Dunkelheits-Pass helle Stellen: Je heller ein Bildpunkt, desto weniger
@@ -266,6 +267,31 @@ Himmel, Nebel, Sonnenfarbe, Sonnenstärke und Umgebungslicht interpoliert, die
 Sonne wandert dabei von Ost nach West. Nachts ist es blaugrau und dämmrig,
 Lagerfeuer leuchten spürbar stärker, und es sind mehr Gegner unterwegs. Die
 Tageszeit steht im HUD.
+
+### Feuer brauchen Holz
+
+Ein Lagerfeuer und eine Laterne haben Brennstoff. Tagsüber zehren sie kaum,
+nachts spürbar, und am schnellsten, wenn Schatten daneben stehen. Ein
+erloschenes Feuer bleibt stehen, gibt aber kein Licht mehr — bis man mit
+einem Scheit Holz nachlegt (der Aktionsknopf zeigt dann den Füllstand).
+Damit hat das Holzsammeln auch nach dem Bau noch einen Grund, und ein Lager
+ist etwas, das man pflegt.
+
+### Lichtinseln
+
+Wo einmal ein Feuer stand, erinnert sich das Land daran: Der Boden wird
+satter und wärmer, und es blüht dichter — dauerhaft, auch wenn das Feuer
+später ausgeht. Die Zonen stehen im Spielstand; wird eine neue angelegt,
+baut `world.refreshArea()` die betroffenen Chunks neu auf, damit die
+Veränderung sofort sichtbar ist.
+
+### Lichtkarte
+
+Der 🗺️-Knopf öffnet eine Karte, die **nur zeigt, was du erhellt hast**:
+jede Lichtinsel als warmer Schein, dein Lager als Punkte (erloschene Feuer
+grau), besiegte Wächter als Ringe und dich selbst als Pfeil mit
+Blickrichtung. Der Ausschnitt passt sich an, der Maßstab steht unten links.
+Eine Karte, die man sich erst erspielt.
 
 ### Lagerfeuer
 

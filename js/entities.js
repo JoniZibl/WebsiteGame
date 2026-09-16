@@ -24,40 +24,53 @@ export class Player {
     this.rig.scale.setScalar(1.7);   // gut lesbar aus der Vogelperspektive
 
     // ---------------------------------------------------------------
-    //  Das Laternenkind, so knapp wie möglich: ein Mantel, ein Licht,
-    //  ein Akzent. Vier Teile — mehr braucht die Silhouette nicht.
+    //  Ein Gartenzwerg mit Laterne. Fünf Teile: Mütze, Kopf, Bart, Kittel
+    //  und das Licht in der Hand. Von oben erkennt man ihn an der roten
+    //  Spitze und dem weißen Bart — das reicht als Silhouette.
     // ---------------------------------------------------------------
-    const cloth = new THREE.MeshLambertMaterial({ color: '#39415e', flatShading: true });
-    const accent = new THREE.MeshLambertMaterial({ color: '#e0654a', flatShading: true });
+    const coat = new THREE.MeshLambertMaterial({ color: '#3f5f7a', flatShading: true });
+    const hatMat = new THREE.MeshLambertMaterial({ color: '#d4463a', flatShading: true });
+    const skin = new THREE.MeshLambertMaterial({ color: '#f0cfa8', flatShading: true });
+    const beardMat = new THREE.MeshLambertMaterial({ color: '#f4f0e4', flatShading: true });
 
     this.glassMat = new THREE.MeshLambertMaterial({
       color: '#ffcf87', emissive: '#ff9c3c', flatShading: true,
     });
 
-    // Mantel: ein einziger Kegel, sechs Kanten
-    const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.15, 6), cloth);
-    body.position.y = 0.57;
+    // Kittel: ein Kegel, mehr Körper braucht ein Zwerg nicht
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.8, 7), coat);
+    body.position.y = 0.4;
 
-    // Kragen trennt Kopf von Körper und ist der einzige Farbakzent
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.13, 6), accent);
-    band.position.y = 1.13;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.27, 8, 6), skin);
+    head.position.y = 0.92;
 
-    // Die Laterne selbst — das ganze Gesicht der Figur
-    const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), this.glassMat);
-    orb.position.y = 1.47;
+    // Bart zeigt nach vorn-unten und sagt damit auch, wohin er schaut
+    const beard = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.5, 6), beardMat);
+    beard.position.set(0, 0.74, 0.12);
+    beard.rotation.x = Math.PI - 0.2;
 
-    // Schnabel: sagt aus der Vogelperspektive, wohin es geht
-    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 4), accent);
-    beak.position.set(0, 1.38, 0.34);
-    beak.rotation.x = Math.PI / 2;
+    // Zipfelmütze: das Erkennungszeichen
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.33, 0.72, 7), hatMat);
+    hat.position.set(0, 1.4, -0.05);
+    hat.rotation.x = -0.12;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.1, 7), hatMat);
+    brim.position.y = 1.07;
 
-    [body, band, beak].forEach((m) => { m.castShadow = true; this.rig.add(m); });
+    // Die Laterne hängt in der Hand — sie ist weiter der ganze Spielbalken
+    const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.27, 1), this.glassMat);
+    orb.position.set(0.58, 0.78, 0.3);
+    const buegel = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.025, 4, 8, Math.PI), beardMat);
+    buegel.position.set(0.58, 1.0, 0.3);
+    buegel.rotation.y = Math.PI / 2;
+
+    [body, head, beard, hat, brim, buegel].forEach((m) => { m.castShadow = true; this.rig.add(m); });
     this.rig.add(orb);
 
     this.glass = orb;
     this.flameMesh = orb;
-    this.bow = beak;                  // trägt weiter das Zucken beim Schuss
-    this.bowRest = beak.rotation.z;
+    this.lanternArm = orb;
+    this.bow = orb;                   // trägt weiter das Zucken beim Schuss
+    this.bowRest = orb.rotation.z;
 
     this.blob = makeBlob(1.05);
 
@@ -163,6 +176,9 @@ export class Player {
     const sc = (0.72 + f * 0.38) * flicker;
     this.flameMesh.scale.setScalar(sc);
     this.flameMesh.rotation.y += dt * 0.7;
+    // die Laterne pendelt beim Laufen ein wenig in der Hand
+    const swing = this.moving ? Math.sin(this.t * 14) * 0.07 : Math.sin(this.t * 2.2) * 0.02;
+    this.flameMesh.position.set(0.58 + swing * 0.4, 0.78 + Math.abs(swing) * 0.35, 0.3 + swing);
   }
 
   /** Füllstand der Laterne, 0..1 — Leben, Munition und Licht in einem. */
