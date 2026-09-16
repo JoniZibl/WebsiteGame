@@ -24,72 +24,40 @@ export class Player {
     this.rig.scale.setScalar(1.7);   // gut lesbar aus der Vogelperspektive
 
     // ---------------------------------------------------------------
-    //  Das Laternenkind: ein kleiner Mantel, darauf eine Laterne statt
-    //  eines Kopfes. Die Flamme darin ist zugleich Lebensbalken, Munition
-    //  und Lichtquelle — die Silhouette ist das Spielprinzip.
+    //  Das Laternenkind, so knapp wie möglich: ein Mantel, ein Licht,
+    //  ein Akzent. Vier Teile — mehr braucht die Silhouette nicht.
     // ---------------------------------------------------------------
-    const cloak = new THREE.MeshLambertMaterial({ color: '#4b5a74', flatShading: true });
-    const cloakLight = new THREE.MeshLambertMaterial({ color: '#68789a', flatShading: true });
-    const scarf = new THREE.MeshLambertMaterial({ color: '#df6a4a', flatShading: true });
-    const metal = new THREE.MeshLambertMaterial({ color: '#8f7b52', flatShading: true });
-    const metalDark = new THREE.MeshLambertMaterial({ color: '#5e4f34', flatShading: true });
+    const cloth = new THREE.MeshLambertMaterial({ color: '#39415e', flatShading: true });
+    const accent = new THREE.MeshLambertMaterial({ color: '#e0654a', flatShading: true });
 
-    // Das Glas glüht von innen — die Helligkeit folgt der Flamme.
     this.glassMat = new THREE.MeshLambertMaterial({
-      color: '#ffd89a', emissive: '#ffae4d', transparent: true, opacity: 0.92, flatShading: true,
-    });
-    this.flameMat = new THREE.MeshBasicMaterial({ color: '#fff0c4' });
-
-    const cape = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.95, 8), cloak);
-    cape.position.y = 0.48;
-    const capeTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.47, 0.1, 8), cloakLight);
-    capeTrim.position.y = 0.06;
-
-    const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.22, 2, 6), cloakLight);
-    armL.position.set(-0.36, 0.62, 0.05);
-    armL.rotation.z = 0.25;
-    const armR = armL.clone();
-    armR.position.x = 0.36;
-    armR.rotation.z = -0.25;
-
-    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.16, 8), scarf);
-    collar.position.y = 0.96;
-    const scarfEnd = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.1), scarf);
-    scarfEnd.position.set(0.02, 0.76, -0.3);
-    scarfEnd.rotation.x = 0.35;
-
-    // Laternenkopf: Boden, Glas, Deckel, Bügel
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.12, 8), metal);
-    base.position.y = 1.08;
-    const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.46, 8), this.glassMat);
-    glass.position.y = 1.36;
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 5), this.flameMat);
-    flame.position.y = 1.32;
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.33, 0.24, 8), metal);
-    cap.position.y = 1.7;
-    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 4, 10, Math.PI), metalDark);
-    handle.position.y = 1.84;
-    handle.rotation.y = Math.PI / 2;
-
-    // zwei Streben geben der Laterne Kanten statt einer glatten Röhre
-    const bars = [0, 1].map((i) => {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.48, 0.05), metalDark);
-      b.position.set(Math.cos(i * Math.PI / 2) * 0.26, 1.36, Math.sin(i * Math.PI / 2) * 0.26);
-      return b;
+      color: '#ffcf87', emissive: '#ff9c3c', flatShading: true,
     });
 
-    // kleines Windlicht in der Hand zeigt die Blickrichtung an
-    const docht = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.3), metalDark);
-    docht.position.set(0, 0.7, 0.42);
+    // Mantel: ein einziger Kegel, sechs Kanten
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.15, 6), cloth);
+    body.position.y = 0.57;
 
-    [cape, capeTrim, armL, armR, collar, scarfEnd, base, cap, handle, ...bars, docht]
-      .forEach((m) => { m.castShadow = true; this.rig.add(m); });
-    this.rig.add(glass, flame);
+    // Kragen trennt Kopf von Körper und ist der einzige Farbakzent
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.13, 6), accent);
+    band.position.y = 1.13;
 
-    this.glass = glass;
-    this.flameMesh = flame;
-    this.bow = docht;                 // trägt weiter das Zucken beim Schuss
-    this.bowRest = docht.rotation.z;
+    // Die Laterne selbst — das ganze Gesicht der Figur
+    const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), this.glassMat);
+    orb.position.y = 1.47;
+
+    // Schnabel: sagt aus der Vogelperspektive, wohin es geht
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 4), accent);
+    beak.position.set(0, 1.38, 0.34);
+    beak.rotation.x = Math.PI / 2;
+
+    [body, band, beak].forEach((m) => { m.castShadow = true; this.rig.add(m); });
+    this.rig.add(orb);
+
+    this.glass = orb;
+    this.flameMesh = orb;
+    this.bow = beak;                  // trägt weiter das Zucken beim Schuss
+    this.bowRest = beak.rotation.z;
 
     this.blob = makeBlob(1.05);
 
@@ -186,14 +154,15 @@ export class Player {
     }
     this.blob.position.set(this.pos.x, this.pos.y + 0.03, this.pos.z);
 
-    // Die Laterne lebt: Flackern, Höhe der Flamme, Farbe nach Füllstand
+    // Die Laterne lebt: sie flackert, schrumpft und rötet sich, wenn sie leer wird
     const f = this.flame;
-    const flicker = 0.88 + Math.sin(this.t * 11) * 0.06 + Math.sin(this.t * 23.7) * 0.04;
-    this.glassMat.emissiveIntensity = (0.25 + f * 1.15) * flicker;
-    this.glassMat.emissive.setRGB(1, 0.42 + f * 0.36, 0.12 + f * 0.36);
-    this.flameMat.color.setRGB(1, 0.62 + f * 0.33, 0.3 + f * 0.5);
-    this.flameMesh.scale.set(0.5 + f * 0.6, (0.35 + f * 0.9) * flicker, 0.5 + f * 0.6);
-    this.flameMesh.rotation.y += dt * 2.4;
+    const flicker = 0.9 + Math.sin(this.t * 11) * 0.06 + Math.sin(this.t * 23.7) * 0.04;
+    this.glassMat.emissiveIntensity = (0.18 + f * 0.9) * flicker;
+    this.glassMat.emissive.setRGB(1, 0.34 + f * 0.3, 0.08 + f * 0.25);
+    this.glassMat.color.setRGB(1, 0.66 + f * 0.18, 0.36 + f * 0.24);
+    const sc = (0.72 + f * 0.38) * flicker;
+    this.flameMesh.scale.setScalar(sc);
+    this.flameMesh.rotation.y += dt * 0.7;
   }
 
   /** Füllstand der Laterne, 0..1 — Leben, Munition und Licht in einem. */

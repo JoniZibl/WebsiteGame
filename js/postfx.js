@@ -91,12 +91,16 @@ const COMPOSITE_FRAG = /* glsl */`
     color = mix(vec3(lum), color, uSaturation);
     color = uLift + color * (uGain - uLift);        // leicht angehobene Schatten, warme Lichter
 
-    // Die Dunkelheit nimmt der Welt die Farbe und zieht sie ins Kalte.
+    // Die Dunkelheit nimmt der Welt die Farbe und zieht sie ins Kalte —
+    // aber nur dort, wo kein Licht hinfällt. Laterne, Feuer und Glut behalten
+    // ihre Wärme, und genau davon lebt das Bild.
     if (uDark > 0.001) {
       float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      float lit = smoothstep(0.3, 0.8, grey);
+      float d = uDark * (1.0 - lit * 0.92);
       vec3 cold = mix(vec3(grey), uDarkTint * grey * 1.7, 0.55);
-      color = mix(color, cold, uDark * 0.85);
-      color *= 1.0 - uDark * 0.32;
+      color = mix(color, cold, d * 0.9);
+      color *= 1.0 - d * 0.34;
     }
 
     float d = distance(vUv, vec2(0.5, 0.5));

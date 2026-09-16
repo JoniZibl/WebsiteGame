@@ -67,6 +67,20 @@ Deploy to GitHub Pages → Run workflow** einmal starten. Danach liegt das Spiel
 `https://jonizibl.github.io/WebsiteGame/` und lässt sich am Handy wie eine App
 zum Startbildschirm hinzufügen.
 
+## Die Figur
+
+Vier Teile, mehr nicht: ein sechskantiger Mantel, ein Kragen als einziger
+Farbakzent, ein kleiner Schnabel für die Blickrichtung — und die Laterne als
+Kopf. Sie ist keine Verzierung, sondern die Anzeige: Sie schrumpft, verliert
+ihre Wärme und rötet sich, während die Flamme sinkt, und wirft dabei echtes
+Licht in die Welt.
+
+Damit die Figur nachts nicht mit der Welt verblasst, verschont der
+Dunkelheits-Pass helle Stellen: Je heller ein Bildpunkt, desto weniger
+entfärbt und verdunkelt er. Laterne, Feuer und Glut behalten so ihre Wärme,
+während alles andere grau und kalt wird — das ist das Bild, von dem das Spiel
+lebt.
+
 ## Aufbau
 
 ```
