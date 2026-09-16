@@ -1,0 +1,127 @@
+import * as THREE from 'three';
+
+/**
+ * Alles, was einen Treffer wie einen Treffer anfühlen lässt: Bildruck,
+ * Wackeln, Schockwellen und Zahlen, die aufsteigen. Ein Spiel ohne das
+ * fühlt sich an wie ein Prototyp — egal wie viele Systeme darin stecken.
+ */
+export class Juice {
+  constructor(scene, camera) {
+    this.camera = camera;
+
+    this.shakeAmount = 0;
+    this.shakeTime = 0;
+    this.offset = new THREE.Vector3();
+
+    this.stop = 0;          // Bildruck in Sekunden
+    this.timeScale = 1;
+
+    // Schockwellen: flache Ringe, die aufblühen und verschwinden
+    const ringGeo = new THREE.RingGeometry(0.55, 1, 20).rotateX(-Math.PI / 2);
+    this.rings = Array.from({ length: 10 }, () => {
+      const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
+        color: '#fff2cf', transparent: true, opacity: 0, depthWrite: false,
+      }));
+      m.visible = false;
+      m.renderOrder = 4;
+      scene.add(m);
+      return { mesh: m, t: 0, life: 0, size: 1 };
+    });
+
+    // Aufsteigende Zahlen als HTML — scharf, billig, funktioniert überall
+    this.layer = document.getElementById('popups');
+    this.pops = Array.from({ length: 14 }, () => {
+      const el = document.createElement('div');
+      el.className = 'pop';
+      this.layer.append(el);
+      return { el, t: 0, life: 0, pos: new THREE.Vector3(), rise: 0 };
+    });
+    this._v = new THREE.Vector3();
+  }
+
+  /** Kurzer Bildruck — der Klassiker, der jeden Treffer verkauft. */
+  freeze(seconds = 0.05) { this.stop = Math.max(this.stop, seconds); }
+
+  shake(amount = 0.5) { this.shakeAmount = Math.min(1.4, this.shakeAmount + amount); }
+
+  ring(pos, size = 3, color = '#fff2cf', life = 0.4) {
+    const r = this.rings.find((x) => x.life <= 0);
+    if (!r) return;
+    r.life = life;
+    r.t = 0;
+    r.size = size;
+    r.mesh.material.color.set(color);
+    r.mesh.position.set(pos.x, (pos.y ?? 0) + 0.12, pos.z);
+    r.mesh.visible = true;
+  }
+
+  popup(pos, text, color = '#fff2cf') {
+    const p = this.pops.find((x) => x.life <= 0);
+    if (!p) return;
+    p.life = 0.85;
+    p.t = 0;
+    p.rise = 34 + Math.random() * 14;
+    p.pos.set(pos.x + (Math.random() - 0.5) * 0.6, (pos.y ?? 0) + 1.2, pos.z);
+    p.el.textContent = text;
+    p.el.style.color = color;
+    p.el.style.opacity = '1';
+  }
+
+  /** dt kommt ungebremst herein; zurück kommt die Zeit, die das Spiel sehen darf. */
+  update(dt) {
+    if (this.stop > 0) {
+      this.stop = Math.max(0, this.stop - dt);
+      this.timeScale = 0.02;
+    } else {
+      this.timeScale = 1;
+    }
+
+    // Wackeln klingt schnell ab und wechselt dabei die Richtung
+    this.shakeTime += dt * 42;
+    this.shakeAmount *= Math.pow(0.0015, dt);
+    if (this.shakeAmount < 0.002) this.shakeAmount = 0;
+    this.offset.set(
+      Math.sin(this.shakeTime) * this.shakeAmount * 0.9,
+      Math.sin(this.shakeTime * 1.7) * this.shakeAmount * 0.5,
+      Math.cos(this.shakeTime * 1.3) * this.shakeAmount * 0.9
+    );
+
+    for (const r of this.rings) {
+      if (r.life <= 0) continue;
+      r.t += dt;
+      const k = Math.min(1, r.t / r.life);
+      if (k >= 1) { r.life = 0; r.mesh.visible = false; continue; }
+      const s = (0.3 + k * 0.9) * r.size;
+      r.mesh.scale.set(s, 1, s);
+      r.mesh.material.opacity = (1 - k) * 0.75;
+    }
+
+    for (const p of this.pops) {
+      if (p.life <= 0) continue;
+      p.t += dt;
+      const k = Math.min(1, p.t / p.life);
+      if (k >= 1) { p.life = 0; p.el.style.opacity = '0'; continue; }
+
+      this._v.copy(p.pos).project(this.camera);
+      const x = (this._v.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-this._v.y * 0.5 + 0.5) * window.innerHeight - k * p.rise;
+      const pop = k < 0.2 ? 1 + (0.2 - k) * 2.4 : 1;
+      p.el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${pop})`;
+      p.el.style.opacity = String(1 - k * k);
+    }
+
+    return dt * this.timeScale;
+  }
+
+  /** Wird nach der Kamerabewegung aufgerufen. */
+  applyToCamera() {
+    this.camera.position.add(this.offset);
+  }
+
+  reset() {
+    this.shakeAmount = 0;
+    this.stop = 0;
+    this.rings.forEach((r) => { r.life = 0; r.mesh.visible = false; });
+    this.pops.forEach((p) => { p.life = 0; p.el.style.opacity = '0'; });
+  }
+}

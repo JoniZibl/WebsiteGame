@@ -148,8 +148,13 @@ export class Player {
 
     // Animation
     const sp = this.vel.length();
-    const bob = this.moving ? Math.sin(this.t * 14) * 0.07 * Math.min(1, sp / 4) : Math.sin(this.t * 2.2) * 0.02;
+    const step = Math.sin(this.t * 14);
+    const bob = this.moving ? Math.abs(step) * 0.13 * Math.min(1, sp / 4) : Math.sin(this.t * 2.2) * 0.02;
     this.rig.position.y = bob - (this.swimming ? 0.45 : this.wading ? 0.18 : 0);
+
+    // Stauchen im Takt: unten breit, oben lang — das macht den Gang lebendig
+    const squash = this.moving ? (1 - Math.abs(step)) * 0.12 * Math.min(1, sp / 4) : 0;
+    this.rig.scale.set(1.7 * (1 + squash), 1.7 * (1 - squash * 0.9), 1.7 * (1 + squash));
     this.rig.rotation.x = this.swimming ? 0.05 : Math.min(sp / this.speed, 1) * 0.16;
     this.rig.rotation.z = this.moving && !this.swimming ? Math.sin(this.t * 14) * 0.05 : 0;
     this.group.position.copy(this.pos);
@@ -207,8 +212,58 @@ export class Player {
 /* =========================================================================== */
 const enemyGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
 const hornGeo = new THREE.ConeGeometry(0.3, 0.45, 5);
-const eyeGeo = new THREE.BoxGeometry(0.13, 0.16, 0.08);
-const eyeMat = new THREE.MeshBasicMaterial({ color: '#ffd27a' });   // glühende Augen im Dunkeln
+
+/**
+ * Gesichter werden einmal auf ein kleines Canvas gemalt. Ein Mesh pro Schatten
+ * statt vier Würfelaugen — und dafür kann er gucken, staunen und quietschen.
+ */
+function faceTexture(draw) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 64, 64);
+  draw(g);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+const eyeWhite = '#fdf6e4';
+const eyeDark = '#241f2e';
+
+const FACES = {
+  // gewöhnlich: zwei wache Augen, schmaler Mund
+  normal: faceTexture((g) => {
+    g.fillStyle = eyeWhite;
+    g.beginPath(); g.ellipse(21, 26, 10, 12, 0, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(43, 26, 10, 12, 0, 0, 7); g.fill();
+    g.fillStyle = eyeDark;
+    g.beginPath(); g.arc(23, 28, 5, 0, 7); g.fill();
+    g.beginPath(); g.arc(45, 28, 5, 0, 7); g.fill();
+    g.strokeStyle = eyeWhite; g.lineWidth = 3.5; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(25, 47); g.lineTo(39, 47); g.stroke();
+  }),
+  // Panik: Augen aufgerissen, Mund ein O
+  panic: faceTexture((g) => {
+    g.fillStyle = eyeWhite;
+    g.beginPath(); g.arc(21, 24, 13, 0, 7); g.fill();
+    g.beginPath(); g.arc(43, 24, 13, 0, 7); g.fill();
+    g.fillStyle = eyeDark;
+    g.beginPath(); g.arc(21, 25, 4, 0, 7); g.fill();
+    g.beginPath(); g.arc(43, 25, 4, 0, 7); g.fill();
+    g.fillStyle = eyeWhite;
+    g.beginPath(); g.ellipse(32, 48, 8, 10, 0, 0, 7); g.fill();
+  }),
+  // getroffen: zugekniffene Augen
+  hit: faceTexture((g) => {
+    g.strokeStyle = eyeWhite; g.lineWidth = 5; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(12, 20); g.lineTo(28, 30); g.stroke();
+    g.beginPath(); g.moveTo(52, 20); g.lineTo(36, 30); g.stroke();
+    g.beginPath(); g.moveTo(24, 48); g.lineTo(40, 48); g.stroke();
+  }),
+};
+
+const faceGeo = new THREE.PlaneGeometry(0.66, 0.56);
 
 export const KINDS = {
   // huscht stur auf einen zu
@@ -230,9 +285,15 @@ class Enemy {
     this.horn = new THREE.Mesh(hornGeo, this.mat);
     this.horn.position.y = 1.0;
     this.horn.visible = false;
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.17, 0.5, 0.41);
-    const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.17, 0.5, 0.41);
-    this.group.add(this.body, this.horn, eyeL, eyeR);
+
+    this.faceMat = new THREE.MeshBasicMaterial({
+      map: FACES.normal, transparent: true, depthWrite: false,
+    });
+    this.face = new THREE.Mesh(faceGeo, this.faceMat);
+    this.face.position.set(0, 0.46, 0.415);
+    this.face.renderOrder = 2;
+
+    this.group.add(this.body, this.horn, this.face);
     this.blob = makeBlob(0.8);
     scene.add(this.group, this.blob);
     this.alive = false;
@@ -254,6 +315,11 @@ class Enemy {
     this.radius = 0.45 * k.scale;
     this.cooldown = 0.8 + Math.random() * 0.8;
     this.flash = 0;
+    this.knockX = 0;
+    this.knockZ = 0;
+    this.squash = 0;
+    this.rise = 0.5;                 // sie wachsen aus dem Boden heraus
+    this.faceMat.map = FACES.normal;
     this.phase = Math.random() * 6.28;
     this.strafe = Math.random() < 0.5 ? 1 : -1;
     this.dying = 0;
@@ -266,9 +332,14 @@ class Enemy {
 
   update(dt, player, world, onHitPlayer, shots, brightness = 0) {
     if (this.dying > 0) {
+      // platt gedrückt und wegtrudeln — ein Ende, das man gern ansieht
       this.dying -= dt;
-      const s = Math.max(0.001, (this.dying / 0.25) * this.def.scale);
-      this.group.scale.setScalar(s);
+      const k = Math.max(0, this.dying / 0.32);
+      const S = this.def.scale;
+      this.group.scale.set(S * (1 + (1 - k) * 0.9), S * k * k, S * (1 + (1 - k) * 0.9));
+      this.group.rotation.y += dt * 9;
+      this.group.position.y = this.pos.y + (1 - k) * 0.35;
+      this.faceMat.map = FACES.hit;
       if (this.dying <= 0) { this.alive = false; this.setVisible(false); }
       return;
     }
@@ -281,17 +352,33 @@ class Enemy {
       this.burning = (brightness - 0.5) * 7;
       this.hp -= this.burning * dt;
       this.flash = Math.max(this.flash, 0.05);
-      if (this.hp <= 0) { this.dying = 0.25; this.onBurn?.(this); return; }
+      this.faceMat.map = FACES.panic;
+      if (this.hp <= 0) { this.dying = 0.32; this.onBurn?.(this); return; }
     } else {
       this.burning = 0;
+      if (this.squash <= 0) this.faceMat.map = FACES.normal;
     }
+    if (this.squash > 0) this.squash -= dt;
 
     const dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z;
     const dist = Math.hypot(dx, dz) || 1;
     const next = this.pos.clone();
     let moved = false;
 
-    if (this.def.keep > 0) {
+    if (this.burning > 0 && this.sample) {
+      // Kopflos zur dunkelsten Seite — vier Stichproben reichen dafür
+      let bestX = 0, bestZ = 0, bestB = Infinity;
+      for (let i = 0; i < 4; i++) {
+        const a = this.phase * 0.2 + i * (Math.PI / 2);
+        const sx = this.pos.x + Math.cos(a) * 4, sz = this.pos.z + Math.sin(a) * 4;
+        const b = this.sample({ x: sx, z: sz });
+        if (b < bestB) { bestB = b; bestX = Math.cos(a); bestZ = Math.sin(a); }
+      }
+      const flee = this.speed * 1.7 * dt;
+      next.x += bestX * flee + Math.sin(this.phase * 3) * 0.04;
+      next.z += bestZ * flee + Math.cos(this.phase * 2.6) * 0.04;
+      moved = true;
+    } else if (this.def.keep > 0) {
       // Fernkämpfer: Wunschabstand halten und dabei seitlich ausweichen
       const wish = this.def.keep;
       let ax = 0, az = 0;
@@ -318,6 +405,16 @@ class Enemy {
       onHitPlayer(this);
     }
 
+    // Rückstoß aus Treffern klingt weich aus
+    if (Math.abs(this.knockX) + Math.abs(this.knockZ) > 0.01) {
+      next.x += this.knockX * dt;
+      next.z += this.knockZ * dt;
+      const decay = Math.pow(0.0008, dt);
+      this.knockX *= decay;
+      this.knockZ *= decay;
+      moved = true;
+    }
+
     if (moved && heightAt(next.x, next.z) > WATER_LEVEL) {
       world.resolveCollisions(next, this.radius);
       this.pos.x = next.x; this.pos.z = next.z;
@@ -325,9 +422,22 @@ class Enemy {
 
     this.pos.y = heightAt(this.pos.x, this.pos.z);
     const hop = Math.abs(Math.sin(this.phase)) * 0.22;
-    this.group.position.set(this.pos.x, this.pos.y + hop * this.def.scale, this.pos.z);
+    let riseOffset = 0;
+    if (this.rise > 0) {
+      this.rise = Math.max(0, this.rise - dt);
+      const k = this.rise / 0.5;
+      riseOffset = -1.1 * k * this.def.scale;
+      this.group.scale.setScalar(this.def.scale * (1 - k * 0.3));
+    }
+    this.group.position.set(this.pos.x, this.pos.y + hop * this.def.scale + riseOffset, this.pos.z);
     this.group.rotation.y = Math.atan2(dx, dz);
-    if (this.def.keep > 0) {
+    if (this.squash > 0) {
+      const q = this.squash / 0.18;
+      this.body.scale.set(1 + q * 0.45, 1 - q * 0.35, 1 + q * 0.45);
+    } else if (this.burning > 0) {
+      const p2 = Math.sin(this.phase * 4);
+      this.body.scale.set(1 + p2 * 0.12, 1.15 - p2 * 0.1, 1 + p2 * 0.12);
+    } else if (this.def.keep > 0) {
       const wind = this.cooldown < 0.35 ? 1.2 : 1;   // kurz vorm Spucken bläht er sich auf
       this.body.scale.set(wind, wind, wind);
     } else {
@@ -338,10 +448,19 @@ class Enemy {
     this.blob.scale.setScalar((0.8 - hop * 0.5) * this.def.scale);
   }
 
+  /** Schubst den Schatten weg — Treffer sollen sichtbar wehtun. */
+  knock(dx, dz, force = 4.5) {
+    const len = Math.hypot(dx, dz) || 1;
+    this.knockX += (dx / len) * force / this.def.scale;
+    this.knockZ += (dz / len) * force / this.def.scale;
+  }
+
   hurt(dmg) {
     this.hp -= dmg;
-    this.flash = 0.09;
-    if (this.hp <= 0) { this.dying = 0.25; return true; }
+    this.flash = 0.12;
+    this.squash = 0.18;
+    this.faceMat.map = FACES.hit;
+    if (this.hp <= 0) { this.dying = 0.32; return true; }
     return false;
   }
 }
@@ -393,6 +512,7 @@ export class EnemyManager {
           const z = player.pos.z + Math.sin(a) * d;
           if (isLand(x, z) && brightnessAt({ x, z }) < 0.45) {
             free.spawn(x, z, tier, this.pickKind(tier), this.tough);
+            this.onSpawn?.(free);
             break;
           }
         }
@@ -402,13 +522,19 @@ export class EnemyManager {
     for (const e of this.pool) {
       if (!e.alive) continue;
       e.onBurn = this.onBurn;
+      e.sample = brightnessAt;
       e.update(dt, player, world, onHitPlayer, shots, brightnessAt(e.pos));
     }
   }
 
   spawnAt(x, z, kind, tier) {
     const free = this.pool.find((e) => !e.alive);
-    if (free && isLand(x, z)) free.spawn(x, z, tier, kind, this.tough);
+    if (free && isLand(x, z)) {
+      free.spawn(x, z, tier, kind, this.tough);
+      this.onSpawn?.(free);
+      return free;
+    }
+    return null;
   }
 
   nearest(pos, maxDist) {
@@ -702,6 +828,7 @@ export class ProjectileManager {
         const dx = e.pos.x - p.mesh.position.x, dz = e.pos.z - p.mesh.position.z;
         if (dx * dx + dz * dz < r * r) {
           p.hit.push(e);
+          e.knock?.(p.dir.x, p.dir.z, 5.5);
           if (e.hurt(this.damage)) onKill(e);
           if (p.pierce > 0) p.pierce -= 1;
           else { p.alive = false; p.mesh.visible = false; }

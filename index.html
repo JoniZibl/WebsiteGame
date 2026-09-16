@@ -27,16 +27,14 @@
     <div class="top-left">
       <div class="bar flame" id="hpBar"><div class="fill" id="hpFill"></div><span id="hpText">70%</span></div>
       <div class="bar xp" id="xpBar"><div class="fill" id="xpFill"></div><span id="xpText">Stufe 1</span></div>
-      <div class="chips">
-        <div class="chip"><span class="ic">✨</span><span id="score">0</span></div>
-        <div class="chip"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
-        <div class="chip"><span class="ic" id="timeIcon">☀️</span><span id="timeText">Morgen</span></div>
-      </div>
       <div class="chips res">
+        <div class="chip"><span class="ic">✨</span><span id="score">0</span></div>
         <div class="chip"><span class="ic">🪵</span><span id="resHolz">0</span></div>
         <div class="chip"><span class="ic">🪨</span><span id="resStein">0</span></div>
         <div class="chip"><span class="ic">🫐</span><span id="resBeeren">0</span></div>
+        <div class="chip"><span class="ic" id="timeIcon">☀️</span><span id="timeText">Tag</span></div>
       </div>
+      <div class="chip area" id="areaChip"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
       <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du entzündest dich neu</span></div>
     </div>
     <button id="actionBtn" class="action-btn hidden">🪓 Hacken</button>
@@ -49,6 +47,8 @@
       <button id="mapBtn" class="ghost-btn" title="Lichtkarte">🗺️</button>
     </div>
   </div>
+
+  <div id="popups"></div>
 
   <div id="bossBar" class="bossbar hidden">
     <span class="name">Wächter des Steinkreises</span>

@@ -32,7 +32,7 @@ html, body {
 .top-left { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 
 .bar {
-  position: relative; width: 168px; height: 26px; border-radius: 14px;
+  position: relative; width: 158px; height: 24px; border-radius: 14px;
   background: rgba(253, 246, 232, .75); box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -157,7 +157,9 @@ html, body {
 .round-btn.eat { bottom: calc(env(safe-area-inset-bottom, 0px) + 140px); }
 .round-btn.hidden { display: none; }
 
-.chips.res .chip { padding: 4px 9px; font-size: 12px; }
+.chips.res { flex-wrap: wrap; }
+.chips.res .chip { padding: 4px 9px; font-size: 12px; gap: 4px; }
+.chip.area { font-size: 12px; padding: 4px 10px; opacity: .85; }
 
 /* ---------- Handeln-Knopf ---------- */
 .trade-btn {
@@ -190,6 +192,15 @@ html, body {
 
 #shopList { margin-bottom: 16px; max-height: 46vh; overflow-y: auto; }
 
+/* ---------- Aufsteigende Zahlen ---------- */
+#popups { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+.pop {
+  position: absolute; left: 0; top: 0; opacity: 0;
+  font-weight: 900; font-size: 20px; letter-spacing: -.5px;
+  text-shadow: 0 2px 0 rgba(40, 30, 20, .45), 0 0 12px rgba(255, 200, 120, .5);
+  will-change: transform, opacity;
+}
+
 /* ---------- Bossleiste ---------- */
 .bossbar {
   position: fixed; left: 50%; transform: translateX(-50%);
@@ -219,7 +230,7 @@ html, body {
 }
 
 /* ---------- Erfahrungsleiste & Rast ---------- */
-.bar.xp { width: 168px; height: 18px; }
+.bar.xp { width: 158px; height: 15px; }
 .bar.xp .fill { background: linear-gradient(180deg, #f0b27a, #df8a5c); }
 .bar.xp span { font-size: 11px; }
 

@@ -593,10 +593,17 @@ function buildProps(cx, cz, bucket, colliders, fires, shrines, villages, nodes) 
 export function shrineKey(x, z) { return Math.round(x) + '_' + Math.round(z); }
 
 // Lichtsäule über einem Steinkreis – von Weitem sichtbares Ziel.
-const beaconGeo = new THREE.CylinderGeometry(1.1, 2.2, 30, 7, 1, true);
+const beaconGeo = new THREE.CylinderGeometry(0.35, 0.85, 13, 6, 1, true);
 const beaconMat = new THREE.MeshBasicMaterial({
-  color: '#ffe0ac', transparent: true, opacity: 0.13,
+  color: '#ffe0ac', transparent: true, opacity: 0.1,
   depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+});
+
+// Ein Schimmer am Boden verrät den Steinkreis auch, wenn der Strahl im Nebel liegt.
+const glowGeo = new THREE.CircleGeometry(3.4, 18).rotateX(-Math.PI / 2);
+const glowMat = new THREE.MeshBasicMaterial({
+  color: '#ffdca0', transparent: true, opacity: 0.16,
+  depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
 });
 
 /* ------------------------------------------------------------------ */
@@ -744,9 +751,12 @@ export class World {
 
     for (const sh of shrines) {
       const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-      beacon.position.set(sh.x, sh.y + 14, sh.z);
+      beacon.position.set(sh.x, sh.y + 6.5, sh.z);
       beacon.renderOrder = 2;
-      group.add(beacon);
+      const glow = new THREE.Mesh(glowGeo, glowMat);
+      glow.position.set(sh.x, sh.y + 0.12, sh.z);
+      glow.renderOrder = 2;
+      group.add(beacon, glow);
     }
     for (const key in bucket) {
       const merged = mergeGeometries(bucket[key], false);
@@ -764,7 +774,9 @@ export class World {
   }
 
   disposeChunk(k, chunk) {
-    chunk.group.traverse((o) => { if (o.isMesh && o.geometry !== beaconGeo) o.geometry.dispose(); });
+    chunk.group.traverse((o) => {
+      if (o.isMesh && o.geometry !== beaconGeo && o.geometry !== glowGeo) o.geometry.dispose();
+    });
     this.scene.remove(chunk.group);
     this.chunks.delete(k);
   }
@@ -773,7 +785,7 @@ export class World {
     this.castShadows = on;
     for (const [, chunk] of this.chunks) {
       chunk.group.traverse((o) => {
-        if (!o.isMesh || o.material === beaconMat) return;
+        if (!o.isMesh || o.material === beaconMat || o.material === glowMat) return;
         o.castShadow = on && o.material !== groundMat;
         o.receiveShadow = on;
       });

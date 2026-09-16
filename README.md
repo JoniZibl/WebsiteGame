@@ -82,6 +82,49 @@ entfärbt und verdunkelt er. Laterne, Feuer und Glut behalten so ihre Wärme,
 während alles andere grau und kalt wird — das ist das Bild, von dem das Spiel
 lebt.
 
+## Spielgefühl
+
+Das Wichtigste an einem Spiel ist nicht, wie viele Systeme es hat, sondern
+was passiert, wenn man etwas trifft. `js/juice.js` kümmert sich darum:
+
+| Mittel | Wofür |
+| --- | --- |
+| **Bildruck** | 40–160 ms Stillstand bei Treffern, Toden und dem Schlag des Wächters |
+| **Kamerawackeln** | Ausschlag mit schnellem Abklingen, gestaffelt nach Wucht |
+| **Rückstoß** | Pfeile schubsen Schatten sichtbar weg |
+| **Stauchen** | Schatten platten beim Treffer, der Zwerg federt im Schritt |
+| **Schockwellen** | flache Ringe bei Tod, Stufenaufstieg und Wächterschlag |
+| **Zahlen** | aufsteigende Treffer- und Beutewerte als HTML über der Szene |
+
+Der Bildruck läuft über eine Zeitskala: `juice.update()` bekommt die echte
+Bildzeit und gibt die zurück, die das Spiel sehen darf. Die Darstellung läuft
+weiter, die Welt steht kurz still.
+
+## Konturlinien
+
+Der Composite-Pass liest die Tiefentextur der Szene und zeichnet dort eine
+dunkle Linie, wo die Tiefe springt — also an jeder Silhouette. Die Schwelle
+wächst mit der Entfernung, sonst wird die Ferne ein Strichgewirr, und in
+unscharfen Bereichen verschwindet die Linie mit der Unschärfe. Das kostet
+vier zusätzliche Texturzugriffe und macht aus einer 3D-Szene ein gezeichnetes
+Bild.
+
+## Die Schatten
+
+Sie tragen ein Gesicht, das einmal auf ein Canvas gemalt und als Textur
+benutzt wird — ein Mesh statt vier Würfelaugen. Es gibt drei: wach,
+zugekniffen (getroffen) und panisch. Im Licht wechseln sie auf Panik, suchen
+sich mit vier Stichproben die dunkelste Richtung und rennen zappelnd dorthin,
+bis sie mit einem „puff!" zerfallen. Beim Tod werden sie platt gedrückt und
+trudeln weg.
+
+## Der Kaltstart
+
+Beim Start fällt die Kamera aus der Höhe ein, der Zwerg wacht mit einer
+Schockwelle auf, und drei Schatten schieben sich sofort aus dem Boden. Die
+ersten zwanzig Sekunden entscheiden bei einem Handyspiel alles — vorher
+stand man in einer leeren Wiese.
+
 ## Aufbau
 
 ```
@@ -97,6 +140,7 @@ js/villagers.js     Dorfbewohner und Krämerstand
 js/critters.js      Rehe, Hasen, Falter und Glühwürmchen
 js/camp.js          eigenes Lager: Feuer, Zelt, Laterne, Zaun
 js/meshkit.js       verschmilzt Figuren zu je einem Mesh (spart Draw Calls)
+js/juice.js         Bildruck, Kamerawackeln, Schockwellen, aufsteigende Zahlen
 js/save.js          Spielstand, dauerhafte Verbesserungen, Bestwerte
 js/postfx.js        Tilt-Shift (Miniatureffekt) als eigener Render-Pass
 js/main.js          Szene, Licht, Kamera, Spielschleife, Kampf-Regel

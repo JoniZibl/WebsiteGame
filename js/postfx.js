@@ -52,7 +52,19 @@ const COMPOSITE_FRAG = /* glsl */`
   uniform float uTime;
   uniform float uDark;       // 0 = volles Licht, 1 = tiefe Dunkelheit
   uniform vec3  uDarkTint;
+
+  uniform sampler2D tDepth;  // Konturlinien aus der Tiefe
+  uniform vec2  uTexel;
+  uniform float uOutline;
+  uniform float uNear;
+  uniform float uFar;
   varying vec2 vUv;
+
+  // Abstand zur Kamera in Metern — daran erkennt man Silhouetten.
+  float depthAt(vec2 uv) {
+    float z = texture2D(tDepth, uv).x * 2.0 - 1.0;
+    return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));
+  }
 
   // Die Render-Targets liegen in sRGB, die Hardware gibt beim Lesen lineare
   // Werte zurück. Das Bild geht direkt auf den Bildschirm, also kodieren wir
@@ -73,6 +85,19 @@ const COMPOSITE_FRAG = /* glsl */`
     vec3 sharp = texture2D(tSharp, vUv).rgb;
     vec3 blurred = texture2D(tBlur, vUv).rgb;
     vec3 color = mix(sharp, blurred, m);
+
+    // Konturlinien: wo die Tiefe springt, sitzt eine Silhouette. Die Schwelle
+    // wächst mit der Entfernung, sonst wird die Ferne ein Strichgewirr.
+    if (uOutline > 0.001) {
+      float d0 = depthAt(vUv);
+      float dx = abs(depthAt(vUv + vec2(uTexel.x, 0.0)) - d0)
+               + abs(depthAt(vUv - vec2(uTexel.x, 0.0)) - d0);
+      float dy = abs(depthAt(vUv + vec2(0.0, uTexel.y)) - d0)
+               + abs(depthAt(vUv - vec2(0.0, uTexel.y)) - d0);
+      float edge = smoothstep(0.012 * d0, 0.05 * d0, dx + dy);
+      // in unscharfen Bereichen verschwindet die Linie mit
+      color *= 1.0 - edge * uOutline * (1.0 - m * 0.9);
+    }
 
     // Der weichgezeichnete Puffer ist schon da – daraus wird der Lichtschein,
     // der die harten Facettenkanten sanft ineinander blendet.
@@ -118,8 +143,11 @@ export class TiltShift {
     this.enabled = true;
     this.iterations = 2;   // zweiter Durchgang = weicheres Bokeh, kostet Füllrate
 
-    this.scene = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: true, samples: 4 });
+    this.scene = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: true });
     this.scene.texture.colorSpace = THREE.SRGBColorSpace;
+    // Die Tiefe brauchen wir für die Konturlinien.
+    this.scene.depthTexture = new THREE.DepthTexture(1, 1);
+    this.scene.depthTexture.type = THREE.UnsignedIntType;
     this.a = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
     this.b = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
     for (const rt of [this.a, this.b]) {
@@ -158,6 +186,11 @@ export class TiltShift {
         uVignette: { value: 0.3 },
         uGrain: { value: 0.016 },
         uTime: { value: 0 },
+        tDepth: { value: null },
+        uTexel: { value: new THREE.Vector2() },
+        uOutline: { value: 0.55 },
+        uNear: { value: 0.5 },
+        uFar: { value: 320 },
         uDark: { value: 0 },
         uDarkTint: { value: new THREE.Vector3(0.42, 0.5, 0.78) },
       },
@@ -176,8 +209,8 @@ export class TiltShift {
   setSize(width, height, pixelRatio, samples = 4) {
     const w = Math.max(1, Math.floor(width * pixelRatio));
     const h = Math.max(1, Math.floor(height * pixelRatio));
-    this.scene.samples = samples;
     this.scene.setSize(w, h);
+    this.compositeMat.uniforms.uTexel.value.set(1 / w, 1 / h);
     // Die Unschärfe braucht keine volle Auflösung – halbiert spart viel Füllrate.
     this.a.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
     this.b.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
@@ -217,6 +250,9 @@ export class TiltShift {
     }
 
     this.compositeMat.uniforms.uTime.value = (performance.now() % 10000) * 0.001;
+    this.compositeMat.uniforms.tDepth.value = this.scene.depthTexture;
+    this.compositeMat.uniforms.uNear.value = camera.near;
+    this.compositeMat.uniforms.uFar.value = camera.far;
     this.compositeMat.uniforms.tSharp.value = this.scene.texture;
     this.compositeMat.uniforms.tBlur.value = this.b.texture;
     this._blit(this.compositeMat, null);

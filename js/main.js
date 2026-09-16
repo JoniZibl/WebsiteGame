@@ -9,6 +9,7 @@ import { Villagers } from './villagers.js';
 import { Critters } from './critters.js';
 import * as Save from './save.js';
 import { Camp, BUILDINGS, canAfford, payFor, costText } from './camp.js';
+import { Juice } from './juice.js';
 
 /* --------------------------------- Setup --------------------------------- */
 const canvas = document.getElementById('scene');
@@ -62,6 +63,7 @@ const gems = new Gems(scene);
 const boss = new Boss(scene);
 const fx = new Particles(scene);
 const audio = new GameAudio();
+const juice = new Juice(scene, camera);
 const villagers = new Villagers(scene);
 const critters = new Critters(scene);
 const saveData = Save.load();
@@ -227,6 +229,7 @@ const state = {
   bosses: 0,
   saveTimer: 0,
   tradeOpen: false,
+  intro: 0,
   nightness: 0,
   day: 1,
   light: 1,
@@ -258,6 +261,7 @@ function newRun(keepPlace = false) {
   boss.reset();
   villagers.hide();
   fx.reset();
+  juice.reset();
   stats = freshStats();
   Save.applyPerks(saveData, stats, player);
   res = saveData.res;
@@ -286,6 +290,17 @@ function newRun(keepPlace = false) {
   camera.lookAt(player.pos.x, player.pos.y + 1.2, player.pos.z);
   updateHUD(true);
   state.running = true;
+
+  // Kaltstart: Kamera fällt ein, und die ersten Schatten sind schon da.
+  state.intro = 1.5;
+  juice.ring(player.pos, 7, '#ffd27a', 0.8);
+  juice.popup(player.pos, 'Wach auf!', '#ffd27a');
+  audio.levelUp();
+  for (let i = 0; i < 3; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 11 + Math.random() * 5;
+    enemies.spawnAt(player.pos.x + Math.cos(a) * d, player.pos.z + Math.sin(a) * d, 'hopper', 0);
+  }
   hintEl.textContent = 'Loslassen → schießen';
   showHint();
 }
@@ -293,7 +308,10 @@ function newRun(keepPlace = false) {
 function onPlayerHit(enemy) {
   const dead = player.hurt(enemy.damage);
   audio.hurt();
-  fx.burst(player.pos, '#df8a5c', 5);
+  juice.freeze(0.06);
+  juice.shake(0.9);
+  juice.popup(player.pos, `−${Math.round(enemy.damage)}`, '#ff8f6a');
+  fx.burst(player.pos, 0xdf8a5c, 5);
   // kleiner Rückstoß für den Gegner
   const dx = enemy.pos.x - player.pos.x, dz = enemy.pos.z - player.pos.z;
   const d = Math.hypot(dx, dz) || 1;
@@ -305,7 +323,10 @@ function onPlayerHit(enemy) {
 function onKill(target) {
   if (target === boss) { onBossDown(); return; }
   audio.kill();
-  fx.burst(target.pos, target.mat.color.getHex(), 9);
+  juice.freeze(0.055);
+  juice.shake(0.45);
+  juice.ring(target.pos, 2.6, '#ffd27a', 0.35);
+  fx.burst(target.pos, 0xffd27a, 11);
   gems.drop(target.pos);
   if (Math.random() < (stats.luck || 0)) gems.drop(target.pos);   // Glückssteine
 }
@@ -314,15 +335,25 @@ function onKill(target) {
 const bossBar = document.getElementById('bossBar');
 const bossFill = document.getElementById('bossFill');
 
+enemies.onSpawn = (enemy) => {
+  juice.ring(enemy.pos, 1.8, '#5b5a78', 0.45);
+  fx.burst(enemy.pos, 0x3a3f56, 5);
+};
+
 enemies.onBurn = (enemy) => {
   audio.kill();
-  fx.burst(enemy.pos, '#ffd27a', 7);
+  juice.ring(enemy.pos, 2.2, '#ffe6a8', 0.4);
+  juice.popup(enemy.pos, 'puff!', '#ffe6a8');
+  fx.burst(enemy.pos, 0xffd27a, 7);
   gems.drop(enemy.pos);
 };
 
 const bossCallbacks = {
   onWake: () => {
     audio.bossWake();
+    juice.shake(0.9);
+    bossBar.classList.remove('hidden');
+    juice.popup(boss.pos, 'Wächter erwacht!', '#ffd27a');
     bossBar.classList.remove('hidden');
   },
   onSummon: (pos) => {
@@ -333,7 +364,10 @@ const bossCallbacks = {
   },
   onSlam: (pos, radius, damage) => {
     audio.bossSlam();
-    fx.burst(pos, '#9b9a84', 12);
+    juice.shake(1.3);
+    juice.freeze(0.08);
+    juice.ring(pos, radius * 1.15, '#e2643c', 0.5);
+    fx.burst(pos, 0x9b9a84, 12);
     const d = Math.hypot(player.pos.x - pos.x, player.pos.z - pos.z);
     if (d < radius) {
       audio.hurt();
@@ -344,7 +378,11 @@ const bossCallbacks = {
 
 function onBossDown() {
   audio.bossDown();
-  fx.burst(boss.pos, '#ffe0ac', 16);
+  juice.freeze(0.16);
+  juice.shake(1.4);
+  juice.ring(boss.pos, 9, '#ffe0ac', 0.8);
+  juice.popup(boss.pos, 'Bezwungen!', '#ffe0ac');
+  fx.burst(boss.pos, 0xffe0ac, 16);
   state.cleared.add(boss.shrine.key);
   state.bosses += 1;
   bossBar.classList.add('hidden');
@@ -358,6 +396,7 @@ function onBossDown() {
 
 function onCollect() {
   player.feed(EMBER_GAIN);
+  juice.popup(player.pos, '+' + EMBER_GAIN, '#ffd27a');
   state.score += 1;
   stats.xp += 1;
   saveData.gems += 1;
@@ -369,8 +408,10 @@ function onCollect() {
 }
 
 function onShotHit(damage) {
-  fx.burst(player.pos, '#e2643c', 5);
+  fx.burst(player.pos, 0xe2643c, 5);
   audio.hurt();
+  juice.shake(0.7);
+  juice.popup(player.pos, `−${Math.round(damage)}`, '#ff8f6a');
   if (player.hurt(damage)) gameOver();
 }
 
@@ -403,6 +444,7 @@ function levelUp() {
   }
   state.paused = true;
   audio.levelUp();
+  juice.ring(player.pos, 6, '#ffd27a', 0.7);
   levelupEl.classList.remove('hidden');
 }
 
@@ -477,9 +519,8 @@ let nearNode = null;
 let nearFire = null;
 
 function floatText(pos, text) {
-  fx.burst(pos, '#f2dda2', 4);
-  hintEl.textContent = text;
-  showHint(1400);
+  fx.burst(pos, 0xf2dda2, 4);
+  juice.popup(pos, text, '#ffe6a8');
 }
 
 actionBtn.addEventListener('click', () => {
@@ -492,7 +533,9 @@ actionBtn.addEventListener('click', () => {
     saveData.camp = camp.serialize();
     Save.save(saveData);
     audio.gem(1);
-    fx.burst({ x: nearFire.x, y: nearFire.y, z: nearFire.z }, '#ffb347', 7);
+    juice.ring(nearFire, 2.2, '#ffb347', 0.4);
+    juice.popup(nearFire, 'nachgelegt', '#ffb347');
+    fx.burst({ x: nearFire.x, y: nearFire.y, z: nearFire.z }, 0xffb347, 7);
     updateHUD(true);
     return;
   }
@@ -755,7 +798,8 @@ const targets = [];
 
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(clock.getDelta(), 1 / 20);
+  const raw = Math.min(clock.getDelta(), 1 / 20);
+  const dt = juice.update(raw);
 
   if (state.running && !state.paused) {
     const move = input.read();
@@ -879,8 +923,16 @@ function frame() {
 
   // Kamera folgt weich und bleibt in der Top-Down-Perspektive
   const want = state.camPos.copy(player.pos).add(CAM_OFFSET);
-  camera.position.lerp(want, 1 - Math.pow(0.0015, dt));
+  if (state.intro > 0) {
+    state.intro = Math.max(0, state.intro - raw);
+    const k = state.intro / 1.5;
+    const ease = k * k;                       // fällt weich ein statt zu rutschen
+    want.y += ease * 46;
+    want.z += ease * 14;
+  }
+  camera.position.lerp(want, 1 - Math.pow(state.intro > 0 ? 0.02 : 0.0015, dt || raw));
   camera.lookAt(player.pos.x, player.pos.y + 1.1, player.pos.z);
+  juice.applyToCamera();
 
   sun.position.set(player.pos.x + state.sunDir.x, player.pos.y + state.sunDir.y, player.pos.z + state.sunDir.z);
   sun.target.position.copy(player.pos);
@@ -926,7 +978,7 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
 });
 
 // Kleiner Debug-Zugang (auch praktisch für automatisierte Tests)
-window.__game = { state, player, enemies, fireLightAt, ambientAt, arrows, shots, gems, boss, audio, villagers, critters, camp, saveData, Save, openShop, openBuild, world,
+window.__game = { state, player, enemies, juice, fireLightAt, ambientAt, arrows, shots, gems, boss, audio, villagers, critters, camp, saveData, Save, openShop, openBuild, world,
   get res() { return res; }, get nearNode() { return nearNode; }, renderer, scene, camera, sun, post,
   get stats() { return stats; }, levelUp };
 
