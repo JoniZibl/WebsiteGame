@@ -266,3 +266,52 @@ html, body {
   text-shadow: 0 2px 0 rgba(253, 246, 232, .85);
   will-change: transform, opacity;
 }
+
+/* ------------------------------ Beutel & Laden ----------------------------- */
+#trinkBtn {
+  right: calc(env(safe-area-inset-right, 0px) + 92px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 178px);
+  background: radial-gradient(circle at 34% 30%, #f0a8a0, #c9543f 60%, #96392a);
+  box-shadow: 0 4px 0 #7a2c20, 0 8px 18px rgba(74, 59, 48, .26); color: #fdf6e8;
+  font-size: 18px; font-weight: 900;
+}
+
+.rue-reihe { display: flex; gap: 7px; margin-bottom: 12px; }
+.rue-platz {
+  flex: 1; padding: 10px 6px; border: 0; border-radius: 13px;
+  background: rgba(74, 59, 48, .07); box-shadow: inset 0 0 0 2px rgba(74, 59, 48, .12);
+  color: var(--tinte); font: inherit; cursor: pointer; text-align: center;
+}
+.rue-platz.voll { background: rgba(127, 174, 94, .16); box-shadow: inset 0 0 0 2px var(--salbei); }
+.rue-platz .ic { display: block; font-size: 21px; line-height: 1.1; }
+.rue-platz small { display: block; font-size: 10.5px; font-weight: 800; opacity: .7; margin-top: 3px; }
+
+.ding-zeile {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 11px; margin-bottom: 6px; border: 0; border-radius: 13px;
+  background: rgba(74, 59, 48, .07); color: var(--tinte); font: inherit; text-align: left;
+}
+.ding-zeile .ic { font-size: 20px; width: 26px; text-align: center; }
+.ding-zeile .txt { flex: 1; min-width: 0; }
+.ding-zeile .txt b { display: block; font-size: 13.5px; }
+.ding-zeile .txt small { display: block; font-size: 11px; opacity: .62; font-weight: 700; line-height: 1.35; }
+.ding-tun {
+  border: 0; border-radius: 10px; padding: 7px 11px; cursor: pointer;
+  background: var(--terra); color: var(--papier); font: inherit; font-size: 12px; font-weight: 800;
+}
+.ding-tun.still { background: transparent; color: var(--tinte); opacity: .55; cursor: default; }
+
+.laden-karte { text-align: left; }
+.laden-kopf { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+.laden-kopf b { font-size: 21px; font-weight: 900; }
+.laden-zeile { cursor: pointer; }
+.laden-zeile:active { transform: scale(.985); }
+.laden-zeile.aus { opacity: .42; cursor: default; }
+.laden-zeile .preis { font-size: 13px; font-weight: 900; white-space: nowrap; }
+.lreiter {
+  flex: 1; padding: 9px 4px; border: 0; border-radius: 12px;
+  background: rgba(74, 59, 48, .08); color: var(--tinte);
+  font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer;
+}
+.lreiter.an { background: var(--terra); color: var(--papier); }
+#ladenListe { max-height: 46vh; overflow-y: auto; margin-bottom: 12px; }

@@ -48,6 +48,7 @@
 
   <button id="menuBtn" class="rund klein" title="Held">🎒</button>
   <button id="wirkBtn" class="rund klein magie" title="Zauber">✨</button>
+  <button id="trinkBtn" class="rund klein trank hidden" title="trinken">🧪</button>
   <button id="redeBtn" class="rund mittel hidden" title="ansprechen">💬</button>
   <button id="hauBtn" class="rund gross" title="angreifen">⚔️</button>
 
@@ -62,15 +63,30 @@
     </div>
   </div>
 
+  <!-- Laden -->
+  <div id="laden" class="overlay hidden">
+    <div class="karte laden-karte">
+      <div class="laden-kopf"><b id="ladenName">Waren</b><span class="gold">🪙 <span id="ladenGold">0</span></span></div>
+      <div class="menu-reiter">
+        <button class="lreiter an" data-seite="kauf">Kaufen</button>
+        <button class="lreiter" data-seite="verkauf">Verkaufen</button>
+      </div>
+      <div id="ladenListe"></div>
+      <button id="ladenZu" class="primary">Fertig</button>
+    </div>
+  </div>
+
   <!-- Heldenblatt -->
   <div id="menu" class="overlay hidden">
     <div class="karte menu-karte">
       <div class="menu-reiter">
         <button class="reiter an" data-tab="fert">Fertigkeiten</button>
+        <button class="reiter" data-tab="beutel">Beutel</button>
         <button class="reiter" data-tab="quests">Aufträge</button>
         <button class="reiter" data-tab="welt">Karte</button>
       </div>
       <div id="tabFert" class="tab"></div>
+      <div id="tabBeutel" class="tab hidden"></div>
       <div id="tabQuests" class="tab hidden"></div>
       <div id="tabWelt" class="tab hidden"></div>
       <button id="menuZu" class="primary">Weiter</button>

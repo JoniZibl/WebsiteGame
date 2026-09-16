@@ -82,7 +82,9 @@ export class Leute {
     for (const [key, l] of gewollt) {
       if (da.has(key)) continue;
       const rand = mulberry32(l.saat >>> 0);
-      const gewerbe = GEWERBE[Math.floor(rand() * GEWERBE.length)];
+      const gewerbe = l.handel
+        ? GEWERBE.find((g) => g.name === 'Händlerin')
+        : GEWERBE[Math.floor(rand() * GEWERBE.length)];
       const name = VORNAMEN[Math.floor(rand() * VORNAMEN.length)];
       const haar = HAARE[Math.floor(rand() * HAARE.length)];
       const obj = this.musterFuer(gewerbe.kleid, haar).clone();
@@ -96,7 +98,7 @@ export class Leute {
 
       this.liste.push({
         key, name, gewerbe, saat: l.saat, dorf: l.dorf,
-        obj, pos: new THREE.Vector3(l.x, y, l.z),
+        obj, pos: new THREE.Vector3(l.x, y, l.z), handel: !!l.handel,
         heimX: l.x, heimZ: l.z,
         takt: rand() * 6, ziel: null, auftrag: null,
       });

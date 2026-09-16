@@ -1,3 +1,5 @@
+import { boni } from './items.js';
+
 /* ==========================================================================
  *  Stufen und Fertigkeiten.
  *
@@ -40,7 +42,9 @@ export function neuerHeld() {
     fert: { klinge: 1, zaehe: 1, magie: 1, spuren: 1, wandern: 1 },
     vorteile: new Set(),
     getoetet: 0,
-    dungeons: new Set(),      // welche schon geleert sind
+    dungeons: new Set(),      // welche Truhen schon offen sind
+    beutel: {},               // id -> Anzahl
+    rue: { waffe: null, ruestung: null, schmuck: null },
   };
 }
 
@@ -56,7 +60,7 @@ export function xpGeben(held, menge) {
     held.hpMax += 8;
     held.ausdauerMax += 5;
     held.magickaMax += 4;
-    held.hp = held.hpMax;
+    held.hp = werte.lebenMax(held);
     auf = true;
   }
   return auf;
@@ -87,12 +91,20 @@ export function uebung(held, fert, menge = 1) {
   return false;
 }
 
-/* ------------------------- Was die Werte bewirken -------------------------- */
+/* ------------------------- Was die Werte bewirken --------------------------
+ * Fertigkeit und Ausrüstung greifen an derselben Stelle ineinander: mit
+ * bloßen Fäusten bringt Klinge 5 wenig, und die beste Klinge trägt sich in
+ * ungeübter Hand auch nicht von allein.
+ * -------------------------------------------------------------------------- */
 export const werte = {
-  schaden: (h) => 8 + h.fert.klinge * 3.5 + (h.vorteile.has('klinge2') ? 6 : 0),
-  ruestung: (h) => (h.vorteile.has('zaehe2') ? 0.25 : 0) + h.fert.zaehe * 0.03,
-  tempo: (h) => 1 + h.fert.wandern * 0.035 + (h.vorteile.has('wandern2') ? 0.2 : 0),
+  schaden: (h) => 6 + h.fert.klinge * 3 + boni(h).schaden * (1 + h.fert.klinge * 0.12)
+    + (h.vorteile.has('klinge2') ? 6 : 0),
+  ruestung: (h) => (h.vorteile.has('zaehe2') ? 0.2 : 0) + h.fert.zaehe * 0.025 + boni(h).panzer,
+  tempo: (h) => 1 + h.fert.wandern * 0.035 + boni(h).tempo
+    + (h.vorteile.has('wandern2') ? 0.2 : 0),
   zauber: (h) => 14 + h.fert.magie * 5 + (h.vorteile.has('magie2') ? 10 : 0),
   sicht: (h) => 16 + h.fert.spuren * 3 + (h.vorteile.has('spuren2') ? 14 : 0),
   beute: (h) => 1 + h.fert.spuren * 0.1 + (h.vorteile.has('spuren4') ? 0.6 : 0),
+  lebenMax: (h) => h.hpMax + boni(h).leben,
+  magickaMax: (h) => h.magickaMax + boni(h).magicka,
 };

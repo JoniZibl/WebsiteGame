@@ -27,12 +27,22 @@ ein Hauptmann und eine große Truhe. Je weiter vom Anfang, desto härter.
 **Die Fertigkeiten** steigen dadurch, dass man sie benutzt — Klinge, Zähigkeit,
 Magie, Spüren, Wandern. Jede Stufe gibt einen Punkt für einen Vorteil.
 
+**Die Ausrüstung** hängt an drei Plätzen: Waffe, Rüstung, Schmuck. Fertigkeit
+und Ausrüstung greifen ineinander — mit bloßen Fäusten bringt Klinge 5 wenig,
+und die beste Klinge trägt sich in ungeübter Hand auch nicht von allein. Was
+man anlegt, sieht man auch: Griff und Klinge in der Hand ändern Länge und Farbe.
+
+**Die Beute** kommt aus Truhen und von Gefallenen und reicht vom Wolfsfell bis
+zur Runenklinge. In jedem Dorf führt jemand einen Laden, kauft den Krempel und
+verkauft Tränke, Waffen und Rüstung — das Angebot wechselt mit dem Tag.
+
 ## Steuerung
 
 - **Ziehen** (oder **WASD**) — laufen
 - **⚔️** zuschlagen *(Leertaste)* · **✨** zaubern *(K)*
 - **💬 / 🧰 / 🚪** ansprechen, Truhe öffnen, Gruft betreten *(E)*
-- **🎒** Fertigkeiten, Aufträge, Karte *(I)*
+- **🧪** trinken *(H)* — erscheint, sobald du Tränke hast
+- **🎒** Fertigkeiten, Beutel, Aufträge, Karte *(I)*
 
 ## Der Kniff für die Draufsicht
 
@@ -64,6 +74,7 @@ nimmt.
 | `js/quest.js` | Auftragsvorlagen und Auftragsbuch |
 | `js/skills.js` | Stufen, Fertigkeiten, Vorteile |
 | `js/combat.js` | Gegner und Kampf |
+| `js/items.js` | Gegenstände, Beutetabellen, Beutel, Laden |
 | `js/main.js` | Anzeige, Steuerung, Schleife |
 
 ## Starten

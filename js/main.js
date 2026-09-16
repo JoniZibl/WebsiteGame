@@ -13,6 +13,8 @@ import { Feinde, ARTEN } from './combat.js';
 import * as gruft from './dungeon.js';
 import * as fert from './skills.js';
 import { Auftragsbuch, auftragFuer } from './quest.js';
+import * as dinge from './items.js';
+import { DINGE } from './items.js';
 import { kisteBauen, torBauen } from './props.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
@@ -142,6 +144,7 @@ const state = {
   camPos: new THREE.Vector3(),
   fallFrom: null,
   gelesen: new Set(), // schon geöffnete Truhen
+  tag: 0,
 };
 
 const DAY = 420;
@@ -167,17 +170,26 @@ const ui = {
 };
 
 let hudTimer = 0;
+function waffeZeigen() {
+  const id = held().rue.waffe;
+  player.setWaffe(id ? DINGE[id] : null);
+}
+
 function updateHUD() {
   const h = held();
-  ui.hp.style.width = `${Math.max(0, h.hp / h.hpMax * 100)}%`;
+  waffeZeigen();
+  const hpMax = fert.werte.lebenMax(h);
+  const magMax = fert.werte.magickaMax(h);
+  ui.hp.style.width = `${Math.max(0, h.hp / hpMax * 100)}%`;
   ui.hpText.textContent = Math.max(0, Math.round(h.hp));
-  ui.hpBar.classList.toggle('wenig', h.hp < h.hpMax * 0.3);
+  ui.hpBar.classList.toggle('wenig', h.hp < hpMax * 0.3);
   ui.aus.style.width = `${Math.max(0, h.ausdauer / h.ausdauerMax * 100)}%`;
-  ui.mag.style.width = `${Math.max(0, h.magicka / h.magickaMax * 100)}%`;
+  ui.mag.style.width = `${Math.max(0, h.magicka / magMax * 100)}%`;
   ui.stufe.textContent = h.stufe;
   ui.xp.style.width = `${Math.min(100, h.xp / h.xpZiel * 100)}%`;
   ui.gold.textContent = h.gold;
   ui.wirk.classList.toggle('leer', h.magicka < 18);
+  trinkKnopfPflegen();
 
   ui.ortName.textContent = state.ort;
   ui.ortInfo.textContent = state.imDungeon
@@ -219,6 +231,16 @@ function feindGefallen(f) {
   const h = held();
   h.getoetet++;
   h.gold += f.art.gold;
+
+  // Was ein Gegner hinterlässt: meist Krempel, selten etwas Brauchbares
+  const stufe = state.imDungeon ? state.imDungeon.stufe : 1;
+  const rand = Math.random;
+  if (f.art.boss || rand() < 0.28 * fert.werte.beute(h)) {
+    const id = f.art.boss ? dinge.beuteZiehen(rand, stufe + 2) : dinge.beuteZiehen(rand, stufe, true);
+    dinge.nehmen(h, id);
+    juice.popup({ x: f.pos.x, y: f.pos.y + 1.1, z: f.pos.z },
+      `${DINGE[id].icon} ${DINGE[id].name}`, '#7fae5e');
+  }
   audio.kill();
   juice.shake(0.35);
   juice.ring({ x: f.pos.x, y: f.pos.y + 0.6, z: f.pos.z }, 2.4, '#e8a83c');
@@ -280,6 +302,58 @@ function zaubern() {
   updateHUD();
 }
 
+/* ------------------------------ Trinken ----------------------------------- */
+function besterTrank(was) {
+  const h = held();
+  let best = null, bestWert = 0;
+  for (const id of Object.keys(h.beutel)) {
+    const d = DINGE[id];
+    if (!d || d.art !== 'trank') continue;
+    const wirkt = was === 'heilt' ? d.heilt : d.magie;
+    if (wirkt && wirkt > bestWert) { bestWert = wirkt; best = id; }
+  }
+  return best;
+}
+
+function trinken() {
+  const h = held();
+  const hpMax = fert.werte.lebenMax(h);
+  // Was fehlt mehr? Danach richtet sich, was er greift.
+  const heilNot = 1 - h.hp / hpMax;
+  const magNot = 1 - h.magicka / fert.werte.magickaMax(h);
+  const erst = heilNot >= magNot ? 'heilt' : 'magie';
+  const id = besterTrank(erst) || besterTrank(erst === 'heilt' ? 'magie' : 'heilt');
+  if (!id) return;
+  const d = DINGE[id];
+  dinge.ablegen(h, id);
+  if (d.heilt) h.hp = Math.min(hpMax, h.hp + d.heilt);
+  if (d.magie) h.magicka = Math.min(fert.werte.magickaMax(h), h.magicka + d.magie);
+  audio.chomp();
+  juice.ring({ x: player.pos.x, y: player.pos.y + 0.5, z: player.pos.z }, 2.2,
+    d.heilt ? '#d9533f' : '#5e8aa8');
+  meldung(`${d.icon} ${d.name}`, d.heilt ? '#d9533f' : '#5e8aa8');
+  updateHUD();
+}
+
+function traenkeDa() {
+  const h = held();
+  return Object.keys(h.beutel).some((id) => DINGE[id]?.art === 'trank');
+}
+
+function trinkKnopfPflegen() {
+  const b = el('trinkBtn');
+  if (!b) return;
+  const da = traenkeDa();
+  b.classList.toggle('hidden', !da);
+  if (da) {
+    const h = held();
+    const anzahl = Object.entries(h.beutel)
+      .filter(([id]) => DINGE[id]?.art === 'trank')
+      .reduce((n, [, k]) => n + k, 0);
+    b.textContent = `🧪${anzahl > 1 ? anzahl : ''}`;
+  }
+}
+
 function sterben(von) {
   state.dead = true;
   state.running = false;
@@ -329,8 +403,11 @@ function gruftenPflegen(px, pz) {
 
 function truheOeffnen(t) {
   const h = held();
-  const gold = Math.round((t.gross ? 120 : 45) * (1 + t.gruft.stufe * 0.3) * fert.werte.beute(h));
+  const saat = (t.gruft.saat ^ (t.id.length * 7919) ^ t.pos.x ^ (t.pos.z << 8)) >>> 0;
+  const inhalt = dinge.truhenInhalt(saat, t.gruft.stufe, t.gross);
+  const gold = Math.round(inhalt.gold * fert.werte.beute(h));
   h.gold += gold;
+  for (const id of inhalt.stuecke) dinge.nehmen(h, id);
   h.dungeons.add(t.id);
   fert.uebung(h, 'spuren', 2);
   fert.xpGeben(h, t.gross ? 80 : 35);
@@ -339,6 +416,10 @@ function truheOeffnen(t) {
   audio.gem(2);
   juice.ring({ x: t.pos.x, y: t.pos.y + 0.5, z: t.pos.z }, 2.6, '#e8a83c');
   meldung(`+${gold} Gold`, '#e8a83c');
+  inhalt.stuecke.forEach((id, i) => {
+    juice.popup({ x: t.pos.x, y: t.pos.y + 1.4 + i * 0.7, z: t.pos.z },
+      `${DINGE[id].icon} ${DINGE[id].name}`, '#7fae5e');
+  });
   const fertigeQ = state.buch.melden('truhe', {});
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
   updateHUD();
@@ -488,6 +569,13 @@ function wahlenFuer(n) {
     });
   }
 
+  if (n.handel || n.gewerbe.name === 'Händlerin') {
+    wahlen.push({
+      label: 'Zeigt mir Eure Waren.',
+      tun: () => { redeSchliessen(); ladenOeffnen(n); },
+    });
+  }
+
   wahlen.push({
     label: 'Was gibt es hier?',
     tun: () => {
@@ -518,17 +606,182 @@ function redeSchliessen() {
   el('rede').classList.add('hidden');
 }
 
+/* --------------------------------- Der Laden -------------------------------
+ * Die Händlerin führt, was ihr Dorf hergibt, und wechselt ihr Angebot mit dem
+ * Tag. Verkaufen geht immer — Krempel aus Gruften ist die halbe Einnahme.
+ * -------------------------------------------------------------------------- */
+let ladenSeite = 'kauf';
+let ladenWirt = null;
+
+function ladenOeffnen(n) {
+  ladenWirt = n;
+  ladenSeite = 'kauf';
+  el('ladenName').textContent = `${n.name}s Waren`;
+  ladenZeichnen();
+  el('laden').classList.remove('hidden');
+}
+
+function ladenSchliessen() {
+  ladenWirt = null;
+  el('laden').classList.add('hidden');
+}
+
+function ladenZeichnen() {
+  if (!ladenWirt) return;
+  const h = held();
+  el('ladenGold').textContent = h.gold;
+  for (const b of document.querySelectorAll('.lreiter')) {
+    b.classList.toggle('an', b.dataset.seite === ladenSeite);
+  }
+  const feld = el('ladenListe');
+  feld.replaceChildren();
+
+  if (ladenSeite === 'kauf') {
+    const waren = dinge.warenFuer(ladenWirt.dorf.saat, state.tag, h.stufe);
+    for (const id of waren) {
+      const d = DINGE[id];
+      const preis = d.wert;
+      const kann = h.gold >= preis;
+      const z = document.createElement('button');
+      z.className = 'ding-zeile laden-zeile' + (kann ? '' : ' aus');
+      z.innerHTML = `<span class="ic">${d.icon}</span>`
+        + `<span class="txt"><b>${d.name}</b><small>${wirkungText(d)}</small></span>`
+        + `<span class="preis">${preis} 🪙</span>`;
+      if (kann) {
+        z.addEventListener('click', () => {
+          h.gold -= preis;
+          dinge.nehmen(h, id);
+          audio.gem(2);
+          ladenZeichnen();
+          updateHUD();
+        });
+      }
+      feld.append(z);
+    }
+  } else {
+    const ids = Object.keys(h.beutel);
+    if (!ids.length) {
+      const p = document.createElement('p');
+      p.className = 'punkte-hinweis';
+      p.textContent = 'Du hast nichts, was sie haben will.';
+      feld.append(p);
+    }
+    for (const id of ids.sort((a, b) => DINGE[b].wert - DINGE[a].wert)) {
+      const d = DINGE[id];
+      const preis = dinge.verkaufswert(id);
+      const z = document.createElement('button');
+      z.className = 'ding-zeile laden-zeile';
+      z.innerHTML = `<span class="ic">${d.icon}</span>`
+        + `<span class="txt"><b>${d.name}${h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : ''}</b>`
+        + `<small>${wirkungText(d)}</small></span>`
+        + `<span class="preis">+${preis} 🪙</span>`;
+      z.addEventListener('click', () => {
+        if (!dinge.ablegen(h, id)) return;
+        h.gold += preis;
+        audio.gem(1);
+        ladenZeichnen();
+        updateHUD();
+      });
+      feld.append(z);
+    }
+  }
+}
+
+function wirkungText(d) {
+  const teile = [];
+  if (d.schaden) teile.push(`+${d.schaden} Schaden`);
+  if (d.panzer) teile.push(`+${Math.round(d.panzer * 100)}% Rüstung`);
+  if (d.leben) teile.push(`+${d.leben} Leben`);
+  if (d.magicka) teile.push(`+${d.magicka} Magicka`);
+  if (d.tempo) teile.push(`+${Math.round(d.tempo * 100)}% Tempo`);
+  if (d.heilt) teile.push(`heilt ${d.heilt}`);
+  if (d.magie) teile.push(`+${d.magie} Magicka`);
+  return teile.length ? teile.join(' · ') : d.text;
+}
+
 /* ------------------------------ Heldenblatt -------------------------------- */
 function menuZeichnen(tab = 'fert') {
   for (const b of document.querySelectorAll('.reiter')) {
     b.classList.toggle('an', b.dataset.tab === tab);
   }
-  el('tabFert').classList.toggle('hidden', tab !== 'fert');
-  el('tabQuests').classList.toggle('hidden', tab !== 'quests');
-  el('tabWelt').classList.toggle('hidden', tab !== 'welt');
+  for (const [id, name] of [['tabFert', 'fert'], ['tabBeutel', 'beutel'],
+                            ['tabQuests', 'quests'], ['tabWelt', 'welt']]) {
+    el(id).classList.toggle('hidden', tab !== name);
+  }
   if (tab === 'fert') fertZeichnen();
+  if (tab === 'beutel') beutelZeichnen();
   if (tab === 'quests') questsZeichnen();
   if (tab === 'welt') karteZeichnen();
+}
+
+/* --------------------------------- Beutel ---------------------------------- */
+function beutelZeichnen() {
+  const h = held();
+  const feld = el('tabBeutel');
+  feld.replaceChildren();
+
+  // Was am Körper hängt
+  const kopf = document.createElement('div');
+  kopf.className = 'rue-reihe';
+  for (const art of dinge.TRAGBAR) {
+    const id = h.rue[art];
+    const platz = document.createElement('button');
+    platz.className = 'rue-platz' + (id ? ' voll' : '');
+    platz.innerHTML = id
+      ? `<span class="ic">${DINGE[id].icon}</span><small>${DINGE[id].name}</small>`
+      : `<span class="ic">·</span><small>${art === 'waffe' ? 'Waffe' : art === 'ruestung' ? 'Rüstung' : 'Schmuck'}</small>`;
+    if (id) platz.addEventListener('click', () => { dinge.ausziehen(h, art); audio.step(); beutelZeichnen(); updateHUD(); });
+    kopf.append(platz);
+  }
+  feld.append(kopf);
+
+  const werte = document.createElement('p');
+  werte.className = 'punkte-hinweis';
+  werte.textContent = `Schaden ${Math.round(fert.werte.schaden(h))}`
+    + ` · Rüstung ${Math.round(Math.min(0.6, fert.werte.ruestung(h)) * 100)}%`
+    + ` · Leben ${fert.werte.lebenMax(h)}`;
+  feld.append(werte);
+
+  const ids = Object.keys(h.beutel).sort((a, b) => DINGE[b].wert - DINGE[a].wert);
+  if (!ids.length) {
+    const p = document.createElement('p');
+    p.className = 'punkte-hinweis';
+    p.textContent = 'Der Beutel ist leer. Gruften sind voll.';
+    feld.append(p);
+    return;
+  }
+  for (const id of ids) {
+    const d = DINGE[id];
+    const z = document.createElement('div');
+    z.className = 'ding-zeile';
+    z.innerHTML = `<span class="ic">${d.icon}</span>`
+      + `<span class="txt"><b>${d.name}${h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : ''}</b>`
+      + `<small>${d.text}</small></span>`;
+    const tun = document.createElement('button');
+    tun.className = 'ding-tun';
+    if (dinge.TRAGBAR.includes(d.art)) {
+      tun.textContent = 'anlegen';
+      tun.addEventListener('click', () => { dinge.anlegen(h, id); audio.gem(2); beutelZeichnen(); updateHUD(); });
+    } else if (d.art === 'trank') {
+      tun.textContent = 'trinken';
+      tun.addEventListener('click', () => { trinkenGezielt(id); beutelZeichnen(); });
+    } else {
+      tun.textContent = `${dinge.verkaufswert(id)} 🪙`;
+      tun.classList.add('still');
+    }
+    z.append(tun);
+    feld.append(z);
+  }
+}
+
+function trinkenGezielt(id) {
+  const h = held();
+  const d = DINGE[id];
+  if (!dinge.ablegen(h, id)) return;
+  if (d.heilt) h.hp = Math.min(fert.werte.lebenMax(h), h.hp + d.heilt);
+  if (d.magie) h.magicka = Math.min(fert.werte.magickaMax(h), h.magicka + d.magie);
+  audio.chomp();
+  updateHUD();
 }
 
 function fertZeichnen() {
@@ -706,11 +959,14 @@ function frame() {
   const raw = Math.min(clock.getDelta(), 1 / 20);
   const dt = juice.update(raw);
 
-  if (state.running && !state.gespraech) {
+  if (state.running && !state.gespraech && !ladenWirt) {
     const h = held();
     const move = input.read();
     player.tempo = fert.werte.tempo(h);
     player.update(dt, move, world);
+    // Häuser sind Modelle, keine Blöcke — hier erst werden sie fest
+    const raus = doerfer.wegSchieben(player.pos.x, player.pos.z);
+    if (raus) { player.pos.x = raus.x; player.pos.z = raus.z; }
     world.update(player.pos.x, player.pos.z, 1);
     doerfer.update(player.pos.x, player.pos.z);
     leute.update(dt, world, doerfer, player.pos);
@@ -719,18 +975,21 @@ function frame() {
     feinde.aufraeumen(player.pos.x, player.pos.z, 130);
     wildnisPflegen(dt);
 
+    const vorher = state.time;
     state.time = (state.time + dt / DAY) % 1;
+    if (state.time < vorher) state.tag++;    // ein Tag ist herum, die Läden füllen auf
     if (state.hieb > 0) state.hieb -= dt;
     if (state.zauber > 0) state.zauber -= dt;
 
     // Ausdauer und Magicka füllen sich von allein
     h.ausdauer = Math.min(h.ausdauerMax, h.ausdauer + 16 * dt);
     const magTempo = h.vorteile.has('magie4') ? 6 : 3.4;
-    h.magicka = Math.min(h.magickaMax, h.magicka + magTempo * dt);
+    h.magicka = Math.min(fert.werte.magickaMax(h), h.magicka + magTempo * dt);
     // Nach dem Kampf heilt es langsam, wenn nichts in der Nähe ist
     const ruhe = !feinde.ziel(player.pos, player.facing, 14);
-    if (ruhe && h.hp < h.hpMax) {
-      h.hp = Math.min(h.hpMax, h.hp + (h.vorteile.has('zaehe4') ? 3.2 : 1.4) * dt);
+    const hpMaxJetzt = fert.werte.lebenMax(h);
+    if (ruhe && h.hp < hpMaxJetzt) {
+      h.hp = Math.min(hpMaxJetzt, h.hp + (h.vorteile.has('zaehe4') ? 3.2 : 1.4) * dt);
     }
 
     // Sturz kostet Leben
@@ -825,6 +1084,12 @@ function frame() {
 el('hauBtn').addEventListener('click', zuschlagen);
 el('wirkBtn').addEventListener('click', zaubern);
 el('redeBtn').addEventListener('click', handeln);
+el('trinkBtn').addEventListener('click', trinken);
+el('ladenZu').addEventListener('click', ladenSchliessen);
+for (const b of document.querySelectorAll('.lreiter')) {
+  b.addEventListener('click', () => { ladenSeite = b.dataset.seite; ladenZeichnen(); });
+}
+el('laden').addEventListener('click', (e) => { if (e.target === el('laden')) ladenSchliessen(); });
 
 el('menuBtn').addEventListener('click', () => {
   menuZeichnen('fert');
@@ -841,8 +1106,9 @@ window.addEventListener('keydown', (e) => {
   if (k === ' ' || k === 'j') { zuschlagen(); e.preventDefault(); }
   if (k === 'k') zaubern();
   if (k === 'e') handeln();
+  if (k === 'h') trinken();
   if (k === 'i') { menuZeichnen('fert'); el('menu').classList.toggle('hidden'); }
-  if (k === 'escape') { redeSchliessen(); el('menu').classList.add('hidden'); }
+  if (k === 'escape') { redeSchliessen(); ladenSchliessen(); el('menu').classList.add('hidden'); }
 });
 
 const soundBtn = el('soundBtn');
@@ -903,11 +1169,13 @@ function writeSave() {
     edits: save.packEdits(world.edits),
     pos: [player.pos.x, player.pos.y, player.pos.z],
     time: state.time,
+    tag: state.tag,
     held: {
       stufe: h.stufe, xp: h.xp, xpZiel: h.xpZiel, punkte: h.punkte, gold: h.gold,
       hp: h.hp, hpMax: h.hpMax, ausdauer: h.ausdauer, ausdauerMax: h.ausdauerMax,
       magicka: h.magicka, magickaMax: h.magickaMax, fert: h.fert, fertXp: h.fertXp || {},
       vorteile: [...h.vorteile], getoetet: h.getoetet, dungeons: [...h.dungeons],
+      beutel: h.beutel, rue: h.rue,
     },
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8) },
   });
@@ -987,6 +1255,7 @@ function weiterSpielen(d) {
   state.buch.offen = (d.quests?.offen || []);
   state.buch.erledigt = (d.quests?.erledigt || []);
   state.time = d.time ?? 0.3;
+  state.tag = d.tag ?? 0;
   state.dead = false;
   state.imDungeon = null;
   state.fallFrom = null;
@@ -1010,9 +1279,9 @@ el('againBtn').addEventListener('click', () => {
   // Man wacht im Dorf auf und behält alles bis auf etwas Gold
   const h = held();
   h.gold = Math.round(h.gold * 0.8);
-  h.hp = h.hpMax;
+  h.hp = fert.werte.lebenMax(h);
   h.ausdauer = h.ausdauerMax;
-  h.magicka = h.magickaMax;
+  h.magicka = fert.werte.magickaMax(h);
   state.dead = false;
   state.imDungeon = null;
   feinde.clear();
@@ -1041,6 +1310,7 @@ window.__game = {
   state, player, world, scene, camera, renderer, juice, audio, post, B, BLOCKS,
   doerfer, leute, feinde, truhen, tore, gruft, fert, held,
   handeln, zuschlagen, zaubern, writeSave, save, ortsname, was,
+  dinge, trinken, ladenOeffnen, ladenZeichnen, beutelZeichnen,
 };
 
 resize();

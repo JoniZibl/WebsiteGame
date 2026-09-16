@@ -66,10 +66,13 @@ export class Player {
     this.legR = new THREE.Mesh(box(0.2, 0.3, 0.22), saum);
     this.legR.position.set(0.14, 0.15, 0);
 
-    // Die Schaufel in der freien Hand
-    this.tool = new THREE.Mesh(box(0.07, 0.46, 0.07), metall);
+    // Die Waffe in der freien Hand. Griff und Klinge sind getrennt, damit
+    // eine bessere Waffe wirklich anders aussieht und nicht nur anders zählt.
+    this.griffMat = new THREE.MeshLambertMaterial({ color: '#8a5230', flatShading: true });
+    this.klingeMat = new THREE.MeshLambertMaterial({ color: '#d8dde2', flatShading: true });
+    this.tool = new THREE.Mesh(box(0.09, 0.3, 0.09), this.griffMat);
     this.tool.position.set(-0.4, 0.92, 0.22);
-    this.head2 = new THREE.Mesh(box(0.2, 0.18, 0.1), metall);
+    this.head2 = new THREE.Mesh(box(0.13, 0.5, 0.06), this.klingeMat);
     this.head2.position.set(-0.4, 0.66, 0.22);
 
     [this.torso, rock, this.head, kapuze, schirm, augeL, augeR, this.armL, this.armR,
@@ -187,6 +190,22 @@ export class Player {
 
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.facing;
+  }
+
+  /** Was in der Hand steckt, richtet sich nach dem, was angelegt ist. */
+  setWaffe(d) {
+    if (!d) {
+      this.tool.visible = false;
+      this.head2.visible = false;
+      return;
+    }
+    this.tool.visible = true;
+    this.head2.visible = true;
+    const laenge = 0.34 + (d.schaden || 0) * 0.026;
+    const breite = 0.1 + (d.schaden || 0) * 0.006;
+    this.head2.scale.set(breite / 0.13, laenge / 0.5, 1);
+    this.klingeMat.color.set(d.klinge || '#d8dde2');
+    this.griffMat.color.set(d.griff || '#8a5230');
   }
 
   jump() {

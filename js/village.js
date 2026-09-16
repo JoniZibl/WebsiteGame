@@ -37,10 +37,12 @@ export function bauplan(dorf) {
       hoehe: 2.3 + rand() * 0.7,
       dach: DACHFARBEN[Math.floor(rand() * DACHFARBEN.length)],
     });
-    // Vor jedem Haus wohnt jemand
+    // Vor jedem Haus wohnt jemand. Eine davon führt einen Laden — ohne die
+    // hätte das Gold aus den Gruften nirgendwo hinzugehen.
     leute.push({
       x: x + Math.cos(winkel) * -3.2, z: z + Math.sin(winkel) * -3.2,
       saat: (rand() * 1e9) | 0, heimX: x, heimZ: z,
+      handel: i === 0,
     });
   }
 
@@ -122,6 +124,42 @@ export class Doerfer {
       this.scene.remove(eintrag.gruppe);
       this.aktiv.delete(key);
     }
+  }
+
+  /* ---------------------------- Häuser sind fest ---------------------------
+   * Die Häuser stehen als Modelle auf dem Gelände, also weiß die Blockwelt
+   * nichts von ihnen. Ohne diese Prüfung liefe man mitten hindurch, und das
+   * Dorf wäre eine Kulisse.
+   * ------------------------------------------------------------------------ */
+  /** Schiebt einen Punkt aus dem nächsten Hausgrundriss heraus. */
+  wegSchieben(x, z, rand = 0.34) {
+    for (const { plan } of this.aktiv.values()) {
+      for (const t of plan.teile) {
+        if (t.art !== 'haus') continue;
+        const dx = x - (t.x + 0.5), dz = z - (t.z + 0.5);
+        if (Math.abs(dx) > 9 || Math.abs(dz) > 9) continue;
+
+        // In das eigene Koordinatensystem des Hauses drehen
+        const c = Math.cos(-t.dreh), s2 = Math.sin(-t.dreh);
+        const lx = dx * c - dz * s2;
+        const lz = dx * s2 + dz * c;
+        const hw = t.breite / 2 + rand, ht = t.tiefe / 2 + rand;
+        if (Math.abs(lx) >= hw || Math.abs(lz) >= ht) continue;
+
+        // Auf der kürzesten Seite hinaus
+        // Ein Hauch über die Kante hinaus, sonst landet man beim nächsten
+        // Bild wieder genau auf der Grenze und klebt dort fest.
+        const raus = hw - Math.abs(lx) < ht - Math.abs(lz)
+          ? { x: Math.sign(lx || 1) * (hw + 0.03), z: lz }
+          : { x: lx, z: Math.sign(lz || 1) * (ht + 0.03) };
+        const c2 = Math.cos(t.dreh), s3 = Math.sin(t.dreh);
+        return {
+          x: t.x + 0.5 + (raus.x * c2 - raus.z * s3),
+          z: t.z + 0.5 + (raus.x * s3 + raus.z * c2),
+        };
+      }
+    }
+    return null;
   }
 
   /** Das Dorf, in dem der Spieler gerade steht — für HUD und Quests. */
