@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#cfe4ea" />
+<meta name="theme-color" content="#bfe0ea" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>MAMPF</title>
+<title>Grabwelt</title>
 <link rel="stylesheet" href="css/style.css" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>😬</text></svg>" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⛏️</text></svg>" />
 <script type="importmap">
 {
   "imports": {
@@ -23,62 +23,44 @@
   <canvas id="scene"></canvas>
   <div id="popups"></div>
 
-  <!-- HUD -->
   <div id="hud">
     <div class="top-left">
-      <div class="rank">
-        <span class="ic" id="rankIcon">🐛</span>
-        <div class="rank-body">
-          <b id="rankName">Käfer</b>
-          <div class="bar grow"><div class="fill" id="growFill"></div></div>
-          <small>als Nächstes: <span id="nextName">🐔 Huhn</span></small>
-        </div>
-        <span class="size" id="sizeText">0.5×</span>
+      <div class="chips">
+        <div class="chip"><span class="ic">🗺️</span><span id="biome">Wiese</span></div>
+        <div class="chip"><span class="ic">⛏️</span><span id="depth">über Tage</span></div>
+        <div class="chip"><span id="clock">☀️ Tag</span></div>
       </div>
-      <div class="chip area"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
     </div>
     <div class="side-btns">
-      <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
-      <button id="soundBtn" class="ghost-btn" title="Ton an/aus">🔊</button>
+      <button id="qualityBtn" class="ghost-btn" title="Grafik">✨</button>
+      <button id="soundBtn" class="ghost-btn" title="Ton">🔊</button>
     </div>
   </div>
 
-  <div id="rankBanner" class="banner hidden"></div>
+  <div id="hotbar"></div>
 
-  <!-- Joystick -->
+  <div id="actions">
+    <button id="downBtn" class="act dig" title="nach unten graben">⬇️</button>
+    <button id="digBtn" class="act dig big" title="graben">⛏️</button>
+    <button id="buildBtn" class="act" title="Block setzen">🧱</button>
+    <button id="upBtn" class="act" title="Treppe bauen">⬆️</button>
+    <button id="jumpBtn" class="act" title="springen">🦘</button>
+  </div>
+
   <div id="stick" class="hidden"><div id="stickBase"></div><div id="stickNub"></div></div>
 
-  <!-- Overlays -->
   <div id="start" class="overlay">
     <div class="card">
-      <h1>MAMPF</h1>
-      <p class="sub claim">Friss, was kleiner ist als du. Alles, was du frisst, macht dich gr&ouml;&szlig;er.</p>
+      <h1>Grabwelt</h1>
+      <p class="sub claim">Eine Blockwelt von oben: Biome, H&ouml;hlen, Erze &mdash; und du mittendrin mit einer Spitzhacke.</p>
       <ul class="how">
-        <li><b>Ziehen</b> (oder <b>WASD</b>) &rarr; laufen. Ber&uuml;hren gen&uuml;gt zum Fressen.</li>
-        <li>Der <b>Bauer</b> ist anfangs dein Tod &mdash; sp&auml;ter ein Snack.</li>
-        <li>Was du frisst, <b>klebt an dir</b> und w&auml;chst mit.</li>
-        <li>Die Kamera zoomt nicht raus. <b>Du</b> wirst gr&ouml;&szlig;er.</li>
+        <li><b>Ziehen</b> (oder <b>WASD</b>) &rarr; laufen. Stufen nimmst du von allein.</li>
+        <li><b>⛏️ halten</b> &rarr; den Block vor dir abbauen <i>(Taste E)</i></li>
+        <li><b>⬇️ halten</b> &rarr; dich nach unten eingraben <i>(Taste Q)</i></li>
+        <li><b>🧱</b> setzt einen Block, <b>⬆️</b> baut dir eine Stufe nach oben</li>
+        <li>Unter Tage wird die Welt &uuml;ber dir <b>weggeschnitten</b> &mdash; du siehst in deinen Tunnel</li>
       </ul>
-      <p class="sub" id="startBest"></p>
-      <button id="startBtn" class="primary">Losfressen</button>
-    </div>
-  </div>
-
-  <div id="dead" class="overlay hidden">
-    <div class="card">
-      <h1>Zerquetscht.</h1>
-      <p class="sub">Du warst zu klein f&uuml;r diese Gegend.</p>
-      <p class="big" id="deadStats"></p>
-      <button id="againBtn" class="primary">Nochmal</button>
-    </div>
-  </div>
-
-  <div id="end" class="overlay hidden">
-    <div class="card" id="endCard">
-      <h1>Satt.</h1>
-      <p class="sub"></p>
-      <p class="big" id="endStats"></p>
-      <button id="endAgainBtn" class="primary">Von vorn</button>
+      <button id="startBtn" class="primary">Losgraben</button>
     </div>
   </div>
 

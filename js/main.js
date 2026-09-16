@@ -1,15 +1,19 @@
 import * as THREE from 'three';
-import { World, heightAt, setSeed, regionName, THINGS, PALETTE, WATER_LEVEL, CHUNK } from './world.js';
-import { Creature, Beings, KINDS } from './creatures.js';
+import {
+  VoxelWorld, B, BLOCKS, AIR, isSolid, setSeed, biomeAt, surfaceAt, HEIGHT, SEA, CHUNK,
+} from './voxel.js';
+import { Player } from './player.js';
 import { Input } from './input.js';
 import { TiltShift } from './postfx.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 
 /* ==========================================================================
- *  MAMPF — du frisst, was kleiner ist als du, und wirst dabei größer.
- *  Die Kamera weicht zurück, je größer du wirst: Die Welt schrumpft zum
- *  Modell. Das ist die Aussage des Spiels, und es ist zugleich die Mechanik.
+ *  Ein Survival-Spiel von oben: Blockwelt, Biome, Höhlen, graben und bauen.
+ *
+ *  Der Kniff für die Draufsicht: Sobald man sich eingräbt, wird die Welt
+ *  über dem Kopf weggeschnitten. Man sieht in seinen Tunnel hinein, ohne
+ *  dass die Kamera die Perspektive wechseln muss.
  * ========================================================================== */
 
 const canvas = document.getElementById('scene');
@@ -18,76 +22,264 @@ let renderer;
 try {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 } catch (err) {
-  document.body.innerHTML =
-    '<div class="overlay"><div class="card"><h1>Kein WebGL</h1>' +
-    '<p class="sub">Dieser Browser kann keine 3D-Grafik anzeigen.</p></div></div>';
+  document.body.innerHTML = '<div class="overlay"><div class="card"><h1>Kein WebGL</h1></div></div>';
   throw err;
 }
+renderer.localClippingEnabled = true;
 
 const isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 let quality = isTouch ? 'low' : 'high';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#cfe4ea');
-scene.fog = new THREE.Fog('#cfe4ea', 60, 150);
+scene.background = new THREE.Color('#bfe0ea');
+scene.fog = new THREE.Fog('#bfe0ea', 60, 135);
 
-const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 900);
-const CAM_DIR = new THREE.Vector3(0, 29, 30).normalize();
-const CAM_BASE = 42;
+const camera = new THREE.PerspectiveCamera(40, 1, 0.3, 400);
+const CAM_DIR = new THREE.Vector3(0, 26, 22).normalize();
+let camDist = 48;
 
-const hemi = new THREE.HemisphereLight('#ffffff', '#7ba659', 0.78);
+const hemi = new THREE.HemisphereLight('#ffffff', '#6f8a5a', 0.85);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight('#fff3d8', 1.25);
-sun.position.set(30, 46, 18);
+const sun = new THREE.DirectionalLight('#fff4de', 1.1);
 scene.add(sun, sun.target);
 
+// Die Schnittebene: alles oberhalb verschwindet, wenn wir unter Tage sind.
+const cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), HEIGHT + 4);
+renderer.clippingPlanes = [cutPlane];
+
+const blockMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+
+/* Guckloch: Was zwischen Kamera und Zwerg steht, faellt weg - sonst
+   verschwindet er unter jedem Blaetterdach. Der Schnitt folgt dem Sehstrahl,
+   nicht der Senkrechten, und franst per Punktmuster aus. */
+const peek = {
+  uPeek: { value: new THREE.Vector3(0, 1e6, 0) },
+  uPeekR: { value: 1.9 },
+};
+blockMat.onBeforeCompile = (shader) => {
+  shader.uniforms.uPeek = peek.uPeek;
+  shader.uniforms.uPeekR = peek.uPeekR;
+  shader.vertexShader = 'varying vec3 vWorld;\n' + shader.vertexShader.replace(
+    '#include <project_vertex>',
+    'vWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <project_vertex>'
+  );
+  shader.fragmentShader = 'varying vec3 vWorld;\nuniform vec3 uPeek;\nuniform float uPeekR;\n'
+    + shader.fragmentShader.replace(
+      '#include <clipping_planes_fragment>',
+      `vec3 toP = uPeek - cameraPosition;
+       float pL = length(toP);
+       vec3 pDir = toP / pL;
+       vec3 pV = vWorld - cameraPosition;
+       float pT = dot(pV, pDir);
+       if (pT > 0.0 && pT < pL - 1.2) {
+         float d = length(pV - pDir * pT);
+         if (d < uPeekR) discard;
+         if (d < uPeekR * 1.7) {
+           float f = (d - uPeekR) / (uPeekR * 0.7);
+           vec2 g = floor(mod(gl_FragCoord.xy, 2.0));
+           if (g.x + g.y * 2.0 > f * 4.0) discard;
+         }
+       }
+       #include <clipping_planes_fragment>`
+    );
+};
+const waterMat = new THREE.MeshLambertMaterial({
+  vertexColors: true, transparent: true, opacity: 0.72, flatShading: true,
+});
+
 const post = new TiltShift(renderer);
-const world = new World(scene, 2);
+const world = new VoxelWorld(scene, blockMat, waterMat, 3);
 const input = new Input();
-const player = new Creature(scene);
-const beings = new Beings(scene);
+const player = new Player(scene);
 const audio = new GameAudio();
 const juice = new Juice(scene, camera);
 
-/* ------------------------------ Rangstufen -------------------------------- */
-const RANKS = [
-  { at: 0.00, name: 'Käfer', icon: '🐛' },
-  { at: 0.80, name: 'Huhn', icon: '🐔' },
-  { at: 1.40, name: 'Schaf', icon: '🐑' },
-  { at: 2.20, name: 'Schwein', icon: '🐖' },
-  { at: 3.20, name: 'Dorfbewohner', icon: '🧍' },
-  { at: 4.40, name: 'Bauer', icon: '🧔' },
-  { at: 6.00, name: 'Hütte', icon: '🛖' },
-  { at: 8.00, name: 'Haus', icon: '🏠' },
-  { at: 11.0, name: 'Ritter', icon: '🛡️' },
-  { at: 14.0, name: 'Turm', icon: '🗼' },
-  { at: 18.0, name: 'Turmwächter', icon: '🗿' },
-  { at: 24.0, name: 'Hügel', icon: '⛰️' },
-];
+// Grubenlampe: unter Tage leuchtet die Figur sich selbst
+const lamp = new THREE.PointLight('#ffc07a', 0, 30, 1.7);
+scene.add(lamp);
 
-function rankFor(size) {
-  let i = 0;
-  while (i < RANKS.length - 1 && RANKS[i + 1].at <= size) i++;
-  return { cur: RANKS[i], next: RANKS[i + 1] || null, index: i };
-}
-
-const ENDE_GROESSE = 24;
+// Markierung, auf welchen Block gerade gezielt wird
+const marker = new THREE.Mesh(
+  new THREE.BoxGeometry(1.04, 1.04, 1.04),
+  new THREE.MeshBasicMaterial({ color: '#ffffff', wireframe: true, transparent: true, opacity: 0.5 })
+);
+marker.visible = false;
+scene.add(marker);
 
 /* -------------------------------- Zustand --------------------------------- */
 const state = {
   running: false,
-  paused: false,
-  eaten: 0,
-  best: 0,
-  rankIndex: 0,
-  intro: 0,
-  ending: 0,          // 0 = läuft, 1 = alles leer, 2 = Entscheidung gefallen
-  sprout: null,
-  sproutTimer: 0,
+  mode: 'dig',            // dig | build
+  digTarget: null,
+  digProgress: 0,
+  inventory: new Map(),
+  selected: B.erde,
+  time: 0.28,
+  depth: 0,
+  cut: HEIGHT + 4,
+  under: 0,
   camPos: new THREE.Vector3(),
 };
 
-try { state.best = Number(localStorage.getItem('mampf-best')) || 0; } catch (err) { /* egal */ }
+const DAY = 240;
+
+function give(block, n = 1) {
+  state.inventory.set(block, (state.inventory.get(block) || 0) + n);
+  renderHotbar();
+}
+
+function take(block, n = 1) {
+  const have = state.inventory.get(block) || 0;
+  if (have < n) return false;
+  if (have === n) state.inventory.delete(block);
+  else state.inventory.set(block, have - n);
+  renderHotbar();
+  return true;
+}
+
+/* --------------------------------- HUD ------------------------------------ */
+const hotbar = document.getElementById('hotbar');
+const biomeEl = document.getElementById('biome');
+const depthEl = document.getElementById('depth');
+const clockEl = document.getElementById('clock');
+
+function renderHotbar() {
+  hotbar.replaceChildren();
+  const entries = [...state.inventory.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (!entries.length) {
+    const hint = document.createElement('div');
+    hint.className = 'slot empty';
+    hint.textContent = 'Grab etwas ab';
+    hotbar.append(hint);
+    return;
+  }
+  for (const [block, count] of entries) {
+    const def = BLOCKS[block];
+    const el = document.createElement('button');
+    el.className = 'slot' + (block === state.selected ? ' on' : '');
+    el.innerHTML = `<span class="swatch" style="background:#${def.color.toString(16).padStart(6, '0')}"></span>` +
+      `<span class="n">${count}</span>`;
+    el.title = def.name;
+    el.addEventListener('click', () => { state.selected = block; renderHotbar(); });
+    hotbar.append(el);
+  }
+}
+
+let hudTimer = 0;
+function updateHUD() {
+  const biome = biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
+  const surface = surfaceAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
+  state.depth = Math.round(surface - player.pos.y);
+  biomeEl.textContent = biome.name;
+  depthEl.textContent = state.depth > 1 ? `${state.depth} m tief` : 'über Tage';
+  const t = state.time;
+  clockEl.textContent = t < 0.25 ? '🌅 Morgen' : t < 0.55 ? '☀️ Tag' : t < 0.72 ? '🌇 Abend' : '🌙 Nacht';
+}
+
+/* ------------------------------ Graben & Bauen ---------------------------- */
+function digStep(dt, mode) {
+  const target = player.aim(world, mode);
+  const block = world.get(target.x, target.y, target.z);
+  const def = BLOCKS[block];
+
+  if (block === AIR || !def || def.hard === Infinity) {
+    state.digTarget = null;
+    state.digProgress = 0;
+    marker.visible = false;
+    return;
+  }
+
+  marker.visible = true;
+  marker.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
+
+  const same = state.digTarget && state.digTarget.x === target.x
+    && state.digTarget.y === target.y && state.digTarget.z === target.z;
+  if (!same) { state.digTarget = target; state.digProgress = 0; }
+
+  state.digProgress += dt;
+  player.swing = 0.25;
+  if (state.digProgress % 0.3 < dt) audio.hit();
+
+  marker.scale.setScalar(1 - Math.min(0.35, state.digProgress / def.hard * 0.35));
+
+  if (state.digProgress >= def.hard) {
+    world.set(target.x, target.y, target.z, AIR);
+    give(def.drop ?? block);
+    audio.kill();
+    juice.shake(0.28);
+    juice.freeze(0.03);
+    juice.popup({ x: target.x + 0.5, y: target.y + 1, z: target.z + 0.5 }, def.name, '#ffe9a8');
+    state.digTarget = null;
+    state.digProgress = 0;
+    marker.scale.setScalar(1);
+  }
+}
+
+function placeBlock(mode) {
+  const target = player.placeTarget(world, mode);
+  if (!target) return;
+  if (world.get(target.x, target.y, target.z) !== AIR
+      && world.get(target.x, target.y, target.z) !== B.wasser) return;
+
+  // nicht in sich selbst bauen
+  const px = Math.floor(player.pos.x), py = Math.floor(player.pos.y), pz = Math.floor(player.pos.z);
+  if (target.x === px && target.z === pz && (target.y === py || target.y === py + 1)) return;
+
+  if (!take(state.selected)) return;
+  world.set(target.x, target.y, target.z, state.selected);
+  audio.gem(1);
+  juice.shake(0.15);
+  player.swing = 0.25;
+}
+
+/* ------------------------------ Tag und Nacht ----------------------------- */
+const underColor = new THREE.Color('#2a211c');
+const skyDay = new THREE.Color('#bfe0ea');
+const skyDusk = new THREE.Color('#f0b98a');
+const skyNight = new THREE.Color('#1d2438');
+const sunDay = new THREE.Color('#fff4de');
+const sunDusk = new THREE.Color('#ffb27a');
+const sunNight = new THREE.Color('#8fa4d8');
+const tmpSky = new THREE.Color();
+const tmpSun = new THREE.Color();
+
+function applyDaytime() {
+  const t = state.time;
+  let k, a, bSky, aSun, bSun;
+  if (t < 0.55) { k = Math.min(1, t / 0.2); a = skyDusk; bSky = skyDay; aSun = sunDusk; bSun = sunDay; }
+  else if (t < 0.75) { k = (t - 0.55) / 0.2; a = skyDay; bSky = skyDusk; aSun = sunDay; bSun = sunDusk; }
+  else if (t < 0.95) { k = (t - 0.75) / 0.2; a = skyDusk; bSky = skyNight; aSun = sunDusk; bSun = sunNight; }
+  else { k = (t - 0.95) / 0.05; a = skyNight; bSky = skyDusk; aSun = sunNight; bSun = sunDusk; }
+
+  tmpSky.copy(a).lerp(bSky, k);
+  tmpSun.copy(aSun).lerp(bSun, k);
+
+  // Je tiefer wir stecken, desto mehr wird aus Himmel Erdreich.
+  // Die Nebelweiten zaehlen ab Kamera, nicht ab Spieler - die Kamera steht
+  // camDist entfernt, ein kleinerer Wert taucht die ganze Szene in Nebel.
+  tmpSky.lerp(underColor, state.under);
+  scene.fog.near = camDist + 12 - state.under * 6;
+  scene.fog.far = camDist + 87 - state.under * 42;
+
+  scene.background.copy(tmpSky);
+  scene.fog.color.copy(tmpSky);
+  renderer.setClearColor(tmpSky);
+  sun.color.copy(tmpSun);
+
+  const night = t > 0.78 && t < 0.97;
+  const under = state.under;
+  sun.intensity = (night ? 0.28 : 1.1) * (1 - under * 0.85);
+  hemi.intensity = (night ? 0.32 : 0.85) * (1 - under * 0.7) + under * 0.1;
+
+  const ang = (t - 0.25) * Math.PI * 2;
+  sun.position.set(
+    player.pos.x + Math.cos(ang) * 40,
+    player.pos.y + 20 + Math.max(6, Math.sin(ang) * 40),
+    player.pos.z + 22
+  );
+  sun.target.position.copy(player.pos);
+  sun.target.updateMatrixWorld();
+}
 
 /* ------------------------------- Bildschirm ------------------------------- */
 function resize() {
@@ -100,7 +292,7 @@ function resize() {
   camera.aspect = w / h;
   camera.fov = h > w ? 46 : 38;
   camera.updateProjectionMatrix();
-  post.compositeMat.uniforms.uBand.value = h > w ? 0.19 : 0.15;
+  post.compositeMat.uniforms.uBand.value = h > w ? 0.34 : 0.28;
 }
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 150));
@@ -112,229 +304,57 @@ function applyQuality() {
   sun.castShadow = high;
   if (high) {
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.bias = -0.0006;
-    sun.shadow.normalBias = 0.04;
+    sun.shadow.bias = -0.0008;
+    sun.shadow.normalBias = 0.06;
+    const c = sun.shadow.camera;
+    c.left = -46; c.right = 46; c.top = 46; c.bottom = -46; c.near = 1; c.far = 180;
+    c.updateProjectionMatrix();
   }
   post.iterations = high ? 2 : 1;
   document.getElementById('qualityBtn').classList.toggle('off', !high);
   resize();
 }
 
-/** Alles skaliert mit der Größe: Kamera, Nebel, Schattenkasten. */
-function scaleWorldToSize() {
-  const f = 0.78 + Math.pow(player.size, 0.72) * 0.40;
-  state.camDist = CAM_BASE * f;
-  scene.fog.near = 40 * f;
-  scene.fog.far = 118 * f;
-  camera.far = 340 * f;
-  camera.updateProjectionMatrix();
-  if (sun.castShadow) {
-    const c = sun.shadow.camera;
-    const r = 58 * f;
-    c.left = -r; c.right = r; c.top = r; c.bottom = -r; c.near = 1; c.far = 240 * f;
-    c.updateProjectionMatrix();
-  }
-  sun.position.set(player.pos.x + 30 * f, player.pos.y + 46 * f, player.pos.z + 18 * f);
-  sun.target.position.copy(player.pos);
-  sun.target.updateMatrixWorld();
-}
-
-/* --------------------------------- HUD ------------------------------------ */
-const rankIcon = document.getElementById('rankIcon');
-const rankName = document.getElementById('rankName');
-const nextName = document.getElementById('nextName');
-const growFill = document.getElementById('growFill');
-const sizeText = document.getElementById('sizeText');
-const areaEl = document.getElementById('area');
-let hudTimer = 0;
-
-function updateHUD(force) {
-  const { cur, next, index } = rankFor(player.size);
-  rankIcon.textContent = cur.icon;
-  rankName.textContent = cur.name;
-  if (next) {
-    const span = next.at - cur.at;
-    growFill.style.transform = `scaleX(${Math.max(0, Math.min(1, (player.size - cur.at) / span))})`;
-    nextName.textContent = `${next.icon} ${next.name}`;
-  } else {
-    growFill.style.transform = 'scaleX(1)';
-    nextName.textContent = 'alles';
-  }
-  sizeText.textContent = player.size.toFixed(1) + '×';
-  areaEl.textContent = regionName(player.pos.x, player.pos.z);
-
-  if (index !== state.rankIndex) {
-    state.rankIndex = index;
-    onRankUp(cur);
-  }
-  if (force) hudTimer = 0;
-}
-
-function onRankUp(rank) {
-  audio.levelUp();
-  juice.freeze(0.1);
-  juice.shake(0.9);
-  juice.ring(player.pos, 6 + player.size, '#ffe9a8', 0.8);
-  juice.popup(player.pos, `${rank.icon} ${rank.name}!`, '#ffe9a8');
-  const banner = document.getElementById('rankBanner');
-  banner.textContent = `Jetzt so groß wie: ${rank.icon} ${rank.name}`;
-  banner.classList.remove('hidden');
-  clearTimeout(onRankUp.timer);
-  onRankUp.timer = setTimeout(() => banner.classList.add('hidden'), 2200);
-}
-
-/* -------------------------------- Fressen --------------------------------- */
-function tryEat() {
-  const reach = player.reach;
-
-  // Dinge in der Welt
-  for (const { chunk, thing } of world.nearbyThings(player.pos, reach + 4)) {
-    const def = THINGS[thing.kind];
-    if (player.size < def.size) continue;
-    const d = Math.hypot(thing.x - player.pos.x, thing.z - player.pos.z);
-    if (d > reach + thing.r) continue;
-
-    world.eat(chunk, thing);
-    devour(def.label, def.food, { x: thing.x, y: thing.y + 0.5, z: thing.z }, colorOf(thing.kind));
-  }
-
-  // Lebendiges
-  for (const b of beings.living) {
-    if (player.size < b.size) continue;
-    const d = Math.hypot(b.pos.x - player.pos.x, b.pos.z - player.pos.z);
-    if (d > reach + b.size * 0.4) continue;
-    b.devour();
-    devour(b.def.label, b.def.food, { x: b.pos.x, y: b.pos.y + b.def.h * 0.5, z: b.pos.z },
-           new THREE.Color(b.def.body).getHex());
-  }
-}
-
-function colorOf(kind) {
-  if (kind === 'baum' || kind === 'busch') return PALETTE.laub1.getHex();
-  if (kind === 'haus' || kind === 'hütte' || kind === 'turm') return PALETTE.ziegel.getHex();
-  return PALETTE.holz.getHex();
-}
-
-function devour(label, food, pos, color) {
-  player.swallow(food, color);
-  state.eaten += 1;
-  audio.chomp(food);
-  juice.freeze(0.04 + Math.min(0.09, food * 0.01));
-  juice.shake(0.25 + Math.min(0.9, food * 0.06));
-  juice.ring(pos, 1.5 + food * 0.3, '#ffe9a8', 0.35);
-  juice.popup(pos, label, '#ffe9a8');
-  updateHUD(true);
-}
-
-function onHitByHunter(being) {
-  player.hurt(being.def.damage);
-  audio.hurt();
-  juice.freeze(0.07);
-  juice.shake(1.1);
-  juice.popup(player.pos, `Aua! ${being.def.label}`, '#ff8f6a');
-  if (player.size <= 0.36) gameOver();
-}
-
-/* --------------------------------- Ende ----------------------------------- */
-const sproutMat = new THREE.MeshLambertMaterial({ color: '#8ad76a', flatShading: true });
-
-function startEnding() {
-  state.ending = 1;
-  beings.reset();
-  world.strip();                  // nichts bleibt stehen
-  audio.setMuffled(true);
-  juice.freeze(0.2);
-  juice.shake(1.6);
-  juice.ring(player.pos, 40, '#e8dcbf', 1.2);
-
-  const g = new THREE.Group();
-  const stem = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.4, 0.5), sproutMat);
-  stem.position.y = 1.2;
-  const leaf = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 1.2), sproutMat);
-  leaf.position.y = 2.4;
-  g.add(stem, leaf);
-  // weit genug weg, dass ein Riese ihn nicht aus Versehen verschluckt
-  const d = player.reach * 2.2 + 18;
-  const a = player.facing + Math.PI * 0.6;
-  const sx = player.pos.x + Math.cos(a) * d;
-  const sz = player.pos.z + Math.sin(a) * d;
-  g.position.set(sx, heightAt(sx, sz), sz);
-  g.scale.setScalar(1 + player.size * 0.25);   // damit man ihn überhaupt sieht
-  scene.add(g);
-  state.sprout = g;
-  state.sproutTimer = 0;
-
-  const banner = document.getElementById('rankBanner');
-  banner.textContent = 'Nichts mehr übrig. Nur noch ein Keim.';
-  banner.classList.remove('hidden');
-  setTimeout(() => {
-    if (state.ending !== 1) return;
-    banner.textContent = 'Du könntest auch einfach stehen bleiben.';
-  }, 4500);
-}
-
-function finishEnding(ate) {
-  state.ending = 2;
-  state.running = false;
-  document.getElementById('rankBanner').classList.add('hidden');
-  const card = document.getElementById('endCard');
-  card.querySelector('h1').textContent = ate ? 'Satt.' : 'Genug.';
-  card.querySelector('.sub').textContent = ate
-    ? 'Du hast alles gefressen, auch das Letzte. Es ist sehr still geworden.'
-    : 'Du hast den Keim stehen lassen. Langsam wächst wieder etwas — ohne dich.';
-  document.getElementById('endStats').textContent =
-    `${state.eaten} Dinge verschlungen · Endgröße ${player.size.toFixed(1)}×`;
-  document.getElementById('end').classList.remove('hidden');
-  audio.setMuffled(false);
-  if (ate) audio.hurt(); else audio.levelUp();
-}
-
-function gameOver() {
-  state.running = false;
-  document.getElementById('deadStats').textContent =
-    `${state.eaten} Dinge verschlungen · Größe ${player.size.toFixed(1)}×`;
-  document.getElementById('dead').classList.remove('hidden');
-}
-
 /* ------------------------------- Neuer Lauf ------------------------------- */
 function newRun() {
   setSeed((Math.random() * 1e9) | 0);
-  for (const [k, c] of [...world.chunks]) world.disposeChunk(k, c);
+  for (const [k, chunk] of [...world.chunks]) {
+    for (const key of ['mesh', 'water']) {
+      if (chunk[key]) { scene.remove(chunk[key]); chunk[key].geometry.dispose(); }
+    }
+    world.chunks.delete(k);
+  }
   world.queue.length = 0;
-  world.barren = false;
+  world.edits.clear();
 
-  player.reset();
-  beings.reset();
+  state.inventory.clear();
+  state.selected = B.erde;
+  state.time = 0.28;
+  state.digTarget = null;
   juice.reset();
 
-  if (state.sprout) { scene.remove(state.sprout); state.sprout = null; }
-  state.eaten = 0;
-  state.rankIndex = 0;
-  state.ending = 0;
-  state.paused = false;
-  audio.setMuffled(false);
+  // Startplatz: grüne Gegend mit Bäumen, nicht mitten im Fels
+  let sx = 0, sz = 0, bestScore = -1;
+  for (let i = 0; i < 700; i++) {
+    const a = i * 2.39996, r = Math.sqrt(i) * 7;
+    const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
+    const s2 = surfaceAt(x, z);
+    if (s2 <= SEA + 2) continue;
+    const biome = biomeAt(x, z);
+    const score = (biome.name === 'Wald' ? 3 : biome.name === 'Wiese' ? 2.4 : 0.5) - r * 0.004;
+    if (score > bestScore) { bestScore = score; sx = x; sz = z; }
+  }
+  world.update(sx, sz, 60);
+  player.spawn(world, sx, sz);
 
-  document.getElementById('dead').classList.add('hidden');
-  document.getElementById('end').classList.add('hidden');
-
-  world.update(player.pos.x, player.pos.z, 40);
-  player.pos.y = heightAt(player.pos.x, player.pos.z);
-  scaleWorldToSize();
-  state.camPos.copy(player.pos).addScaledVector(CAM_DIR, state.camDist);
+  state.cut = HEIGHT + 4;
+  cutPlane.constant = state.cut;
+  state.camPos.copy(player.pos).addScaledVector(CAM_DIR, camDist);
   camera.position.copy(state.camPos);
   camera.lookAt(player.pos);
 
-  // Kaltstart: die Kamera fällt ein, drei Hühner stehen schon da
-  state.intro = 1.4;
-  juice.ring(player.pos, 4, '#ffe9a8', 0.7);
-  juice.popup(player.pos, 'Hunger!', '#ffe9a8');
-  for (let i = 0; i < 3; i++) {
-    const a = Math.random() * 6.28, d = 5 + Math.random() * 4;
-    const free = beings.pool.find((b) => !b.alive);
-    free?.spawn('huhn', player.pos.x + Math.cos(a) * d, player.pos.z + Math.sin(a) * d);
-  }
-
-  updateHUD(true);
+  renderHotbar();
+  updateHUD();
   state.running = true;
 }
 
@@ -346,81 +366,108 @@ function frame() {
   const raw = Math.min(clock.getDelta(), 1 / 20);
   const dt = juice.update(raw);
 
-  if (state.running && !state.paused) {
+  if (state.running) {
     const move = input.read();
     player.update(dt, move, world);
-    // Wonach schaut das Wesen gerade? Die nächste fressbare Sache.
-    let look = null, lookD = 26 * 26;
-    for (const b of beings.living) {
-      const d = (b.pos.x - player.pos.x) ** 2 + (b.pos.z - player.pos.z) ** 2;
-      if (d < lookD) { lookD = d; look = b.pos; }
-    }
-    player.lookAt = look;
-
-    if (state.ending === 0) tryEat();
-    beings.update(dt, player, world, onHitByHunter);
     world.update(player.pos.x, player.pos.z, 1);
-    scaleWorldToSize();
-    audio.ambient(dt);
 
-    if (player.size > state.best) {
-      state.best = player.size;
-      try { localStorage.setItem('mampf-best', String(state.best)); } catch (err) { /* egal */ }
-    }
+    state.time = (state.time + dt / DAY) % 1;
 
-    if (state.ending === 0 && player.size >= ENDE_GROESSE) startEnding();
+    // Graben oder Bauen, solange der Knopf gehalten wird
+    if (held.dig) digStep(dt, 'front');
+    else if (held.down) digStep(dt, 'down');
+    else { state.digTarget = null; state.digProgress = 0; marker.visible = false; }
 
-    if (state.ending === 1 && state.sprout) {
-      const d = Math.hypot(state.sprout.position.x - player.pos.x, state.sprout.position.z - player.pos.z);
-      state.sprout.rotation.y += dt * 0.6;
-      state.sprout.position.y = heightAt(state.sprout.position.x, state.sprout.position.z)
-        + Math.sin(performance.now() * 0.002) * 0.2;
+    // Die Welt über dem Kopf wegschneiden, sobald wir unter Tage sind.
+    // Maßstab ist die ursprüngliche Geländehöhe — sonst zählt das eigene
+    // Loch als Oberfläche und die Decke bleibt stehen.
+    const surface = surfaceAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
+    const wantCut = player.pos.y + 3 < surface ? Math.floor(player.pos.y) + 4 : HEIGHT + 4;
+    state.cut += (wantCut - state.cut) * Math.min(1, dt * 7);
+    // Die Ebene darf nie genau auf einer Blockfläche liegen, sonst flimmert
+    // der Schnitt. Ein Hauch darunter schneidet sauber zwischen den Blöcken.
+    cutPlane.constant = Math.round(state.cut) - 0.03;
 
-      if (d < player.reach + 2) {
-        // Hingehen und fressen: das laute Ende
-        scene.remove(state.sprout);
-        state.sprout = null;
-        finishEnding(true);
-      } else if (!move.active) {
-        // Aufhören: das leise Ende. Man muss dafür wirklich nichts tun.
-        state.sproutTimer += dt;
-        if (state.sproutTimer > 6) finishEnding(false);
-      } else {
-        state.sproutTimer = Math.max(0, state.sproutTimer - dt * 2);
-      }
-    }
+    // Grubenlampe an, sobald es dunkel um uns wird. Die Tiefe zaehlt schnell
+    // hoch: schon nach ein paar Metern soll es sich nach Untertage anfuehlen.
+    const underground = Math.max(0, Math.min(1, (surface - player.pos.y - 1) / 5));
+    state.under = underground;
+    applyDaytime();
+    const night = state.time > 0.78 && state.time < 0.97 ? 1 : 0;
+    peek.uPeek.value.set(player.pos.x, player.pos.y + 1.0, player.pos.z);
+    lamp.position.set(player.pos.x, player.pos.y + 1.6, player.pos.z);
+    lamp.intensity = Math.max(underground, night * 0.6) * 9;
+
+    // Untertage kippt die Graduierung ins Warme, nachts ins Kalte
+    const darkU = post.compositeMat.uniforms;
+    darkU.uDark.value = Math.max(underground * 0.6, night * 0.55);
+    if (underground > night * 0.8) darkU.uDarkTint.value.set(0.78, 0.52, 0.34);
+    else darkU.uDarkTint.value.set(0.42, 0.5, 0.78);
 
     hudTimer -= dt;
-    if (hudTimer <= 0) { hudTimer = 0.15; updateHUD(); }
+    if (hudTimer <= 0) { hudTimer = 0.25; updateHUD(); }
   }
 
-  // Kamera: weicht mit der Größe zurück, die Welt wird zum Modell
-  const want = state.camPos.copy(player.pos).addScaledVector(CAM_DIR, state.camDist || CAM_BASE);
-  if (state.intro > 0) {
-    state.intro = Math.max(0, state.intro - raw);
-    const k = state.intro / 1.4;
-    want.addScaledVector(CAM_DIR, k * k * 90);
-  }
-  camera.position.lerp(want, 1 - Math.pow(state.intro > 0 ? 0.03 : 0.002, raw));
-  camera.lookAt(player.pos.x, player.pos.y + player.size * 0.6, player.pos.z);
+  const want = state.camPos.copy(player.pos).addScaledVector(CAM_DIR, camDist);
+  camera.position.lerp(want, 1 - Math.pow(0.002, raw));
+  camera.lookAt(player.pos.x, player.pos.y + 1, player.pos.z);
   juice.applyToCamera();
 
   post.render(scene, camera);
 }
 
-/* --------------------------------- Menüs ---------------------------------- */
+/* --------------------------------- Knöpfe --------------------------------- */
+const held = { dig: false, down: false };
+
+function bindHold(id, key) {
+  const el = document.getElementById(id);
+  const on = (e) => { held[key] = true; el.classList.add('on'); e.preventDefault(); };
+  const off = () => { held[key] = false; el.classList.remove('on'); };
+  el.addEventListener('pointerdown', on);
+  el.addEventListener('pointerup', off);
+  el.addEventListener('pointerleave', off);
+  el.addEventListener('pointercancel', off);
+}
+bindHold('digBtn', 'dig');
+bindHold('downBtn', 'down');
+
+document.getElementById('buildBtn').addEventListener('click', () => placeBlock('front'));
+document.getElementById('upBtn').addEventListener('click', () => {
+  // Treppe bauen: Block unter die Füße, dabei selbst hochspringen
+  const px = Math.floor(player.pos.x), py = Math.floor(player.pos.y), pz = Math.floor(player.pos.z);
+  if (world.get(px, py, pz) !== AIR && world.get(px, py, pz) !== B.wasser) return;
+  if (!take(state.selected)) return;
+  world.set(px, py, pz, state.selected);
+  player.pos.y = py + 1;
+  player.vel.y = 0;
+  audio.gem(2);
+});
+document.getElementById('jumpBtn').addEventListener('click', () => player.jump());
+
+window.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === ' ') player.jump();
+  if (k === 'e') held.dig = true;
+  if (k === 'q') held.down = true;
+  if (k === 'f') placeBlock('front');
+});
+window.addEventListener('keyup', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === 'e') held.dig = false;
+  if (k === 'q') held.down = false;
+});
+
 const soundBtn = document.getElementById('soundBtn');
 let muted = false;
-try { muted = localStorage.getItem('mampf-muted') === '1'; } catch (err) { /* egal */ }
+try { muted = localStorage.getItem('block-muted') === '1'; } catch (err) { /* egal */ }
 audio.setMuted(muted);
 soundBtn.textContent = muted ? '🔇' : '🔊';
-
 soundBtn.addEventListener('click', () => {
   muted = !muted;
   audio.unlock();
   audio.setMuted(muted);
   soundBtn.textContent = muted ? '🔇' : '🔊';
-  try { localStorage.setItem('mampf-muted', muted ? '1' : '0'); } catch (err) { /* egal */ }
+  try { localStorage.setItem('block-muted', muted ? '1' : '0'); } catch (err) { /* egal */ }
 });
 
 document.getElementById('qualityBtn').addEventListener('click', () => {
@@ -428,29 +475,24 @@ document.getElementById('qualityBtn').addEventListener('click', () => {
   applyQuality();
 });
 
-for (const id of ['startBtn', 'againBtn', 'endAgainBtn']) {
-  document.getElementById(id).addEventListener('click', () => {
-    audio.unlock();
-    document.getElementById('start').classList.add('hidden');
-    newRun();
-  });
-}
+document.getElementById('startBtn').addEventListener('click', () => {
+  audio.unlock();
+  document.getElementById('start').classList.add('hidden');
+  newRun();
+});
 
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
-window.__game = { state, player, beings, world, juice, audio, renderer, scene, camera, post, rankFor };
+window.__game = { state, player, world, scene, camera, renderer, juice, audio, post, B, BLOCKS, give };
 
 resize();
 applyQuality();
 
-// Vorschau hinter dem Startbild
 setSeed(20260916);
-player.reset();
-world.update(player.pos.x, player.pos.z, 30);
-scaleWorldToSize();
-camera.position.copy(player.pos).addScaledVector(CAM_DIR, state.camDist);
+world.update(0, 0, 25);
+player.spawn(world, 0, 0);
+camera.position.copy(player.pos).addScaledVector(CAM_DIR, camDist);
 camera.lookAt(player.pos);
-document.getElementById('startBest').textContent =
-  state.best > 0.6 ? `Bisher größte Größe: ${state.best.toFixed(1)}×` : '';
+renderHotbar();
 frame();

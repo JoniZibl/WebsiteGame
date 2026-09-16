@@ -1,8 +1,8 @@
 :root {
-  --sky: #cfe4ea;
-  --ink: #33324a;
+  --sky: #bfe0ea;
+  --ink: #2f3440;
   --cream: #fdf7ea;
-  --coral: #6d5bd0;
+  --coral: #d9843f;
   --mint: #6cc357;
   --shadow: 0 8px 24px rgba(62, 74, 44, .18);
 }
@@ -128,9 +128,9 @@ html, body {
 .primary {
   width: 100%; border: 0; border-radius: 16px; padding: 14px 20px;
   background: var(--coral); color: #fff; font: inherit; font-weight: 800; font-size: 16px;
-  box-shadow: 0 6px 0 #4f40a0; cursor: pointer;
+  box-shadow: 0 6px 0 #ab6127; cursor: pointer;
 }
-.primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #4f40a0; }
+.primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #ab6127; }
 
 /* ---------- Aktionsknöpfe ---------- */
 .action-btn {
@@ -191,6 +191,49 @@ html, body {
 }
 
 #shopList { margin-bottom: 16px; max-height: 46vh; overflow-y: auto; }
+
+/* ---------- Werkzeugleiste und Aktionen ---------- */
+#hotbar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 116px);
+  display: flex; gap: 6px; padding: 6px; border-radius: 16px;
+  background: rgba(253, 247, 234, .8); box-shadow: var(--shadow);
+  pointer-events: auto; z-index: 4; max-width: 92vw; overflow-x: auto;
+}
+#hotbar .slot {
+  position: relative; width: 46px; height: 46px; border: 0; border-radius: 12px;
+  background: rgba(47, 52, 64, .09); cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+}
+#hotbar .slot.on { background: rgba(217, 132, 63, .3); box-shadow: inset 0 0 0 2px var(--coral); }
+#hotbar .slot .swatch {
+  width: 26px; height: 26px; border-radius: 7px;
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .22), 0 1px 2px rgba(0, 0, 0, .25);
+}
+#hotbar .slot .n {
+  position: absolute; right: 3px; bottom: 1px;
+  font-size: 11px; font-weight: 900; color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .7);
+}
+#hotbar .slot.empty {
+  width: auto; padding: 0 14px; font-size: 12px; font-weight: 800; opacity: .55; background: none;
+}
+
+#actions {
+  position: fixed; right: calc(env(safe-area-inset-right, 0px) + 14px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+  display: grid; grid-template-columns: repeat(2, auto); gap: 10px;
+  pointer-events: auto; z-index: 4;
+}
+.act {
+  width: 56px; height: 56px; border: 0; border-radius: 18px;
+  background: var(--cream); font-size: 24px; cursor: pointer;
+  box-shadow: 0 5px 0 #cbbf9d, var(--shadow);
+  -webkit-user-select: none; user-select: none; touch-action: none;
+}
+.act:active, .act.on { transform: translateY(3px); box-shadow: 0 2px 0 #cbbf9d; }
+.act.big { background: var(--coral); }
+.act.dig.on { background: #ffcf9a; }
 
 /* ---------- Rang-Anzeige ---------- */
 .rank {
