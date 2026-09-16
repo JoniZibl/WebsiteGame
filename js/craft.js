@@ -9,10 +9,10 @@ import { B, BLOCKS } from './voxel.js';
  * ========================================================================== */
 
 export const TOOLS = [
-  { name: 'Bloße Hände',     icon: '✋',  speed: 1.0 },
-  { name: 'Holzspitzhacke',  icon: '🪓',  speed: 2.0 },
-  { name: 'Steinspitzhacke', icon: '⛏️', speed: 3.2 },
-  { name: 'Eisenspitzhacke', icon: '⚒️', speed: 4.8 },
+  { name: 'Bloße Hände',     short: 'Hände', icon: '✋',  speed: 1.0 },
+  { name: 'Holzspitzhacke',  short: 'Holz',  icon: '🪓',  speed: 2.0 },
+  { name: 'Steinspitzhacke', short: 'Stein', icon: '⛏️', speed: 3.2 },
+  { name: 'Eisenspitzhacke', short: 'Eisen', icon: '⚒️', speed: 4.8 },
 ];
 
 /** Jedes Rezept gibt entweder Blöcke aus oder hebt die Werkzeugstufe. */

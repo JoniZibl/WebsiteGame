@@ -41,13 +41,13 @@ export const BLOCKS = {
   [B.eis]:      { name: 'Eis',      color: 0xa8dbe8, hard: 0.5 },
   [B.lehm]:     { name: 'Lehm',     color: 0xa8968a, hard: 0.5 },
   [B.kaktus]:   { name: 'Kaktus',   color: 0x4d8c46, hard: 0.4 },
-  [B.pilz]:     { name: 'Pilz',     color: 0xcf5340, hard: 0.2 },
+  [B.pilz]:     { name: 'Pilz',     color: 0xcf5340, side: 0xe8dcc8, hard: 0.2, thin: true, slim: [0.42, 0.46], food: 26 },
   [B.grundstein]: { name: 'Grundstein', color: 0x2e2c33, hard: Infinity },
   [B.fackel]:   { name: 'Fackel',   color: 0xffd489, hard: 0.1, glow: 1, thin: true, slim: [0.18, 0.7] },
 };
 
 export const isSolid = (b) => b !== AIR && b !== B.wasser && !BLOCKS[b]?.thin;
-export const isOpaque = (b) => b !== AIR && b !== B.wasser;
+export const isOpaque = (b) => b !== AIR && b !== B.wasser && !BLOCKS[b]?.thin;
 
 /* -------------------------------- Biome ----------------------------------- */
 export const BIOMES = {
@@ -119,7 +119,15 @@ export function generate(x, y, z) {
     return y <= SEA ? B.wasser : AIR;
   }
 
-  if (isCave(x, y, z) && y < surface - 2) return AIR;
+  if (isCave(x, y, z) && y < surface - 2) {
+    // Auf Hoehlenboeden wachsen Pilze - das Einzige, was der Zwerg essen kann,
+    // und damit der Grund, ueberhaupt in die Hoehlen zu gehen.
+    if (!isCave(x, y - 1, z) && y - 1 < surface - 2 && y > 2) {
+      const r = mulberry32(((x * 374761393) ^ (y * 668265263) ^ (z * 2246822519) ^ SEED) >>> 0)();
+      if (r < 0.035) return B.pilz;
+    }
+    return AIR;
+  }
 
   const depth = surface - y;
   if (y === surface) {

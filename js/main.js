@@ -6,6 +6,7 @@ import { Player } from './player.js';
 import { Input } from './input.js';
 import { TiltShift } from './postfx.js';
 import { TOOLS, toolFor, CraftPanel } from './craft.js';
+import { MobManager } from './mobs.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 
@@ -67,7 +68,8 @@ blockMat.onBeforeCompile = (shader) => {
   shader.fragmentShader = 'varying vec3 vWorld;\nuniform vec3 uPeek;\nuniform float uPeekR;\n'
     + shader.fragmentShader.replace(
       '#include <clipping_planes_fragment>',
-      `vec3 toP = uPeek - cameraPosition;
+      `if (vWorld.y > uPeek.y) {
+       vec3 toP = uPeek - cameraPosition;
        float pL = length(toP);
        vec3 pDir = toP / pL;
        vec3 pV = vWorld - cameraPosition;
@@ -75,11 +77,12 @@ blockMat.onBeforeCompile = (shader) => {
        if (pT > 0.0 && pT < pL - 1.2) {
          float d = length(pV - pDir * pT);
          if (d < uPeekR) discard;
-         if (d < uPeekR * 1.7) {
-           float f = (d - uPeekR) / (uPeekR * 0.7);
+         if (d < uPeekR * 1.35) {
+           float f = (d - uPeekR) / (uPeekR * 0.35);
            vec2 g = floor(mod(gl_FragCoord.xy, 2.0));
            if (g.x + g.y * 2.0 > f * 4.0) discard;
          }
+       }
        }
        #include <clipping_planes_fragment>`
     );
@@ -117,6 +120,11 @@ const state = {
   inventory: new Map(),
   selected: B.erde,
   tier: 0,
+  hp: 100,
+  food: 100,
+  swingTimer: 0,
+  fallFrom: null,
+  dead: false,
   time: 0.28,
   depth: 0,
   cut: HEIGHT + 4,
@@ -129,6 +137,8 @@ const DAY = 240;
 function give(block, n = 1) {
   state.inventory.set(block, (state.inventory.get(block) || 0) + n);
   renderHotbar();
+  if (state.selected === undefined || !state.inventory.has(state.selected)) state.selected = block;
+  eatBtn.classList.toggle('hidden', !bestFood());
 }
 
 function take(block, n = 1) {
@@ -137,6 +147,7 @@ function take(block, n = 1) {
   if (have === n) state.inventory.delete(block);
   else state.inventory.set(block, have - n);
   renderHotbar();
+  eatBtn.classList.toggle('hidden', !bestFood());
   return true;
 }
 
@@ -147,6 +158,9 @@ const depthEl = document.getElementById('depth');
 const clockEl = document.getElementById('clock');
 const toolEl = document.getElementById('tool');
 const toolIconEl = document.getElementById('toolIcon');
+const hpFill = document.getElementById('hpFill');
+const foodFill = document.getElementById('foodFill');
+const eatBtn = document.getElementById('eatBtn');
 
 function renderHotbar() {
   hotbar.replaceChildren();
@@ -174,17 +188,39 @@ let hudTimer = 0;
 function updateHUD() {
   const biome = biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
   const surface = surfaceAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
-  state.depth = Math.round(surface - player.pos.y);
+  state.depth = Math.max(0, Math.round(surface - player.pos.y));
   biomeEl.textContent = biome.name;
   depthEl.textContent = state.depth > 1 ? `${state.depth} m tief` : 'über Tage';
   const t = state.time;
   clockEl.textContent = t < 0.25 ? '🌅 Morgen' : t < 0.55 ? '☀️ Tag' : t < 0.72 ? '🌇 Abend' : '🌙 Nacht';
-  toolEl.textContent = TOOLS[state.tier].name;
+  toolEl.textContent = TOOLS[state.tier].short;
   toolIconEl.textContent = TOOLS[state.tier].icon;
+  hpFill.style.width = `${Math.max(0, state.hp)}%`;
+  foodFill.style.width = `${Math.max(0, state.food)}%`;
+  hpFill.parentElement.classList.toggle('low', state.hp < 30);
+  foodFill.parentElement.classList.toggle('low', state.food < 25);
+  eatBtn.classList.toggle('hidden', !bestFood());
 }
 
 /* ------------------------------ Graben & Bauen ---------------------------- */
 function digStep(dt, mode) {
+  // Steht ein Wesen in Reichweite, gilt der Knopf ihm - nicht dem Stein.
+  // Der Knopf bleibt dann beim Wesen, auch waehrend der Schlag nachlaedt;
+  // sonst haut der Zwerg zwischendurch Loecher in den Boden.
+  if (mobs.nearest(player)) {
+    marker.visible = false;
+    state.digTarget = null;
+    state.digProgress = 0;
+    if (state.swingTimer <= 0) {
+      state.swingTimer = 0.34;
+      mobs.strike(player, 2 + state.tier);
+      player.swing = 0.3;
+      audio.hit();
+      juice.shake(0.22);
+    }
+    return;
+  }
+
   const target = player.aim(world, mode);
   const block = world.get(target.x, target.y, target.z);
   const def = BLOCKS[block];
@@ -206,7 +242,7 @@ function digStep(dt, mode) {
       state.nagTimer = 1.6;
       juice.popup({ x: target.x + 0.5, y: target.y + 1, z: target.z + 0.5 },
         `Braucht ${toolFor(block)}`, '#ffb4a2');
-      audio.thump?.();
+      audio.step();
     }
     return;
   }
@@ -258,6 +294,63 @@ function placeBlock(mode) {
   juice.shake(0.15);
   player.swing = 0.25;
 }
+
+/* --------------------------- Leben und Sättigung --------------------------- */
+/* Die Sättigung fällt langsam und zieht erst danach am Leben. Wer oben bleibt
+   und isst, stirbt nie - gefährlich wird nur, wer tief gräbt und nichts
+   mitnimmt. */
+const STARVE = 100 / 420;      // eine volle Leiste hält rund sieben Minuten
+
+function bestFood() {
+  for (const [block] of state.inventory) if (BLOCKS[block]?.food) return block;
+  return null;
+}
+
+function eat() {
+  const block = bestFood();
+  if (!block || state.food > 97) return;
+  take(block);
+  state.food = Math.min(100, state.food + BLOCKS[block].food);
+  state.hp = Math.min(100, state.hp + 6);
+  audio.chomp();
+  juice.popup({ x: player.pos.x, y: player.pos.y + 2.3, z: player.pos.z }, 'Mmh', '#c8e6a0');
+  updateHUD();
+}
+
+function hurt(amount, why) {
+  if (state.dead || !state.running) return;
+  state.hp -= amount;
+  juice.shake(0.5);
+  juice.freeze(0.05);
+  audio.hurt();
+  if (state.hp <= 0) die(why);
+  updateHUD();
+}
+
+function die(why) {
+  state.hp = 0;
+  state.dead = true;
+  state.running = false;
+  document.getElementById('deadWhy').textContent = why;
+  document.getElementById('deadStats').textContent =
+    `${state.depth} m tief · ${TOOLS[state.tier].name}`;
+  document.getElementById('dead').classList.remove('hidden');
+}
+
+/* ------------------------------ Höhlenvolk --------------------------------- */
+const mobs = new MobManager(scene, {
+  onHit: (damage, m) => {
+    hurt(damage, `${m.kind.name} hat dich erwischt.`);
+    juice.popup({ x: player.pos.x, y: player.pos.y + 2.2, z: player.pos.z },
+      `−${damage}`, '#ff9c86');
+  },
+  onKill: (m) => {
+    audio.kill();
+    juice.shake(0.3);
+    if (m.kind.drop) give(m.kind.drop);
+    juice.popup({ x: m.pos.x, y: m.pos.y + 1.2, z: m.pos.z }, m.kind.name, '#ffe9a8');
+  },
+});
 
 /* ------------------------------- Werkbank --------------------------------- */
 const craft = new CraftPanel(document.getElementById('craft'), {
@@ -398,8 +491,13 @@ function newRun() {
   state.inventory.clear();
   state.selected = B.erde;
   state.tier = 0;
+  state.hp = 100;
+  state.food = 100;
+  state.dead = false;
+  state.fallFrom = null;
   torches.clear();
   updateTorchLights();
+  mobs.clear();
   state.time = 0.28;
   state.digTarget = null;
   juice.reset();
@@ -466,7 +564,7 @@ function frame() {
     state.under = underground;
     applyDaytime();
     const night = state.time > 0.78 && state.time < 0.97 ? 1 : 0;
-    peek.uPeek.value.set(player.pos.x, player.pos.y + 1.0, player.pos.z);
+    peek.uPeek.value.set(player.pos.x, player.pos.y + 1.9, player.pos.z);
     lamp.position.set(player.pos.x, player.pos.y + 1.6, player.pos.z);
     lamp.intensity = Math.max(underground, night * 0.6) * 9;
 
@@ -475,6 +573,43 @@ function frame() {
     darkU.uDark.value = Math.max(underground * 0.6, night * 0.55);
     if (underground > night * 0.8) darkU.uDarkTint.value.set(0.78, 0.52, 0.34);
     else darkU.uDarkTint.value.set(0.42, 0.5, 0.78);
+
+    // Sättigung fällt, danach erst das Leben
+    state.food -= STARVE * dt;
+    if (state.food <= 0) {
+      state.food = 0;
+      state.hp -= 3.5 * dt;
+      if (state.hp <= 0) die('Du bist verhungert.');
+    } else if (state.hp < 100 && state.food > 55) {
+      state.hp = Math.min(100, state.hp + 1.6 * dt);   // satt heilt langsam
+    }
+
+    // Sturzschaden: gezählt wird der höchste Punkt seit dem letzten Bodenkontakt
+    if (player.onGround) {
+      if (state.fallFrom !== null) {
+        const drop = state.fallFrom - player.pos.y;
+        if (drop > 4) hurt(Math.round((drop - 4) * 7), 'Zu tief gesprungen.');
+        state.fallFrom = null;
+      }
+    } else {
+      state.fallFrom = state.fallFrom === null
+        ? player.pos.y : Math.max(state.fallFrom, player.pos.y);
+    }
+
+    // Unter Wasser geht die Luft aus
+    const head = world.get(Math.floor(player.pos.x), Math.floor(player.pos.y + 1.5),
+      Math.floor(player.pos.z));
+    if (head === B.wasser) {
+      state.breath = (state.breath ?? 12) - dt;
+      if (state.breath <= 0) { state.breath = 1.2; hurt(9, 'Ertrunken.'); }
+    } else {
+      state.breath = 12;
+    }
+
+    // Das Höhlenvolk kommt nur im Dunkeln
+    const dark = Math.max(state.under, night * 0.8);
+    mobs.update(dt, world, player, dark);
+    if (state.swingTimer > 0) state.swingTimer -= dt;
 
     hudTimer -= dt;
     if (hudTimer <= 0) { hudTimer = 0.25; updateHUD(); }
@@ -493,12 +628,23 @@ const held = { dig: false, down: false };
 
 function bindHold(id, key) {
   const el = document.getElementById(id);
-  const on = (e) => { held[key] = true; el.classList.add('on'); e.preventDefault(); };
-  const off = () => { held[key] = false; el.classList.remove('on'); };
+  // Der Zeiger wird festgehalten: sonst reisst der Druck ab, sobald sich der
+  // Knopf unter dem Finger auch nur ein bisschen verschiebt.
+  const on = (e) => {
+    held[key] = true;
+    el.classList.add('on');
+    el.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  };
+  const off = (e) => {
+    held[key] = false;
+    el.classList.remove('on');
+    if (e && el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  };
   el.addEventListener('pointerdown', on);
   el.addEventListener('pointerup', off);
-  el.addEventListener('pointerleave', off);
   el.addEventListener('pointercancel', off);
+  el.addEventListener('lostpointercapture', off);
 }
 bindHold('digBtn', 'dig');
 bindHold('downBtn', 'down');
@@ -524,6 +670,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'q') held.down = true;
   if (k === 'f') placeBlock('front');
   if (k === 'c') craft.toggle();
+  if (k === 'r') eat();
 });
 window.addEventListener('keyup', (e) => {
   const k = e.key.toLowerCase();
@@ -555,11 +702,18 @@ document.getElementById('startBtn').addEventListener('click', () => {
   newRun();
 });
 
+document.getElementById('againBtn').addEventListener('click', () => {
+  document.getElementById('dead').classList.add('hidden');
+  newRun();
+});
+
+document.getElementById('eatBtn').addEventListener('click', eat);
+
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
 window.__game = { state, player, world, scene, camera, renderer, juice, audio, post, B, BLOCKS, give,
-  torchCount: () => torches.size };
+  torchCount: () => torches.size, mobs, eat, hurt };
 
 resize();
 applyQuality();

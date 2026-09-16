@@ -25,6 +25,10 @@
 
   <div id="hud">
     <div class="top-left">
+      <div class="vitals">
+        <div class="bar hp"><div class="fill" id="hpFill"></div><span class="ic">❤️</span></div>
+        <div class="bar food"><div class="fill" id="foodFill"></div><span class="ic">🍄</span></div>
+      </div>
       <div class="chips">
         <div class="chip"><span class="ic">🗺️</span><span id="biome">Wiese</span></div>
         <div class="chip"><span class="ic">⛏️</span><span id="depth">über Tage</span></div>
@@ -47,6 +51,7 @@
     <button id="upBtn" class="act" title="Treppe bauen">⬆️</button>
     <button id="jumpBtn" class="act" title="springen">🦘</button>
     <button id="craftBtn" class="act" title="Werkbank">⚒️</button>
+    <button id="eatBtn" class="act hidden" title="essen">🍄</button>
   </div>
 
   <div id="craft" class="overlay hidden"></div>
@@ -64,8 +69,19 @@
         <li><b>🧱</b> setzt einen Block, <b>⬆️</b> baut dir eine Stufe nach oben</li>
         <li><b>⚒️</b> Werkbank: aus Holz wird eine Hacke, damit geht Stein &mdash; und so weiter nach unten</li>
         <li>Unter Tage wird die Welt &uuml;ber dir <b>weggeschnitten</b> &mdash; du siehst in deinen Tunnel</li>
+        <li>Im Dunkeln lauert etwas. Halte <b>⛏️</b>, wenn es nah ist &mdash; dann schl&auml;gst du zu</li>
+        <li><b>🍄</b> Pilze wachsen in H&ouml;hlen und S&uuml;mpfen. Ohne sie wirst du hungrig</li>
       </ul>
       <button id="startBtn" class="primary">Losgraben</button>
+    </div>
+  </div>
+
+  <div id="dead" class="overlay hidden">
+    <div class="card">
+      <h1>Ausgegraben.</h1>
+      <p class="sub" id="deadWhy">Das Dunkel hat dich erwischt.</p>
+      <p class="big" id="deadStats"></p>
+      <button id="againBtn" class="primary">Nochmal</button>
     </div>
   </div>
 

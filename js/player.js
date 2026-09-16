@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { B, BLOCKS, AIR, isSolid, HEIGHT } from './voxel.js';
+import { B, BLOCKS, AIR, isSolid, HEIGHT, surfaceAt } from './voxel.js';
 
 /* ==========================================================================
  *  Die Figur in einer Blockwelt: Schwerkraft, Stufen steigen, graben, bauen.
@@ -65,7 +65,13 @@ export class Player {
   }
 
   spawn(world, x, z) {
-    const y = world.surfaceY(x, z) + 1;
+    // Auf den gewachsenen Boden, nicht auf ein Blaetterdach - world.surfaceY
+    // zaehlt Baeume mit und setzte den Zwerg schon mal in eine Baumkrone.
+    const y = surfaceAt(x, z) + 1;
+    for (let dy = 0; dy < 3; dy++) {
+      const b = world.get(x, y + dy, z);
+      if (b === B.laub || b === B.stamm || b === B.pilz) world.set(x, y + dy, z, AIR);
+    }
     this.pos.set(x + 0.5, y, z + 0.5);
     this.vel.set(0, 0, 0);
     this.health = 10;
