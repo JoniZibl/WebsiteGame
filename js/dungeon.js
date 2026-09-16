@@ -71,12 +71,14 @@ export function plan(gruft) {
   const gaenge = [];
   const bodenY = Math.max(6, gruft.h - 16);
 
-  // Der Schacht vom Eingang nach unten
-  gaenge.push({ x0: gruft.x - 1, x1: gruft.x + 1, y0: bodenY, y1: gruft.h + 1,
-                z0: gruft.z - 1, z1: gruft.z + 1 });
+  // Der Schacht vom Eingang nach unten, fünf mal fünf breit — hinein passt
+  // eine Wendeltreppe, und damit kommt man auch wieder heraus.
+  const schacht = { x: gruft.x, z: gruft.z, unten: bodenY, oben: gruft.h + 1 };
+  gaenge.push({ x0: gruft.x - 2, x1: gruft.x + 2, y0: bodenY, y1: gruft.h + 1,
+                z0: gruft.z - 2, z1: gruft.z + 2 });
 
   let cx = gruft.x, cz = gruft.z, cy = bodenY;
-  const anzahl = 4 + Math.floor(rand() * 4);
+  const anzahl = 4 + Math.floor(rand() * 3);
   let letztes = { x: cx, z: cz, y: cy };
 
   for (let n = 0; n < anzahl; n++) {
@@ -115,9 +117,35 @@ export function plan(gruft) {
     minY = Math.min(minY, q.y0); maxY = Math.max(maxY, q.y1);
   }
 
-  const p = { gruft, raeume, gaenge, bodenY, huelle: { minX, maxX, minY, maxY, minZ, maxZ } };
+  const p = { gruft, raeume, gaenge, bodenY, schacht, huelle: { minX, maxX, minY, maxY, minZ, maxZ } };
   plaene.set(gruft.id, p);
   return p;
+}
+
+/* Die Treppe läuft am Rand des Schachts entlang, eine Stufe je Blockhöhe.
+   Aufeinanderfolgende Stufen grenzen aneinander — damit ist sie begehbar,
+   ohne dass jemand springen können muss. */
+const RING = [
+  [2, -2], [2, -1], [2, 0], [2, 1], [2, 2], [1, 2], [0, 2], [-1, 2],
+  [-2, 2], [-2, 1], [-2, 0], [-2, -1], [-2, -2], [-1, -2], [0, -2], [1, -2],
+];
+
+function stufeBei(p, x, y, z) {
+  const s = p.schacht;
+  if (!s || y < s.unten || y > s.oben) return false;
+  const dx = x - s.x, dz = z - s.z;
+  if (Math.abs(dx) > 2 || Math.abs(dz) > 2) return false;
+  const i = ((s.oben - y) % RING.length + RING.length) % RING.length;
+  const [sx, sz] = RING[i];
+  return dx === sx && dz === sz;
+}
+
+/** Wo die Treppe oben anfängt — dort setzt man den Fuß hinein. */
+export function treppenKopf(gruft) {
+  const p = plan(gruft);
+  const s = p.schacht;
+  const [sx, sz] = RING[0];
+  return { x: s.x + sx + 0.5, y: s.oben + 1, z: s.z + sz + 0.5 };
 }
 
 const drin = (q, x, y, z) =>
@@ -147,6 +175,8 @@ export function hohlIn(plaeneNah, x, y, z) {
   for (const p of plaeneNah) {
     const h = p.huelle;
     if (y < h.minY - 1 || y > h.maxY + 1) continue;
+    // Die Stufen stehen im ausgehöhlten Schacht, also erst fragen
+    if (stufeBei(p, x, y, z)) return 3;
     for (const q of p.raeume) if (drin(q, x, y, z)) return y === q.y0 ? 2 : 1;
     for (const q of p.gaenge) if (drin(q, x, y, z)) return y === q.y0 ? 2 : 1;
   }
@@ -163,7 +193,9 @@ export function bewohner(gruft) {
   const truhen = [];
 
   p.raeume.forEach((raum, idx) => {
-    const n = idx === 0 ? 1 : 1 + Math.floor(rand() * 3);
+    // Ein bis zwei je Kammer. Mehr ist kein Kampf mehr, sondern ein Unfall:
+    // die Gänge sind eng, und was wach wird, kommt gemeinsam.
+    const n = idx === 0 ? 1 : 1 + Math.floor(rand() * 2);
     for (let k = 0; k < n; k++) {
       feinde.push({
         x: raum.mitte.x + (rand() - 0.5) * (raum.x1 - raum.x0) * 0.7,

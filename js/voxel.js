@@ -248,7 +248,7 @@ export function generateIn(sp, x, y, z) {
   if (sp.gruften.length) {
     const hohl = gruft.hohlIn(sp.gruften, x, y, z);
     if (hohl === 1) return AIR;
-    if (hohl === 2) return B.planke;
+    if (hohl === 2 || hohl === 3) return B.planke;
   }
 
   const surface = sp.surface;

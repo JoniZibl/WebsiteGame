@@ -17,23 +17,23 @@ const RADIUS = 0.34;
 export const ARTEN = {
   wolf: {
     name: 'Wolf', fell: '#a39488', dunkel: '#74675c', augen: '#f5c451',
-    hp: 26, schaden: 9, tempo: 4.4, reichweite: 1.3, takt: 1.1, xp: 22, gold: 0,
-    hoehe: 0.9, vierbeiner: true, sicht: 18,
+    hp: 26, schaden: 9, tempo: 4.4, reichweite: 1.3, takt: 1.2, xp: 22, gold: 0,
+    hoehe: 0.9, vierbeiner: true, sicht: 16,
   },
   raeuber: {
     name: 'Räuber', fell: '#9d86b8', dunkel: '#6a5a86', augen: '#f6ead6',
-    hp: 42, schaden: 13, tempo: 3.4, reichweite: 1.5, takt: 1.35, xp: 34, gold: 18,
-    hoehe: 1.7, sicht: 20,
+    hp: 42, schaden: 10, tempo: 3.4, reichweite: 1.5, takt: 1.5, xp: 34, gold: 18,
+    hoehe: 1.7, sicht: 14,
   },
   skelett: {
     name: 'Skelett', fell: '#f0e7d2', dunkel: '#c3b79c', augen: '#c9543f',
-    hp: 34, schaden: 15, tempo: 2.9, reichweite: 1.5, takt: 1.5, xp: 30, gold: 12,
-    hoehe: 1.7, sicht: 22,
+    hp: 34, schaden: 11, tempo: 2.9, reichweite: 1.5, takt: 1.7, xp: 30, gold: 12,
+    hoehe: 1.7, sicht: 14,
   },
   hauptmann: {
     name: 'Hauptmann', fell: '#e0654b', dunkel: '#a8402f', augen: '#f5c451',
-    hp: 110, schaden: 24, tempo: 3.2, reichweite: 1.8, takt: 1.5, xp: 120, gold: 90,
-    hoehe: 2.0, boss: true, sicht: 26,
+    hp: 110, schaden: 18, tempo: 3.2, reichweite: 1.8, takt: 1.6, xp: 120, gold: 90,
+    hoehe: 2.0, boss: true, sicht: 17,
   },
 };
 

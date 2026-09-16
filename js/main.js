@@ -49,7 +49,7 @@ scene.fog = new THREE.Fog('#ede2cd', 60, 135);
 
 const camera = new THREE.PerspectiveCamera(40, 1, 0.3, 400);
 const CAM_DIR = new THREE.Vector3(0, 24, 19).normalize();
-let camDist = 62;
+let camDist = 56;
 
 const hemi = new THREE.HemisphereLight('#fff6e4', '#c39a72', 0.95);
 scene.add(hemi);
@@ -368,12 +368,25 @@ function handeln() {
   if (w.art === 'npc') redeOeffnen(w.ziel);
 }
 
+/* In welcher Gruft stecken wir? Das wird aus der Lage bestimmt, nicht aus dem
+   Betreten - sonst gilt man schon auf der obersten Treppenstufe als draußen,
+   und wer durch eine Höhle hineinfällt, gälte nie als drinnen. */
+function gruftUnter(x, y, z) {
+  for (const g of gruft.grueftUm(x, z, 130)) {
+    const h = gruft.plan(g).huelle;
+    if (x >= h.minX - 2 && x <= h.maxX + 2 && z >= h.minZ - 2 && z <= h.maxZ + 2
+        && y >= h.minY - 2 && y <= h.maxY + 3) return g;
+  }
+  return null;
+}
+
 function gruftBetreten(g) {
-  const p = gruft.plan(g);
   state.imDungeon = g;
   state.ort = g.name;
-  // In den Schacht hinein und auf dessen Boden absetzen
-  player.pos.set(g.x + 0.5, p.bodenY + 1, g.z + 0.5);
+  // Oben auf die Treppe stellen — hinunter geht man selbst, und genauso
+  // wieder hinauf.
+  const kopf = gruft.treppenKopf(g);
+  player.pos.set(kopf.x, kopf.y, kopf.z);
   player.vel.set(0, 0, 0);
   world.update(player.pos.x, player.pos.z, 30);
   gruftenPflegen(player.pos.x, player.pos.z);
@@ -736,7 +749,24 @@ function frame() {
     const dorf = doerfer.dorfUnter(player.pos.x, player.pos.z);
     const surface = surfaceAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
     const tief = surface - player.pos.y;
-    if (tief < 3 && state.imDungeon) { state.imDungeon.gefuellt = false; state.imDungeon = null; }
+
+    const jetztDrin = tief >= 2 ? gruftUnter(player.pos.x, player.pos.y, player.pos.z) : null;
+    if (jetztDrin !== state.imDungeon) {
+      if (state.imDungeon) {
+        state.imDungeon.gefuellt = false;
+        // Was in der alten Gruft steht, bleibt nicht draußen stehen
+        for (const f of [...feinde.liste]) if (f.herkunft === state.imDungeon.id) feinde.entfernen(f);
+        for (const t of [...truhen]) {
+          if (t.gruft === state.imDungeon) { scene.remove(t.obj); truhen.splice(truhen.indexOf(t), 1); }
+        }
+      }
+      state.imDungeon = jetztDrin;
+      if (jetztDrin) {
+        state.ort = jetztDrin.name;
+        meldung(jetztDrin.name, '#4a3b30', 3.0);
+      }
+    }
+
     if (!state.imDungeon) {
       const neuerOrt = dorf ? ortsname(dorf) : 'Wildnis';
       if (neuerOrt !== state.ort) {
