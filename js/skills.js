@@ -42,6 +42,7 @@ export function neuerHeld() {
     fert: { klinge: 1, zaehe: 1, magie: 1, spuren: 1, wandern: 1 },
     vorteile: new Set(),
     getoetet: 0,
+    hilfen: 0,                // erledigte Nebenaufträge — sie zählen am Ende
     dungeons: new Set(),      // welche Truhen schon offen sind
     beutel: {},               // id -> Anzahl
     rue: { waffe: null, ruestung: null, schmuck: null },

@@ -30,6 +30,11 @@ export const ARTEN = {
     hp: 34, schaden: 11, tempo: 2.9, reichweite: 1.5, takt: 1.7, xp: 30, gold: 12,
     hoehe: 1.7, sicht: 14,
   },
+  waechter: {
+    name: 'Der Wächter', fell: '#e8c46a', dunkel: '#b08a2f', augen: '#fff6e4',
+    hp: 260, schaden: 22, tempo: 3.0, reichweite: 2.0, takt: 1.5, xp: 450, gold: 400,
+    hoehe: 2.3, boss: true, sicht: 20,
+  },
   hauptmann: {
     name: 'Hauptmann', fell: '#e0654b', dunkel: '#a8402f', augen: '#f5c451',
     hp: 110, schaden: 18, tempo: 3.2, reichweite: 1.8, takt: 1.6, xp: 120, gold: 90,

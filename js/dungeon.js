@@ -69,7 +69,7 @@ export function plan(gruft) {
 
   const raeume = [];
   const gaenge = [];
-  const bodenY = Math.max(6, gruft.h - 16);
+  const bodenY = Math.max(4, gruft.h - (gruft.schlund ? 26 : 16));
 
   // Der Schacht vom Eingang nach unten, fünf mal fünf breit — hinein passt
   // eine Wendeltreppe, und damit kommt man auch wieder heraus.
@@ -197,11 +197,13 @@ export function bewohner(gruft) {
     // die Gänge sind eng, und was wach wird, kommt gemeinsam.
     const n = idx === 0 ? 1 : 1 + Math.floor(rand() * 2);
     for (let k = 0; k < n; k++) {
+      const chef = raum.letzter && k === 0;
       feinde.push({
         x: raum.mitte.x + (rand() - 0.5) * (raum.x1 - raum.x0) * 0.7,
         y: raum.y0 + 1,
         z: raum.mitte.z + (rand() - 0.5) * (raum.z1 - raum.z0) * 0.7,
-        art: raum.letzter && k === 0 ? 'hauptmann' : rand() < 0.45 ? 'skelett' : 'raeuber',
+        art: chef ? (gruft.schlund ? 'waechter' : 'hauptmann')
+           : rand() < 0.45 ? 'skelett' : 'raeuber',
         stufe: gruft.stufe,
       });
     }

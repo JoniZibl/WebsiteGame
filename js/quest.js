@@ -33,7 +33,7 @@ export const VORLAGEN = [
   {
     id: 'glimm',
     titel: () => 'Glimm für die Schmiede',
-    text: () => 'Die Esse ist kalt. Unter der Erde liegt Glimm — grabt uns welches heraus.',
+    text: () => 'Die Esse ist kalt. In den Gruften sitzt Glimm im Fels — brecht uns welches heraus.',
     art: 'sammeln', mengeMin: 4, mengeMax: 8,
     lohn: { gold: 80, xp: 110 },
   },

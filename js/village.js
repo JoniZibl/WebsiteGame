@@ -70,6 +70,7 @@ export function bauplan(dorf) {
 export class Doerfer {
   constructor(scene) {
     this.scene = scene;
+    this.heimatKey = null;         // im Heimatdorf wohnt der Chronist
     this.aktiv = new Map();        // "i,j" -> { gruppe, dorf, plan }
     this.muster = {
       brunnen: props.brunnenBauen(),
@@ -106,6 +107,8 @@ export class Doerfer {
       if (this.aktiv.has(key)) continue;
 
       const plan = bauplan(dorf);
+      // Der Chronist wohnt nur an einem einzigen Ort auf der Welt
+      if (key === this.heimatKey && plan.leute[1]) plan.leute[1].chronist = true;
       const gruppe = new THREE.Group();
       for (const t of plan.teile) {
         const muster = t.art === 'haus' ? this.hausMuster(t) : this.muster[t.art];

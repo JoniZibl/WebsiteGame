@@ -15,6 +15,17 @@ bekommt Wege.
 Satteldach um einen Brunnen, Laternen am Wegkreuz, Zäune, Tannen. Vor jedem
 Haus wohnt jemand mit Namen, Gewerbe und genau einem Auftrag.
 
+**Die Geschichte** heißt *Das Erlöschen*. Im Heimatdorf sitzt ein Chronist, der
+aufschreibt, was aufhört: Die Laternen brennen kürzer als früher, weil das Glimm
+im Fels müde wird. Fünf Kapitel führen von fünf Glimmsteinen über ein altes
+Siegel und zwei fremde Dörfer bis in den Schlund, wo jemand sitzt, der das Licht
+genommen hat.
+
+Am Ende stehen zwei Wege. Erschlagen kann man ihn immer. Reden kann man mit ihm
+nur, wenn man unterwegs mindestens vier Leuten geholfen hat — und das ist der
+Punkt: Was am Ende zählt, ist nicht, was du erschlagen hast, sondern ob du
+gekommen bist, als jemand gefragt hat.
+
 **Die Aufträge** schicken einen irgendwohin — eine Gruft leeren, ein Erbstück
 holen, Wölfe vertreiben, Glimm graben, eine Nachricht ins Nachbardorf bringen.
 Jeder Auftraggeber hat immer denselben, weil er aus seinem Saatkorn gewürfelt
@@ -40,6 +51,7 @@ verkauft Tränke, Waffen und Rüstung — das Angebot wechselt mit dem Tag.
 
 - **Ziehen** (oder **WASD**) — laufen
 - **⚔️** zuschlagen *(Leertaste)* · **✨** zaubern *(K)*
+- **💎** Glimmadern im Fels brechen *(E)*
 - **💬 / 🧰 / 🚪** ansprechen, Truhe öffnen, Gruft betreten *(E)*
 - **🧪** trinken *(H)* — erscheint, sobald du Tränke hast
 - **🎒** Fertigkeiten, Beutel, Aufträge, Karte *(I)*
@@ -75,6 +87,7 @@ nimmt.
 | `js/skills.js` | Stufen, Fertigkeiten, Vorteile |
 | `js/combat.js` | Gegner und Kampf |
 | `js/items.js` | Gegenstände, Beutetabellen, Beutel, Laden |
+| `js/story.js` | die Hauptgeschichte in fünf Kapiteln |
 | `js/main.js` | Anzeige, Steuerung, Schleife |
 
 ## Starten

@@ -315,3 +315,7 @@ html, body {
 }
 .lreiter.an { background: var(--terra); color: var(--papier); }
 #ladenListe { max-height: 46vh; overflow-y: auto; margin-bottom: 12px; }
+
+/* Die Hauptgeschichte hebt sich vom Kleinkram ab */
+.q-zeile.haupt { background: rgba(232, 168, 60, .14); box-shadow: inset 0 0 0 2px rgba(232, 168, 60, .4); }
+.auftrag.fertig b { color: var(--terra); }

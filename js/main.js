@@ -14,6 +14,7 @@ import * as gruft from './dungeon.js';
 import * as fert from './skills.js';
 import { Auftragsbuch, auftragFuer } from './quest.js';
 import * as dinge from './items.js';
+import * as story from './story.js';
 import { DINGE } from './items.js';
 import { kisteBauen, torBauen } from './props.js';
 import { GameAudio } from './audio.js';
@@ -144,6 +145,9 @@ const state = {
   camPos: new THREE.Vector3(),
   fallFrom: null,
   gelesen: new Set(), // schon geöffnete Truhen
+  geschichte: story.neueGeschichte(),
+  schlund: null,
+  heimat: null,
   tag: 0,
 };
 
@@ -196,14 +200,27 @@ function updateHUD() {
     ? `Gruft · Stufe ${state.imDungeon.stufe}`
     : biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).name;
 
-  const q = state.buch.verfolgt();
-  ui.auftrag.classList.toggle('hidden', !q);
-  if (q) {
-    ui.aTitel.textContent = q.titel;
-    ui.aStand.textContent = q.fertig
-      ? 'erledigt — bring die Nachricht zurück'
-      : `${q.stand} / ${q.menge}`;
-    ui.auftrag.classList.toggle('fertig', q.fertig);
+  // Die Geschichte steht vor den Nebenaufträgen
+  const st = state.geschichte;
+  const k = st.gestartet ? story.aktuell(st) : null;
+  if (k) {
+    ui.auftrag.classList.remove('hidden');
+    ui.aTitel.textContent = `✦ ${k.titel}`;
+    const fertig = story.kapitelFertig(st);
+    ui.aStand.textContent = fertig
+      ? 'zurück zum Chronisten'
+      : `${story.fuellen(k.ziel, st)} · ${st.ziel}/${k.menge}`;
+    ui.auftrag.classList.toggle('fertig', fertig);
+  } else {
+    const q = state.buch.verfolgt();
+    ui.auftrag.classList.toggle('hidden', !q);
+    if (q) {
+      ui.aTitel.textContent = q.titel;
+      ui.aStand.textContent = q.fertig
+        ? 'erledigt — bring die Nachricht zurück'
+        : `${q.stand} / ${q.menge}`;
+      ui.auftrag.classList.toggle('fertig', q.fertig);
+    }
   }
 }
 
@@ -252,6 +269,9 @@ function feindGefallen(f) {
   }
   const fertigeQ = state.buch.melden('toeten', { imDungeon: !!state.imDungeon });
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
+  if (f.id === 'waechter' && story.melden(state.geschichte, 'waechter', {})) {
+     endeZeigen('klinge');
+  }
   updateHUD();
 }
 
@@ -422,12 +442,55 @@ function truheOeffnen(t) {
   });
   const fertigeQ = state.buch.melden('truhe', {});
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
+  if (story.melden(state.geschichte, 'truhe', { gruftId: t.gruft.id })) {
+    dinge.nehmen(h, 'siegel');
+    meldung('📜 Altes Siegel', '#e8a83c', 3.2);
+    kapitelGeschafft();
+  }
+  updateHUD();
+}
+
+/* ------------------------------ Glimm brechen ------------------------------
+ * Die Adern im Fels sind das Einzige, was man noch aus der Welt selbst holt.
+ * Ohne sie waere der Auftrag "Glimm fuer die Schmiede" unerfuellbar - graben
+ * kann man seit dem Umbau zum Rollenspiel nicht mehr.
+ * -------------------------------------------------------------------------- */
+function glimmInReichweite() {
+  const px = Math.floor(player.pos.x), py = Math.floor(player.pos.y), pz = Math.floor(player.pos.z);
+  let best = null, bestD = 99;
+  for (let dy = -1; dy <= 2; dy++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        if (world.get(px + dx, py + dy, pz + dz) !== B.glimm) continue;
+        const d = Math.abs(dx) + Math.abs(dy) + Math.abs(dz);
+        if (d < bestD) { bestD = d; best = { x: px + dx, y: py + dy, z: pz + dz }; }
+      }
+    }
+  }
+  return best;
+}
+
+function glimmBrechen(ort) {
+  const h = held();
+  world.set(ort.x, ort.y, ort.z, AIR);
+  dinge.nehmen(h, 'glimmstein');
+  fert.uebung(h, 'spuren', 2);
+  fert.xpGeben(h, 12);
+  audio.gem(2);
+  juice.shake(0.25);
+  juice.ring({ x: ort.x + 0.5, y: ort.y + 0.5, z: ort.z + 0.5 }, 2.0, '#f5c451');
+  juice.popup({ x: ort.x + 0.5, y: ort.y + 1.2, z: ort.z + 0.5 }, '💎 Glimmstein', '#e8a83c');
+  const fertigeQ = state.buch.melden('sammeln', {});
+  for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
+  if (story.melden(state.geschichte, 'glimm', {})) kapitelGeschafft();
   updateHUD();
 }
 
 /* -------------------------- Womit kann man reden? -------------------------- */
 function was() {
   const p = player.pos;
+  const w = waechterInReichweite();
+  if (w) return { art: 'waechter', ziel: w };
   const n = leute.naechster(p, 3.4);
   if (n) return { art: 'npc', ziel: n };
   for (const t of truhen) {
@@ -438,6 +501,8 @@ function was() {
   for (const t of tore) {
     if (Math.hypot(t.pos.x - p.x, t.pos.z - p.z) < 4.5) return { art: 'tor', ziel: t };
   }
+  const ader = glimmInReichweite();
+  if (ader) return { art: 'glimm', ziel: ader };
   return null;
 }
 
@@ -445,8 +510,13 @@ function handeln() {
   const w = was();
   if (!w) return;
   if (w.art === 'truhe') { truheOeffnen(w.ziel); return; }
+  if (w.art === 'glimm') { glimmBrechen(w.ziel); return; }
   if (w.art === 'tor') { gruftBetreten(w.ziel.gruft); return; }
-  if (w.art === 'npc') redeOeffnen(w.ziel);
+  if (w.art === 'npc') {
+    if (w.ziel.chronist) chronistOeffnen(w.ziel);
+    else redeOeffnen(w.ziel);
+  }
+  if (w.art === 'waechter') waechterAnsprechen(w.ziel);
 }
 
 /* In welcher Gruft stecken wir? Das wird aus der Lage bestimmt, nicht aus dem
@@ -474,6 +544,145 @@ function gruftBetreten(g) {
   audio.gem(0);
   meldung(g.name, '#4a3b30', 3.0);
   updateHUD();
+}
+
+/* ------------------------------ Die Geschichte ----------------------------- */
+function kapitelGeschafft() {
+  audio.gem(3);
+  juice.shake(0.4);
+  const k = story.aktuell(state.geschichte);
+  if (k) meldung(`„${k.titel}" — zurück zum Chronisten`, '#e8a83c', 3.2);
+  updateHUD();
+}
+
+/** Die Richtung zum Schlund, für den Text des Chronisten. */
+function schlundRichtung() {
+  if (!state.schlund) return 'weit draußen';
+  const dx = state.schlund.x - player.pos.x, dz = state.schlund.z - player.pos.z;
+  return Math.abs(dx) > Math.abs(dz)
+    ? (dx > 0 ? 'Weit im Osten' : 'Weit im Westen')
+    : (dz > 0 ? 'Weit im Süden' : 'Weit im Norden');
+}
+
+function chronistOeffnen(n) {
+  const st = state.geschichte;
+  state.gespraech = n;
+  el('redeName').textContent = 'Der Chronist';
+  el('redeBeruf').textContent = n.name;
+
+  if (st.fertig) {
+    redeZeigen(st.ende === 'wort'
+      ? 'Die Laternen brennen wieder länger. Ich habe es aufgeschrieben — zum ersten Mal '
+        + 'ein Strich, der länger wird.\n\nDanke, dass Ihr geredet habt statt zugeschlagen.'
+      : 'Das Glimm kommt zurück. Die Gruften sind still geworden, stiller als vorher.\n\n'
+        + 'Ich weiß nicht, ob das ein guter Handel war. Aber es ist getan.',
+      [{ label: 'Lebt wohl.', tun: redeSchliessen }]);
+    el('rede').classList.remove('hidden');
+    return;
+  }
+
+  const k = story.aktuell(st);
+
+  if (!st.gestartet) {
+    redeZeigen(story.fuellen(k.rede, st, schlundRichtung()), [
+      { label: 'Ich sehe mich um.', unten: k.ziel.replace('{gruft}', st.gruftName || ''),
+        tun: () => {
+          st.gestartet = true;
+          audio.gem(1);
+          redeZeigen('Gut. Ich bin hier, wenn Ihr etwas habt.',
+            [{ label: 'Bis dann.', tun: redeSchliessen }]);
+          updateHUD();
+        } },
+      { label: 'Nicht heute.', tun: redeSchliessen },
+    ]);
+  } else if (story.kapitelFertig(st)) {
+    const abschluss = k.abschluss || 'Ihr habt es also gesehen.';
+    redeZeigen(story.fuellen(abschluss, st, schlundRichtung()), [
+      { label: 'Und weiter?', tun: () => {
+          story.weiter(st);
+          st.gestartet = false;
+          const naechst = story.aktuell(st);
+          if (!naechst || st.fertig) { redeSchliessen(); return; }
+          chronistOeffnen(n);
+        } },
+    ]);
+  } else {
+    redeZeigen(story.fuellen(k.rede, st, schlundRichtung()), [
+      { label: `Noch nicht. (${st.ziel}/${k.menge})`, aus: true },
+      { label: 'Ich gehe weiter.', tun: redeSchliessen },
+    ]);
+  }
+  el('rede').classList.remove('hidden');
+}
+
+/* ----------------------------- Der Wächter -------------------------------- */
+function waechterInReichweite() {
+  if (!state.imDungeon || !state.imDungeon.schlund) return null;
+  for (const f of feinde.liste) {
+    if (f.id !== 'waechter') continue;
+    if (Math.hypot(f.pos.x - player.pos.x, f.pos.z - player.pos.z) < 5
+        && Math.abs(f.pos.y - player.pos.y) < 3) return f;
+  }
+  return null;
+}
+
+function waechterAnsprechen(f) {
+  const h = held();
+  state.gespraech = { pos: f.pos };
+  el('redeName').textContent = 'Der Wächter';
+  el('redeBeruf').textContent = 'im Schlund';
+
+  const darf = story.darfReden(h);
+  const wahlen = [];
+  if (darf) {
+    wahlen.push({
+      label: 'Sie erinnern sich noch.',
+      unten: `${h.hilfen} Menschen haben dich um Hilfe gebeten — und du bist gekommen.`,
+      tun: () => {
+        redeZeigen('Ihr wart bei ihnen. Bei allen diesen.\n\n'
+          + 'Ich habe das Licht genommen, weil niemand mehr danach gefragt hat. '
+          + 'Ein Licht, um das niemand bittet, ist Verschwendung.\n\n'
+          + 'Nehmt es mit. Und sagt ihnen, sie sollen fragen.',
+          [{ label: 'Das werde ich.', tun: () => { redeSchliessen(); endeZeigen('wort'); } }]);
+      },
+    });
+  } else {
+    wahlen.push({
+      label: 'Sie erinnern sich noch.',
+      unten: `Er glaubt dir nicht. (${h.hilfen || 0} von ${story.NOETIGE_HILFE} Menschen geholfen)`,
+      aus: true,
+    });
+  }
+  wahlen.push({ label: 'Dann nehme ich es mir.', tun: redeSchliessen });
+
+  redeZeigen('Ihr seid weit gelaufen für etwas, das niemand vermisst hat.\n\n'
+    + 'Zehn Jahre sitze ich hier. In zehn Jahren ist niemand gekommen, um zu fragen, '
+    + 'wo das Licht geblieben ist. Nur Ihr. Und Ihr fragt nicht — Ihr holt.',
+    wahlen);
+  el('rede').classList.remove('hidden');
+}
+
+function endeZeigen(art) {
+  const st = state.geschichte;
+  st.ende = art;
+  st.fertig = true;
+  state.running = false;
+  const h = held();
+  if (art === 'wort') {
+    h.gold += 600;
+    fert.xpGeben(h, 800);
+  }
+  el('endeTitel').textContent = art === 'wort' ? 'Das Licht kehrt zurück.' : 'Der Schlund ist still.';
+  el('endeText').textContent = art === 'wort'
+    ? 'Der Wächter gibt das Glimm heraus. In den Dörfern brennen die Laternen wieder '
+      + 'länger — weil jemand danach gefragt hat.'
+    : 'Der Wächter fällt, und mit ihm gibt der Fels sein Licht zurück. Es war zu holen. '
+      + 'Ob es zu nehmen war, sagt niemand.';
+  el('endeStats').textContent = `Stufe ${h.stufe} · ${h.getoetet} erlegt · `
+    + `${h.hilfen || 0} Menschen geholfen`;
+  el('ende').classList.remove('hidden');
+  audio.gem(3);
+  writeSave();
 }
 
 /* -------------------------------- Gespräch --------------------------------- */
@@ -532,6 +741,7 @@ function wahlenFuer(n) {
         const lohn = state.buch.abgeben(laeuft, held());
         if (lohn) {
           fert.xpGeben(held(), lohn.xp);
+          held().hilfen = (held().hilfen || 0) + 1;
           audio.gem(3);
           n.auftrag = null;
           redeZeigen('Ihr habt Wort gehalten. Das vergisst man hier nicht.',
@@ -824,6 +1034,30 @@ function fertZeichnen() {
 function questsZeichnen() {
   const feld = el('tabQuests');
   feld.replaceChildren();
+
+  const st = state.geschichte;
+  const k = story.aktuell(st);
+  if (k && st.gestartet) {
+    const z = document.createElement('div');
+    z.className = 'q-zeile haupt' + (story.kapitelFertig(st) ? ' fertig' : '');
+    z.innerHTML = `<b>✦ ${k.titel}</b>`
+      + `<p>${story.fuellen(k.rede, st, schlundRichtung()).split('\n')[0]}</p>`
+      + `<small>${story.kapitelFertig(st) ? 'zurück zum Chronisten'
+          : `${story.fuellen(k.ziel, st)} · ${st.ziel}/${k.menge}`}</small>`;
+    feld.append(z);
+  } else if (!st.fertig) {
+    const z = document.createElement('div');
+    z.className = 'q-zeile haupt';
+    z.innerHTML = '<b>✦ Der Chronist</b><p>Im Heimatdorf wohnt jemand, der aufschreibt, '
+      + 'was aufhört. Sprich mit ihm.</p>';
+    feld.append(z);
+  }
+
+  const hilfen = document.createElement('p');
+  hilfen.className = 'punkte-hinweis';
+  hilfen.textContent = `${held().hilfen || 0} Menschen geholfen`;
+  feld.append(hilfen);
+
   const offen = state.buch.offen;
   if (!offen.length) {
     const p = document.createElement('p');
@@ -1023,6 +1257,12 @@ function frame() {
       if (jetztDrin) {
         state.ort = jetztDrin.name;
         meldung(jetztDrin.name, '#4a3b30', 3.0);
+        if (jetztDrin.schlund && story.melden(state.geschichte, 'schlund', {})) {
+          story.weiter(state.geschichte);       // im Schlund beginnt sofort der Wächter
+          state.geschichte.gestartet = true;
+          state.geschichte.ziel = 0;
+          meldung('Etwas wartet weiter unten.', '#c9543f', 3.4);
+        }
       }
     }
 
@@ -1033,6 +1273,11 @@ function frame() {
         if (dorf) {
           const fertigeQ = state.buch.melden('gehen', { ort: neuerOrt });
           for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
+          // Fremde Dörfer zählen für die Geschichte, das Heimatdorf nicht
+          const fremd = !state.heimat || dorf.i !== state.heimat.i || dorf.j !== state.heimat.j;
+          if (fremd && story.melden(state.geschichte, 'doerfer', { ort: neuerOrt })) {
+            kapitelGeschafft();
+          }
         }
       }
     }
@@ -1065,7 +1310,10 @@ function frame() {
     // Der Reden-Knopf erscheint nur, wenn es etwas zu tun gibt
     const w = was();
     ui.rede.classList.toggle('hidden', !w);
-    if (w) ui.rede.textContent = w.art === 'npc' ? '💬' : w.art === 'truhe' ? '🧰' : '🚪';
+    if (w) {
+      ui.rede.textContent = w.art === 'npc' ? '💬' : w.art === 'truhe' ? '🧰'
+        : w.art === 'glimm' ? '💎' : w.art === 'waechter' ? '🕯️' : '🚪';
+    }
 
     hudTimer -= dt;
     if (hudTimer <= 0) { hudTimer = 0.22; updateHUD(); }
@@ -1174,10 +1422,12 @@ function writeSave() {
       stufe: h.stufe, xp: h.xp, xpZiel: h.xpZiel, punkte: h.punkte, gold: h.gold,
       hp: h.hp, hpMax: h.hpMax, ausdauer: h.ausdauer, ausdauerMax: h.ausdauerMax,
       magicka: h.magicka, magickaMax: h.magickaMax, fert: h.fert, fertXp: h.fertXp || {},
-      vorteile: [...h.vorteile], getoetet: h.getoetet, dungeons: [...h.dungeons],
+      vorteile: [...h.vorteile], getoetet: h.getoetet, hilfen: h.hilfen || 0,
+      dungeons: [...h.dungeons],
       beutel: h.beutel, rue: h.rue,
     },
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8) },
+    geschichte: state.geschichte,
   });
 }
 
@@ -1202,6 +1452,33 @@ function startplatz() {
   const nah = doerferUm(0, 0, 1200).sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));
   if (nah.length) return { x: nah[0].x + 4, z: nah[0].z + 4, dorf: nah[0] };
   return { x: 0, z: 0, dorf: null };
+}
+
+/* Die Geschichte braucht feste Orte: ein Heimatdorf mit dem Chronisten, eine
+   benannte Gruft für das Siegel und den Schlund ganz draußen. Alle drei stehen
+   im Saatkorn, also findet sie jeder Neustart derselben Welt wieder. */
+function welteinrichtung(heimat) {
+  state.heimat = heimat;
+  doerfer.heimatKey = heimat ? `${heimat.i},${heimat.j}` : null;
+
+  const mitteX = heimat ? heimat.x : 0, mitteZ = heimat ? heimat.z : 0;
+  const alle = gruft.grueftUm(mitteX, mitteZ, 1300);
+  if (!alle.length) return;
+
+  const nachEntfernung = [...alle].sort((a, b) =>
+    Math.hypot(a.x - mitteX, a.z - mitteZ) - Math.hypot(b.x - mitteX, b.z - mitteZ));
+
+  // Die Gruft aus Kapitel 1: nah genug, um sie früh zu schaffen
+  const siegelGruft = nachEntfernung[Math.min(1, nachEntfernung.length - 1)];
+  state.geschichte.gruftId = siegelGruft.id;
+  state.geschichte.gruftName = siegelGruft.name;
+
+  // Der Schlund: die entfernteste, und sie wird tiefer und härter als alles
+  const fern = nachEntfernung[nachEntfernung.length - 1];
+  fern.schlund = true;
+  fern.name = 'Der Schlund';
+  fern.stufe = 5;
+  state.schlund = fern;
 }
 
 function aufstellen(x, z) {
@@ -1234,6 +1511,8 @@ function neuesSpiel() {
   juice.reset();
 
   const s = startplatz();
+  state.geschichte = story.neueGeschichte();
+  welteinrichtung(s.dorf);
   state.ort = s.dorf ? ortsname(s.dorf) : 'Wildnis';
   aufstellen(s.x, s.z);
   writeSave();
@@ -1261,6 +1540,15 @@ function weiterSpielen(d) {
   state.fallFrom = null;
   juice.reset();
 
+  state.geschichte = Object.assign(story.neueGeschichte(), d.geschichte || {});
+  welteinrichtung(startplatz().dorf);
+  if (d.geschichte) {
+    // Die Gruft aus dem Spielstand gewinnt — die Welt kann sich sonst
+    // anders entscheiden als beim letzten Mal.
+    state.geschichte.gruftId = d.geschichte.gruftId ?? state.geschichte.gruftId;
+    state.geschichte.gruftName = d.geschichte.gruftName ?? state.geschichte.gruftName;
+  }
+
   const [px, , pz] = d.pos;
   const dorf = dorfBei(Math.round(px), Math.round(pz));
   state.ort = dorf ? ortsname(dorf) : 'Wildnis';
@@ -1272,6 +1560,15 @@ el('startBtn').addEventListener('click', () => {
   audio.unlock();
   el('start').classList.add('hidden');
   neuesSpiel();
+});
+
+el('endeWeiter').addEventListener('click', () => {
+  // Nach dem Ende geht die Welt weiter — sie hört ja nicht auf
+  el('ende').classList.add('hidden');
+  feinde.clear();
+  const s = startplatz();
+  state.ort = s.dorf ? ortsname(s.dorf) : 'Wildnis';
+  aufstellen(s.x, s.z);
 });
 
 el('againBtn').addEventListener('click', () => {
@@ -1311,6 +1608,7 @@ window.__game = {
   doerfer, leute, feinde, truhen, tore, gruft, fert, held,
   handeln, zuschlagen, zaubern, writeSave, save, ortsname, was,
   dinge, trinken, ladenOeffnen, ladenZeichnen, beutelZeichnen,
+  story, chronistOeffnen, waechterAnsprechen, endeZeigen, kapitelGeschafft,
 };
 
 resize();

@@ -24,6 +24,10 @@ const GEWERBE = [
   { name: 'Händlerin', kleid: '#c98f57', gruss: 'Alles hat einen Preis. Auch das Schweigen.' },
 ];
 
+/* Der Chronist gibt es genau einmal. Er trägt Grau und sitzt näher an seinem
+   Haus als die anderen — er läuft nicht mehr viel. */
+const CHRONIST = { name: 'Chronist', kleid: '#6a6a78', gruss: 'Ich schreibe auf, was aufhört.' };
+
 function mat(color) { return new THREE.MeshLambertMaterial({ color, flatShading: true }); }
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
@@ -82,11 +86,11 @@ export class Leute {
     for (const [key, l] of gewollt) {
       if (da.has(key)) continue;
       const rand = mulberry32(l.saat >>> 0);
-      const gewerbe = l.handel
-        ? GEWERBE.find((g) => g.name === 'Händlerin')
+      const gewerbe = l.chronist ? CHRONIST
+        : l.handel ? GEWERBE.find((g) => g.name === 'Händlerin')
         : GEWERBE[Math.floor(rand() * GEWERBE.length)];
       const name = VORNAMEN[Math.floor(rand() * VORNAMEN.length)];
-      const haar = HAARE[Math.floor(rand() * HAARE.length)];
+      const haar = l.chronist ? '#e6e0d4' : HAARE[Math.floor(rand() * HAARE.length)];
       const obj = this.musterFuer(gewerbe.kleid, haar).clone();
 
       let y = l.dorf.h + 1;
@@ -98,7 +102,7 @@ export class Leute {
 
       this.liste.push({
         key, name, gewerbe, saat: l.saat, dorf: l.dorf,
-        obj, pos: new THREE.Vector3(l.x, y, l.z), handel: !!l.handel,
+        obj, pos: new THREE.Vector3(l.x, y, l.z), handel: !!l.handel, chronist: !!l.chronist,
         heimX: l.x, heimZ: l.z,
         takt: rand() * 6, ziel: null, auftrag: null,
       });
@@ -106,8 +110,9 @@ export class Leute {
 
     // Umherlaufen
     for (const n of this.liste) {
+      if (n.chronist) { n.ziel = null; }
       n.takt -= dt;
-      if (n.takt <= 0) {
+      if (!n.chronist && n.takt <= 0) {
         n.takt = 3 + Math.random() * 5;
         n.ziel = Math.random() < 0.4 ? null : {
           x: n.heimX + (Math.random() - 0.5) * 9,
