@@ -1,43 +1,70 @@
-# Glimm
+# Talkunde
 
-Ein Grabspiel im Browser, von oben gesehen, auf dem Handy spielbar.
+Ein Rollenspiel im Browser, von oben gesehen, auf dem Handy spielbar. Eine
+endlose Welt aus Blöcken mit Dörfern, Leuten, Aufträgen und Gruften — und
+allem, was darauf steht, als richtiges kleines Modell.
 
-Die Welt ist ein Modell, das du aufschneidest. Wer nach unten gräbt, wandert
-durch Farbbänder wie durch einen geologischen Querschnitt — Krume, Lehm,
-Roterde, Rostband, Malvenstein, Blaustein, Tiefblau. Jede Schicht hat ihre
-eigene Farbe und ihren eigenen Widerstand: je tiefer, desto zäher der Fels.
+## Was es gibt
 
-## Die ganze Steuerung
+**Die Welt** rechnet sich aus ihren Koordinaten aus und hört nie auf. Sechs
+Biome, Flusstäler, Höhlenröhren, Erz in der Tiefe. Dörfer liegen auf einem
+groben Raster mit Versatz; wo eines steht, wird das Gelände eingeebnet und
+bekommt Wege.
 
-- **Ziehen** — du läufst. Was im Weg ist, gräbst du weg.
-- **Loslassen** — du sinkst. Tiefer ist immer nach unten.
-- **Ein Knopf** — gräbst du, oder gehst du nur?
+**Die Dörfer** sind gebaut, nicht gewürfelt zusammengeschoben: Häuser mit
+Satteldach um einen Brunnen, Laternen am Wegkreuz, Zäune, Tannen. Vor jedem
+Haus wohnt jemand mit Namen, Gewerbe und genau einem Auftrag.
 
-Mehr gibt es nicht. Kein Inventar, keine Werkbank, keine Leiste.
+**Die Aufträge** schicken einen irgendwohin — eine Gruft leeren, ein Erbstück
+holen, Wölfe vertreiben, Glimm graben, eine Nachricht ins Nachbardorf bringen.
+Jeder Auftraggeber hat immer denselben, weil er aus seinem Saatkorn gewürfelt
+wird.
 
-## Was bleibt
+**Die Gruften** liegen unter Tage: ein Schacht vom Tor nach unten, Räume auf
+einem lockeren Raster, Gänge dazwischen, Räuber und Skelette darin, am Ende
+ein Hauptmann und eine große Truhe. Je weiter vom Anfang, desto härter.
 
-Deine Gänge leuchten nach. Wo du gegraben hast, glimmt die Wand — der eigene
-Weg steht als warmes Geflecht in der Erde und ist das Einzige, was du hier
-hinterlässt.
+**Die Fertigkeiten** steigen dadurch, dass man sie benutzt — Klinge, Zähigkeit,
+Magie, Spüren, Wandern. Jede Stufe gibt einen Punkt für einen Vorteil.
 
-Das **Glimm** im Fels füllt deine Laterne. Ein harter Sturz lässt die Flamme
-ausschlagen; geht sie aus, ist der Abstieg zu Ende. Oben an der Luft füllt sich
-das Licht von allein — die Oberfläche ist der sichere Hafen.
+## Steuerung
+
+- **Ziehen** (oder **WASD**) — laufen
+- **⚔️** zuschlagen *(Leertaste)* · **✨** zaubern *(K)*
+- **💬 / 🧰 / 🚪** ansprechen, Truhe öffnen, Gruft betreten *(E)*
+- **🎒** Fertigkeiten, Aufträge, Karte *(I)*
+
+## Der Kniff für die Draufsicht
+
+Ein Spiel von oben und Gruften unter der Erde vertragen sich normalerweise
+nicht. Talkunde schneidet die Welt über dem Kopf weg, sobald man unter Tage
+ist — die Gruft liegt als Querschnitt vor einem. Über Tage fällt zusätzlich
+alles weg, was zwischen Kamera und Figur steht, damit kein Dach die Sicht
+nimmt.
 
 ## Technik
 
 - three.js (lokal unter `vendor/three/`, kein CDN, kein Build-Schritt)
-- Chunk-Welt in `Uint8Array`, flächenweises Culling, Schattierung und
-  Schichtfarbe direkt in die Vertex-Farben gebacken
-- Die Welt über dem Kopf wird per Clipping-Ebene weggeschnitten; zusätzlich
-  fällt weg, was zwischen Kamera und Figur steht
-- Höhlen als Röhren: zwei Rauschfelder auf ihren Nulldurchgang eingedampft,
-  hohl ist nur die Schnittlinie
+- Gelände als Chunk-Welt in `Uint8Array`, flächenweises Culling, Schattierung
+  und Schichtfarbe in die Vertex-Farben gebacken
+- Häuser, Bäume und Figuren als Low-Poly-Modelle, je Bauart einmal gebaut und
+  danach nur geklont
 - Nachbearbeitung (`js/postfx.js`): Tilt-Shift wie bei Miniaturen, Bloom,
   Farbgradierung, Vignette, Korn, tiefenbasierte Konturen
 - Ton komplett prozedural über WebAudio, keine Audiodateien
-- Spielstand in `localStorage`: nur Saatkorn und Änderungen
+- Spielstand in `localStorage`: Saatkorn, Änderungen, Held und Aufträge
+
+| Datei | wofür |
+| --- | --- |
+| `js/voxel.js` | Gelände, Biome, Dörfer, Höhlen, Vernetzung |
+| `js/props.js` | Häuser, Bäume, Zäune, Truhen, Tore |
+| `js/village.js` | Dorfgrundrisse und ihr Auf- und Abbau |
+| `js/dungeon.js` | Gruften: Grundriss, Bewohner, Beute |
+| `js/npc.js` | die Leute im Dorf |
+| `js/quest.js` | Auftragsvorlagen und Auftragsbuch |
+| `js/skills.js` | Stufen, Fertigkeiten, Vorteile |
+| `js/combat.js` | Gegner und Kampf |
+| `js/main.js` | Anzeige, Steuerung, Schleife |
 
 ## Starten
 

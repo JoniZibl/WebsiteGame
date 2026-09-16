@@ -17,11 +17,13 @@ export class Player {
     /* Der Lichtträger. Fast alles an ihm ist Silhouette — was man sieht, ist
        die Laterne und zwei Augen, die sie spiegeln. Bei der Größe, in der er
        auf dem Schirm steht, zählt nur die Umrisslinie. */
-    const kutte = new THREE.MeshLambertMaterial({ color: '#c9543f', flatShading: true });
-    const saum  = new THREE.MeshLambertMaterial({ color: '#a8402f', flatShading: true });
+    /* Der Spieler muss sich auf einen Blick von den Dorfleuten abheben —
+       dieselbe Bauweise, aber Stahl und Blau statt Leinen und Erdfarben. */
+    const kutte = new THREE.MeshLambertMaterial({ color: '#4a6f9e', flatShading: true });
+    const saum  = new THREE.MeshLambertMaterial({ color: '#33506f', flatShading: true });
     const haut  = new THREE.MeshLambertMaterial({ color: '#f0cba0', flatShading: true });
     const glas  = new THREE.MeshBasicMaterial({ color: '#ffe9b0' });
-    const metall = new THREE.MeshLambertMaterial({ color: '#f3e7d1', flatShading: true });
+    const metall = new THREE.MeshLambertMaterial({ color: '#d8dde2', flatShading: true });
     const auge  = new THREE.MeshBasicMaterial({ color: '#3f3328' });
 
     const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -83,7 +85,7 @@ export class Player {
     this.inWater = false;
     this.t = 0;
     this.swing = 0;
-    this.health = 10;
+    this.tempo = 1;
   }
 
   spawn(world, x, z) {
@@ -96,7 +98,6 @@ export class Player {
     }
     this.pos.set(x + 0.5, y, z + 0.5);
     this.vel.set(0, 0, 0);
-    this.health = 10;
   }
 
   /* --------------------------- Kollision ---------------------------------- */
@@ -117,7 +118,7 @@ export class Player {
     const feet = world.get(Math.floor(this.pos.x), Math.floor(this.pos.y + 0.2), Math.floor(this.pos.z));
     this.inWater = feet === B.wasser;
 
-    const speed = (this.inWater ? 3.4 : 5.4) * move.strength;
+    const speed = (this.inWater ? 3.4 : 5.4) * (this.tempo || 1) * move.strength;
     const wishX = move.x * speed;
     const wishZ = move.y * speed;
     this.vel.x += (wishX - this.vel.x) * Math.min(1, dt * 14);

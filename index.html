@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#ede2cd" />
-<title>Glimm</title>
+<title>Talkunde</title>
 <link rel="stylesheet" href="css/style.css" />
 <script type="importmap">
 {
@@ -20,49 +20,89 @@
   <div id="popups"></div>
 
   <div id="hud">
-    <div class="readout">
-      <b id="depth">oben</b>
-      <small id="stratum">Wiese</small>
-      <small class="best">tiefster Punkt <span id="deepest">0 m</span></small>
+    <div class="oben-links">
+      <div class="balken leben"><i></i><span id="hpText">100</span></div>
+      <div class="balken ausdauer"><i></i></div>
+      <div class="balken magicka"><i></i></div>
+      <div class="ort"><b id="ortName">Talkunde</b><small id="ortInfo">Wiese</small></div>
     </div>
-    <div class="side-btns">
+
+    <div class="oben-rechts">
+      <div class="stufe"><span id="stufeZahl">1</span><small>Stufe</small></div>
+      <div class="xp"><i id="xpFill"></i></div>
+      <div class="gold">🪙 <span id="goldZahl">0</span></div>
+    </div>
+
+    <div id="auftragTafel" class="auftrag hidden">
+      <b id="auftragTitel"></b>
+      <small id="auftragStand"></small>
+    </div>
+
+    <div class="seiten-knoepfe">
       <button id="qualityBtn" class="ghost-btn" title="Grafik">✨</button>
       <button id="soundBtn" class="ghost-btn" title="Ton">🔊</button>
     </div>
   </div>
 
-  <!-- Der einzige Knopf: graben oder laufen -->
-  <button id="modeBtn" title="graben / laufen">⛏</button>
-  <div id="lightRing"><span>🔥</span></div>
+  <div id="zielleiste" class="hidden"><b id="zielName"></b><i id="zielHp"></i></div>
+
+  <button id="menuBtn" class="rund klein" title="Held">🎒</button>
+  <button id="wirkBtn" class="rund klein magie" title="Zauber">✨</button>
+  <button id="redeBtn" class="rund mittel hidden" title="ansprechen">💬</button>
+  <button id="hauBtn" class="rund gross" title="angreifen">⚔️</button>
 
   <div id="stick" class="hidden"><div id="stickBase"></div><div id="stickNub"></div></div>
 
+  <!-- Gespräch -->
+  <div id="rede" class="overlay hidden">
+    <div class="karte rede-karte">
+      <div class="rede-kopf"><b id="redeName"></b><small id="redeBeruf"></small></div>
+      <p id="redeText" class="rede-text"></p>
+      <div id="redeWahl" class="rede-wahl"></div>
+    </div>
+  </div>
+
+  <!-- Heldenblatt -->
+  <div id="menu" class="overlay hidden">
+    <div class="karte menu-karte">
+      <div class="menu-reiter">
+        <button class="reiter an" data-tab="fert">Fertigkeiten</button>
+        <button class="reiter" data-tab="quests">Aufträge</button>
+        <button class="reiter" data-tab="welt">Karte</button>
+      </div>
+      <div id="tabFert" class="tab"></div>
+      <div id="tabQuests" class="tab hidden"></div>
+      <div id="tabWelt" class="tab hidden"></div>
+      <button id="menuZu" class="primary">Weiter</button>
+    </div>
+  </div>
+
   <div id="start" class="overlay">
-    <div class="card">
-      <h1>Glimm</h1>
-      <p class="sub claim">Du tr&auml;gst das letzte Licht in die Erde. Es brennt, solange du gr&auml;bst.</p>
+    <div class="karte">
+      <h1>Talkunde</h1>
+      <p class="sub claim">Eine Welt ohne Ende, ein Dorf zum Anfangen und mehr Gruften, als du leeren kannst.</p>
       <ul class="how">
-        <li><b>Ziehen</b> &rarr; du l&auml;ufst. Was im Weg ist, gr&auml;bst du weg.</li>
-        <li><b>Loslassen</b> &rarr; du sinkst. Tiefer ist immer nach unten.</li>
-        <li><b>⛏ / 👣</b> der einzige Knopf: gr&auml;bst du, oder gehst du nur?</li>
-        <li>Das <b>Glimm</b> im Fels f&uuml;llt dein Licht. Geht es aus, ist Schluss.</li>
-        <li>Deine G&auml;nge <b>leuchten nach</b>. Sie sind das Einzige, was bleibt.</li>
+        <li><b>Ziehen</b> &rarr; laufen. Die Welt l&auml;dt weiter, solange du gehst.</li>
+        <li><b>⚔️</b> zuschlagen &middot; <b>✨</b> zaubern &middot; <b>💬</b> ansprechen</li>
+        <li><b>🎒</b> Fertigkeiten, Auftr&auml;ge, Karte</li>
+        <li>Rede mit den Leuten. Sie schicken dich in die <b>Gruften</b>.</li>
+        <li>Was du oft tust, wirst du gut. Jede Stufe gibt einen <b>Vorteil</b>.</li>
       </ul>
-      <button id="resumeBtn" class="primary hidden">Weitergraben</button>
-      <button id="startBtn" class="primary">Hinabsteigen</button>
+      <button id="resumeBtn" class="primary hidden">Weiterspielen</button>
+      <button id="startBtn" class="primary">Aufbrechen</button>
     </div>
   </div>
 
   <div id="dead" class="overlay hidden">
-    <div class="card">
-      <h1>Erloschen.</h1>
-      <p class="sub">Das Dunkel hat dich eingeholt bei <span id="deadDepth">0 m</span>.</p>
-      <p class="big">tiefster Punkt <span id="deadBest">0 m</span></p>
-      <button id="againBtn" class="primary">Noch einmal hinab</button>
+    <div class="karte">
+      <h1>Gefallen.</h1>
+      <p class="sub" id="deadWer">Etwas war st&auml;rker als du.</p>
+      <p class="big" id="deadStats"></p>
+      <button id="againBtn" class="primary">Im Dorf aufwachen</button>
     </div>
   </div>
 
-  <noscript><div class="overlay"><div class="card"><h1>JavaScript n&ouml;tig</h1></div></div></noscript>
+  <noscript><div class="overlay"><div class="karte"><h1>JavaScript n&ouml;tig</h1></div></div></noscript>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

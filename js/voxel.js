@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fbm, noise2, mulberry32 } from './noise.js';
+import * as gruft from './dungeon.js';
 
 /* ==========================================================================
  *  Die Blockwelt.
@@ -19,7 +20,7 @@ export const AIR = 0;
 export const B = {
   gras:  1, erde: 2, stein: 3, sand: 4, schnee: 5,
   stamm: 6, laub: 7, wasser: 8, glimm: 9, moos: 10,
-  eis:  11, grundstein: 12,
+  eis:  11, grundstein: 12, weg: 13, planke: 14,
 };
 
 /* ---------------------------- Die Erdschichten ----------------------------
@@ -61,6 +62,8 @@ export const BLOCKS = {
   [B.moos]:     { name: 'Leuchtmoos', color: 0xa8d8a0, hard: 0.2, glow: 0.7, licht: 14,
                   thin: true, slim: [0.8, 0.14] },
   [B.eis]:      { name: 'Eis',     color: 0xbfdfe4, hard: 0.4 },
+  [B.weg]:      { name: 'Weg',     color: 0xdcc79a, side: 0xbe8d5a, hard: 0.3 },
+  [B.planke]:   { name: 'Planke',  color: 0xc98f57, side: 0xa8743f, hard: 0.35 },
   [B.grundstein]: { name: 'Urgestein', color: 0x46597a, hard: Infinity },
 };
 
@@ -78,11 +81,18 @@ export const BIOMES = {
 };
 
 let SEED = 1337;
-export function setSeed(s) { SEED = s | 0; }
+export function setSeed(s) {
+  SEED = s | 0;
+  dorfZellen.clear();
+  gruft.zellenLeeren();
+}
+
 export function getSeed() { return SEED; }
 
 /** Temperatur und Feuchte entscheiden, welches Biom hier liegt. */
-export function biomeAt(x, z) {
+export function biomeAt(x, z) { return rohBiome(x, z); }
+
+function rohBiome(x, z) {
   const t = fbm(x * 0.0022, z * 0.0022, SEED + 11, 3);
   const h = fbm(x * 0.0026, z * 0.0026, SEED + 29, 3);
   const berg = fbm(x * 0.0035, z * 0.0035, SEED + 47, 2);
@@ -94,8 +104,78 @@ export function biomeAt(x, z) {
   return BIOMES.wiese;
 }
 
-/** Höhe der Oberfläche in Blöcken. */
-export function surfaceAt(x, z) {
+/* ---------------------------------- Dörfer --------------------------------
+ * Dörfer liegen auf einem groben Raster mit Versatz, damit sie verstreut
+ * wirken und trotzdem jederzeit ohne Speicher ausrechenbar sind. Wer eines
+ * berührt, bekommt ebenen Grund: das Gelände wird zur Dorfhöhe hin
+ * überblendet, sonst stehen die Häuser am Hang in der Luft.
+ * -------------------------------------------------------------------------- */
+const DORF_RASTER = 230;
+
+const dorfZellen = new Map();
+
+/** Liegt in dieser Rasterzelle ein Dorf? Rein aus den Koordinaten gerechnet.
+ *  Gemerkt wird es trotzdem: surfaceAt fragt für jeden Block nach. */
+export function dorfInZelle(i, j) {
+  const key = i + ',' + j;
+  if (dorfZellen.has(key)) return dorfZellen.get(key);
+  const d = rechneDorf(i, j);
+  dorfZellen.set(key, d);
+  return d;
+}
+
+function rechneDorf(i, j) {
+  const rand = mulberry32(((i * 341873128) ^ (j * 132897987) ^ (SEED * 7919)) >>> 0);
+  if (rand() > 0.62) return null;
+  const x = Math.round(i * DORF_RASTER + (rand() - 0.5) * DORF_RASTER * 0.55);
+  const z = Math.round(j * DORF_RASTER + (rand() - 0.5) * DORF_RASTER * 0.55);
+  const h = rohSurface(x, z);
+  if (h <= SEA + 3) return null;
+  const biome = rohBiome(x, z);
+  // Dörfer stehen auf Grün: im Fels, in der Düne und im Firn baut niemand.
+  if (biome === BIOMES.berg || biome === BIOMES.wueste || biome === BIOMES.schnee) return null;
+  return { i, j, x, z, h, r: 34 + Math.round(rand() * 12), saat: (rand() * 1e9) | 0 };
+}
+
+/** Das Dorf, in dessen Umkreis dieser Punkt liegt — oder nichts. */
+export function dorfBei(x, z) {
+  const i0 = Math.round(x / DORF_RASTER), j0 = Math.round(z / DORF_RASTER);
+  for (let j = j0 - 1; j <= j0 + 1; j++) {
+    for (let i = i0 - 1; i <= i0 + 1; i++) {
+      const d = dorfInZelle(i, j);
+      if (!d) continue;
+      if (Math.hypot(x - d.x, z - d.z) < d.r) return d;
+    }
+  }
+  return null;
+}
+
+/** Alle Dörfer, die von hier aus in Reichweite liegen. */
+export function doerferUm(x, z, reichweite = DORF_RASTER * 1.5) {
+  const out = [];
+  const n = Math.ceil(reichweite / DORF_RASTER) + 1;
+  const i0 = Math.round(x / DORF_RASTER), j0 = Math.round(z / DORF_RASTER);
+  for (let j = j0 - n; j <= j0 + n; j++) {
+    for (let i = i0 - n; i <= i0 + n; i++) {
+      const d = dorfInZelle(i, j);
+      if (d && Math.hypot(x - d.x, z - d.z) < reichweite) out.push(d);
+    }
+  }
+  return out;
+}
+
+/** Liegt hier ein Weg? Ein Kreuz durch die Mitte und ein Ring darum. */
+export function wegBei(d, x, z) {
+  const dx = x - d.x, dz = z - d.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist > d.r * 0.92) return false;
+  if (Math.abs(dx) <= 0 || Math.abs(dz) <= 0) return true;
+  const ring = d.r * 0.46;
+  return Math.abs(dist - ring) <= 0.8;
+}
+
+/** Höhe des gewachsenen Geländes, ohne Rücksicht auf Dörfer. */
+function rohSurface(x, z) {
   const base = fbm(x * 0.012, z * 0.012, SEED, 4);
   const hügel = fbm(x * 0.035, z * 0.035, SEED + 5, 3);
   const berg = Math.max(0, fbm(x * 0.0035, z * 0.0035, SEED + 47, 2) - 0.55) * 2.6;
@@ -106,6 +186,17 @@ export function surfaceAt(x, z) {
   if (r < 0.045) h -= (1 - r / 0.045) * 7;
 
   return Math.max(3, Math.min(HEIGHT - 6, Math.round(h)));
+}
+
+/** Höhe der Oberfläche in Blöcken — im Dorf eingeebnet. */
+export function surfaceAt(x, z) {
+  const d = dorfBei(x, z);
+  if (!d) return rohSurface(x, z);
+  const dist = Math.hypot(x - d.x, z - d.z);
+  const kern = d.r * 0.35;
+  const k = dist <= kern ? 1 : Math.max(0, 1 - (dist - kern) / (d.r - kern));
+  const weich = k * k * (3 - 2 * k);
+  return Math.round(rohSurface(x, z) * (1 - weich) + d.h * weich);
 }
 
 /* Höhlen als Röhren, nicht als Schächte.
@@ -133,16 +224,35 @@ function oreAt(x, y, z, depth) {
 }
 
 /** Der Block an dieser Stelle, bevor jemand daran gegraben hat. */
-export function generate(x, y, z) {
+/* Alles, was für eine ganze Spalte gilt, wird einmal berechnet. Vorher lief
+   das pro Block — bei 44 Blöcken je Spalte war das der Hauptgrund, warum ein
+   Chunk vierzig Millisekunden brauchte. */
+export function spalte(x, z) {
+  const surface = surfaceAt(x, z);
+  const biome = biomeAt(x, z);
+  const dorf = dorfBei(x, z);
+  return {
+    surface, biome,
+    weg: dorf ? wegBei(dorf, x, z) : false,
+    gruften: gruft.gruftenNahe(x, z),
+  };
+}
+
+/** Der Block an dieser Stelle, bevor jemand daran gegraben hat. */
+export function generateIn(sp, x, y, z) {
   if (y <= 0) return B.grundstein;
   if (y >= HEIGHT) return AIR;
 
-  const surface = surfaceAt(x, z);
-  const biome = biomeAt(x, z);
-
-  if (y > surface) {
-    return y <= SEA ? B.wasser : AIR;
+  // Gruften stechen durch alles hindurch - auch durch die Oberfläche, denn
+  // der Schacht muss ja irgendwo anfangen.
+  if (sp.gruften.length) {
+    const hohl = gruft.hohlIn(sp.gruften, x, y, z);
+    if (hohl === 1) return AIR;
+    if (hohl === 2) return B.planke;
   }
+
+  const surface = sp.surface;
+  if (y > surface) return y <= SEA ? B.wasser : AIR;
 
   if (isCave(x, y, z) && y < surface - 2) {
     // Auf Hoehlenboeden waechst Leuchtmoos. Es ist der Grund, Hoehlen
@@ -156,11 +266,19 @@ export function generate(x, y, z) {
 
   const depth = surface - y;
   if (y === surface) {
-    if (surface <= SEA + 1 && biome !== BIOMES.wueste) return B.sand;
-    return biome.top;
+    if (sp.weg) return B.weg;
+    if (surface <= SEA + 1 && sp.biome !== BIOMES.wueste) return B.sand;
+    return sp.biome.top;
   }
   if (depth < 4) return B.erde;
   return oreAt(x, y, z, depth);
+}
+
+/** Einzelabfrage — bequem, aber teuer. In Schleifen lieber spalte() nehmen. */
+export function generate(x, y, z) {
+  if (y <= 0) return B.grundstein;
+  if (y >= HEIGHT) return AIR;
+  return generateIn(spalte(x, z), x, y, z);
 }
 
 /* --------------------------- Bäume und Gewächse ---------------------------- */
@@ -180,6 +298,8 @@ function plantInto(set, ox, oz) {
 
       const s = surfaceAt(x, z);
       if (s <= SEA) continue;
+      const dorf = dorfBei(x, z);
+      if (dorf && Math.hypot(x - dorf.x, z - dorf.z) < dorf.r * 0.95) continue;
       const rand = mulberry32(((x * 2654435761) ^ (z * 40503) ^ SEED) >>> 0);
 
       const nadel = biome.treeKind === 'nadel';
@@ -286,7 +406,8 @@ export class VoxelWorld {
       for (let lx = 0; lx < CHUNK; lx++) {
         const x = ox + lx, z = oz + lz;
         const base = (lz * CHUNK + lx) * HEIGHT;
-        for (let y = 0; y < HEIGHT; y++) data[base + y] = generate(x, y, z);
+        const sp = spalte(x, z);
+        for (let y = 0; y < HEIGHT; y++) data[base + y] = generateIn(sp, x, y, z);
       }
     }
 
@@ -338,6 +459,11 @@ export class VoxelWorld {
           const def = BLOCKS[block];
           if (!def) continue;
 
+          // Ein Hauch Farbrauschen, tieffrequent. Ohne das wirken große gleiche
+          // Flächen wie Pappe; zu feinkörnig wird daraus ein Schachbrett.
+          const tupf = 1 + (noise2(x * 0.085, z * 0.085, SEED + 5) - 0.5) * 0.075
+                         + (noise2(x * 0.021, z * 0.021, SEED + 9) - 0.5) * 0.06;
+
           const liquid = def.liquid;
           const P = liquid ? wpos : pos, C = liquid ? wcol : col, I = liquid ? widx : idx;
 
@@ -353,7 +479,7 @@ export class VoxelWorld {
             } else {
               base = def.side !== undefined && face.dir[1] === 0 ? def.side : def.color;
             }
-            _c.setHex(base).multiplyScalar(shade);
+            _c.setHex(base).multiplyScalar(shade * tupf);
 
             // Wo der Spieler gegraben hat, glimmt die Wand nach. So bleibt der
             // eigene Gang als leuchtendes Geflecht in der Erde stehen - die
@@ -438,3 +564,7 @@ export class VoxelWorld {
     return 1;
   }
 }
+
+/* Die Gruften bekommen Gelände und Saatkorn erst hier - vorher gibt es
+   rohSurface noch nicht. */
+gruft.verbinden(rohSurface, () => SEED);
