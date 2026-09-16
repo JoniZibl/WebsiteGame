@@ -1,9 +1,9 @@
 :root {
-  --sky: #cdd6ad;
-  --ink: #3e4a2c;
-  --cream: #fbf4e2;
-  --coral: #df8a5c;
-  --mint: #a8bd78;
+  --sky: #cfe4ea;
+  --ink: #33324a;
+  --cream: #fdf7ea;
+  --coral: #6d5bd0;
+  --mint: #6cc357;
   --shadow: 0 8px 24px rgba(62, 74, 44, .18);
 }
 
@@ -128,9 +128,9 @@ html, body {
 .primary {
   width: 100%; border: 0; border-radius: 16px; padding: 14px 20px;
   background: var(--coral); color: #fff; font: inherit; font-weight: 800; font-size: 16px;
-  box-shadow: 0 6px 0 #bf7049; cursor: pointer;
+  box-shadow: 0 6px 0 #4f40a0; cursor: pointer;
 }
-.primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #bf7049; }
+.primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #4f40a0; }
 
 /* ---------- Aktionsknöpfe ---------- */
 .action-btn {
@@ -191,6 +191,35 @@ html, body {
 }
 
 #shopList { margin-bottom: 16px; max-height: 46vh; overflow-y: auto; }
+
+/* ---------- Rang-Anzeige ---------- */
+.rank {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px 8px 10px; border-radius: 18px;
+  background: rgba(253, 247, 234, .82); box-shadow: var(--shadow);
+}
+.rank .ic { font-size: 24px; }
+.rank-body { min-width: 132px; }
+.rank-body b { display: block; font-size: 14px; line-height: 1.1; }
+.rank-body small { font-size: 11px; opacity: .65; font-weight: 700; }
+.rank .size { font-size: 15px; font-weight: 900; opacity: .75; }
+
+.bar.grow { width: 100%; height: 8px; margin: 4px 0 3px; background: rgba(51, 50, 74, .16); }
+.bar.grow .fill {
+  inset: 1px; width: calc(100% - 2px); border-radius: 5px;
+  background: linear-gradient(180deg, #8f7cf0, #6d5bd0);
+  box-shadow: none;
+}
+
+.banner {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 96px);
+  padding: 10px 20px; border-radius: 16px;
+  background: rgba(51, 50, 74, .82); color: var(--cream);
+  font-weight: 900; font-size: 15px; letter-spacing: .2px;
+  box-shadow: var(--shadow); transition: opacity .3s; z-index: 6;
+}
+.banner.hidden { opacity: 0; }
 
 /* ---------- Aufsteigende Zahlen ---------- */
 #popups { position: fixed; inset: 0; pointer-events: none; z-index: 5; }

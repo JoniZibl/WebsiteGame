@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#2b3347" />
+<meta name="theme-color" content="#cfe4ea" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Glut</title>
+<title>MAMPF</title>
 <link rel="stylesheet" href="css/style.css" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏕️</text></svg>" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>😬</text></svg>" />
 <script type="importmap">
 {
   "imports": {
@@ -21,41 +21,29 @@
 </head>
 <body>
   <canvas id="scene"></canvas>
+  <div id="popups"></div>
 
   <!-- HUD -->
   <div id="hud">
     <div class="top-left">
-      <div class="bar flame" id="hpBar"><div class="fill" id="hpFill"></div><span id="hpText">70%</span></div>
-      <div class="bar xp" id="xpBar"><div class="fill" id="xpFill"></div><span id="xpText">Stufe 1</span></div>
-      <div class="chips res">
-        <div class="chip"><span class="ic">✨</span><span id="score">0</span></div>
-        <div class="chip"><span class="ic">🪵</span><span id="resHolz">0</span></div>
-        <div class="chip"><span class="ic">🪨</span><span id="resStein">0</span></div>
-        <div class="chip"><span class="ic">🫐</span><span id="resBeeren">0</span></div>
-        <div class="chip"><span class="ic" id="timeIcon">☀️</span><span id="timeText">Tag</span></div>
+      <div class="rank">
+        <span class="ic" id="rankIcon">🐛</span>
+        <div class="rank-body">
+          <b id="rankName">Käfer</b>
+          <div class="bar grow"><div class="fill" id="growFill"></div></div>
+          <small>als Nächstes: <span id="nextName">🐔 Huhn</span></small>
+        </div>
+        <span class="size" id="sizeText">0.5×</span>
       </div>
-      <div class="chip area" id="areaChip"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
-      <div class="chip rest hidden" id="rest"><span class="ic">🔥</span><span>Du entzündest dich neu</span></div>
+      <div class="chip area"><span class="ic">🗺️</span><span id="area">Wiesen</span></div>
     </div>
-    <button id="actionBtn" class="action-btn hidden">🪓 Hacken</button>
-    <button id="tradeBtn" class="trade-btn hidden">🧺 Handeln</button>
-    <button id="buildBtn" class="round-btn">⛺</button>
-    <button id="eatBtn" class="round-btn eat hidden">🫐</button>
     <div class="side-btns">
       <button id="qualityBtn" class="ghost-btn" title="Grafik umschalten">✨</button>
       <button id="soundBtn" class="ghost-btn" title="Ton an/aus">🔊</button>
-      <button id="mapBtn" class="ghost-btn" title="Lichtkarte">🗺️</button>
     </div>
   </div>
 
-  <div id="popups"></div>
-
-  <div id="bossBar" class="bossbar hidden">
-    <span class="name">Wächter des Steinkreises</span>
-    <div class="track"><div class="fill" id="bossFill"></div></div>
-  </div>
-
-  <div id="hint" class="hint hidden">Loslassen &rarr; schie&szlig;en</div>
+  <div id="rankBanner" class="banner hidden"></div>
 
   <!-- Joystick -->
   <div id="stick" class="hidden"><div id="stickBase"></div><div id="stickNub"></div></div>
@@ -63,69 +51,38 @@
   <!-- Overlays -->
   <div id="start" class="overlay">
     <div class="card">
-      <h1>Cozy Grove</h1>
-      <p class="sub">Ein kleiner, ruhiger Prototyp</p>
+      <h1>MAMPF</h1>
+      <p class="sub claim">Friss, was kleiner ist als du. Alles, was du frisst, macht dich gr&ouml;&szlig;er.</p>
       <ul class="how">
-        <li><b>Ziehen</b> (oder <b>WASD</b>) &rarr; laufen</li>
-        <li><b>Loslassen</b> &rarr; du zielst &amp; schie&szlig;t automatisch</li>
-        <li>Edelsteine sammeln &rarr; neue F&auml;higkeiten</li>
-        <li>Am <b>Lagerfeuer</b> erholst du dich</li>
-        <li>Lichts&auml;ulen f&uuml;hren zu den <b>W&auml;chtern</b></li>
-        <li>Holz &amp; Stein sammeln &rarr; <b>eigenes Lager bauen</b></li>
-        <li>Deine Welt bleibt &mdash; auch dein Lager</li>
+        <li><b>Ziehen</b> (oder <b>WASD</b>) &rarr; laufen. Ber&uuml;hren gen&uuml;gt zum Fressen.</li>
+        <li>Der <b>Bauer</b> ist anfangs dein Tod &mdash; sp&auml;ter ein Snack.</li>
+        <li>Was du frisst, <b>klebt an dir</b> und w&auml;chst mit.</li>
+        <li>Die Kamera zoomt nicht raus. <b>Du</b> wirst gr&ouml;&szlig;er.</li>
       </ul>
-      <p class="sub" id="startStash">Glut im Beutel: 0 ✨</p>
-      <button id="startBtn" class="primary">Losziehen</button>
-    </div>
-  </div>
-
-  <div id="levelup" class="overlay hidden">
-    <div class="card">
-      <h1 id="levelTitle">Stufe 2</h1>
-      <p class="sub">Such dir etwas aus</p>
-      <div id="cards" class="cards"></div>
-    </div>
-  </div>
-
-  <div id="map" class="overlay hidden">
-    <div class="card map-card">
-      <h1>Lichtkarte</h1>
-      <p class="sub">Sie zeigt nur, was du erhellt hast.</p>
-      <canvas id="mapCanvas" width="640" height="640"></canvas>
-      <button id="mapClose" class="primary">Zur&uuml;ck</button>
-    </div>
-  </div>
-
-  <div id="build" class="overlay hidden">
-    <div class="card">
-      <h1>Lager bauen</h1>
-      <p class="sub">Vorrat: <b id="buildRes">0 🪵 · 0 🪨</b></p>
-      <div id="buildList" class="cards"></div>
-      <button id="buildClose" class="primary">Zurück</button>
-    </div>
-  </div>
-
-  <div id="shop" class="overlay hidden">
-    <div class="card">
-      <h1>Krämerstand</h1>
-      <p class="sub">Dein Vorrat: <b id="shopGems">0</b> ✨</p>
-      <div id="shopList" class="cards"></div>
-      <button id="shopClose" class="primary">Weiterziehen</button>
+      <p class="sub" id="startBest"></p>
+      <button id="startBtn" class="primary">Losfressen</button>
     </div>
   </div>
 
   <div id="dead" class="overlay hidden">
     <div class="card">
-      <h1>Erloschen</h1>
-      <p class="sub" id="deadWhere">Deine Laterne ist ausgegangen.</p>
-      <p class="big" id="deadScore">0 ✨</p>
-      <p class="sub" id="deadLevel">Stufe 1</p>
-      <p class="sub" id="deadStash">Vorrat: 0 ✨</p>
-      <button id="againBtn" class="primary">Weiter</button>
+      <h1>Zerquetscht.</h1>
+      <p class="sub">Du warst zu klein f&uuml;r diese Gegend.</p>
+      <p class="big" id="deadStats"></p>
+      <button id="againBtn" class="primary">Nochmal</button>
     </div>
   </div>
 
-  <noscript><div class="overlay"><div class="card"><h1>JavaScript nötig</h1></div></div></noscript>
+  <div id="end" class="overlay hidden">
+    <div class="card" id="endCard">
+      <h1>Satt.</h1>
+      <p class="sub"></p>
+      <p class="big" id="endStats"></p>
+      <button id="endAgainBtn" class="primary">Von vorn</button>
+    </div>
+  </div>
+
+  <noscript><div class="overlay"><div class="card"><h1>JavaScript n&ouml;tig</h1></div></div></noscript>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -132,6 +132,20 @@ export class GameAudio {
 
   // ---------------------------------------------------------------- Effekte
   shoot()    { this._blip('triangle', 520, { dur: 0.12, peak: 0.12, glide: -260 }); }
+
+  /** Schmatzen: je größer der Bissen, desto tiefer und satter. */
+  chomp(food = 1) {
+    const f = Math.max(0.2, Math.min(3, food));
+    this._thump(380 / f, { dur: 0.1 + f * 0.03, peak: 0.22, type: 'lowpass' });
+    this._blip('square', 190 / Math.sqrt(f), { dur: 0.1, peak: 0.07, glide: -50 });
+    this._blip('sine', 520 / Math.sqrt(f), { dur: 0.14, peak: 0.08, glide: 120, delay: 0.04 });
+  }
+
+  /** Am Ende wird es dumpf — als hielte die Welt den Atem an. */
+  setMuffled(on) {
+    if (!this.ready) return;
+    this.master.gain.setTargetAtTime(this.muted ? 0 : (on ? 0.22 : 0.7), this.ctx.currentTime, 0.4);
+  }
   hit()      { this._thump(1400, { dur: 0.09, peak: 0.16, type: 'bandpass' }); }
   kill()     { this._thump(700, { dur: 0.18, peak: 0.22 }); this._blip('sine', 330, { dur: 0.22, peak: 0.1, glide: 180, delay: 0.03 }); }
   hurt()     { this._thump(260, { dur: 0.26, peak: 0.3 }); this._blip('sawtooth', 150, { dur: 0.2, peak: 0.08, glide: -60 }); }

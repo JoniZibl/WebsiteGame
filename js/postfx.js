@@ -89,12 +89,15 @@ const COMPOSITE_FRAG = /* glsl */`
     // Konturlinien: wo die Tiefe springt, sitzt eine Silhouette. Die Schwelle
     // wächst mit der Entfernung, sonst wird die Ferne ein Strichgewirr.
     if (uOutline > 0.001) {
+      // zwei Ringe von Stichproben ergeben eine dickere, gleichmäßige Linie
+      vec2 t1 = uTexel * 1.6;
+      vec2 t2 = uTexel * 3.0;
       float d0 = depthAt(vUv);
-      float dx = abs(depthAt(vUv + vec2(uTexel.x, 0.0)) - d0)
-               + abs(depthAt(vUv - vec2(uTexel.x, 0.0)) - d0);
-      float dy = abs(depthAt(vUv + vec2(0.0, uTexel.y)) - d0)
-               + abs(depthAt(vUv - vec2(0.0, uTexel.y)) - d0);
-      float edge = smoothstep(0.012 * d0, 0.05 * d0, dx + dy);
+      float dx = abs(depthAt(vUv + vec2(t1.x, 0.0)) - d0) + abs(depthAt(vUv - vec2(t1.x, 0.0)) - d0)
+               + abs(depthAt(vUv + vec2(t2.x, 0.0)) - d0) + abs(depthAt(vUv - vec2(t2.x, 0.0)) - d0);
+      float dy = abs(depthAt(vUv + vec2(0.0, t1.y)) - d0) + abs(depthAt(vUv - vec2(0.0, t1.y)) - d0)
+               + abs(depthAt(vUv + vec2(0.0, t2.y)) - d0) + abs(depthAt(vUv - vec2(0.0, t2.y)) - d0);
+      float edge = smoothstep(0.02 * d0, 0.07 * d0, dx + dy);
       // in unscharfen Bereichen verschwindet die Linie mit
       color *= 1.0 - edge * uOutline * (1.0 - m * 0.9);
     }
@@ -188,7 +191,7 @@ export class TiltShift {
         uTime: { value: 0 },
         tDepth: { value: null },
         uTexel: { value: new THREE.Vector2() },
-        uOutline: { value: 0.55 },
+        uOutline: { value: 0.8 },
         uNear: { value: 0.5 },
         uFar: { value: 320 },
         uDark: { value: 0 },
