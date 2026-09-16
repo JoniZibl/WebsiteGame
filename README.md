@@ -16,13 +16,29 @@ nach unten, sodass dein Stollen immer wie ein Querschnitt vor dir liegt. Über
 Tage fällt außerdem alles weg, was zwischen Kamera und Zwerg steht — kein
 Blätterdach verdeckt dich mehr.
 
+## Überleben
+
+Leben und Sättigung stehen oben links. Die Sättigung hält rund sieben Minuten,
+danach zieht der Hunger am Leben — gegessen werden Pilze, die in Höhlen und
+Sümpfen wachsen. Stürze ab vier Metern tun weh, unter Wasser geht die Luft aus,
+und im Dunkeln laufen Höhlenschleime und Steinbeißer herum.
+
+Die Werkzeugstufe entscheidet, was überhaupt abbaubar ist: Holz → Bretter →
+Holzspitzhacke → Stein → Steinspitzhacke → Eisen → Eisenspitzhacke → Gold und
+Kristall. Gebaut wird an der Werkbank (⚒️).
+
+Der Spielstand liegt im Browser: nur das Saatkorn und deine Änderungen, ein paar
+Kilobyte. Beim nächsten Öffnen gräbst du weiter, wo du aufgehört hast.
+
 ## Steuerung
 
 - **Ziehen** (oder **WASD**) — laufen
 - **⛏️** — vor dir abbauen, **⬇️** — nach unten graben, **⬆️** — nach oben
 - **🧱** — den gewählten Block setzen
 - **🦘** — springen
+- **⚒️** — Werkbank, **🍄** — essen
 - Die **Leiste unten** wählt aus, was du in der Hand hast
+- Steht ein Wesen in Reichweite, schlägt **⛏️** zu statt zu graben
 
 ## Technik
 

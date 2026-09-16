@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import {
-  VoxelWorld, B, BLOCKS, AIR, isSolid, setSeed, biomeAt, surfaceAt, HEIGHT, SEA, CHUNK,
+  VoxelWorld, B, BLOCKS, AIR, isSolid, setSeed, getSeed, biomeAt, surfaceAt, HEIGHT, SEA, CHUNK,
 } from './voxel.js';
 import { Player } from './player.js';
 import { Input } from './input.js';
 import { TiltShift } from './postfx.js';
 import { TOOLS, toolFor, CraftPanel } from './craft.js';
 import { MobManager } from './mobs.js';
+import * as save from './save.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 
@@ -476,9 +477,28 @@ function applyQuality() {
   resize();
 }
 
-/* ------------------------------- Neuer Lauf ------------------------------- */
-function newRun() {
-  setSeed((Math.random() * 1e9) | 0);
+/* ------------------------------ Spielstand -------------------------------- */
+/* Gespeichert wird nur das Saatkorn und was der Spieler veraendert hat - die
+   Welt selbst rechnet sich jederzeit neu aus. */
+let saveTimer = 0;
+
+function writeSave() {
+  if (!state.running || state.dead) return;
+  save.save({
+    seed: getSeed(),
+    edits: save.packEdits(world.edits),
+    torches: [...torches],
+    inventory: [...state.inventory],
+    selected: state.selected,
+    tier: state.tier,
+    hp: state.hp,
+    food: state.food,
+    time: state.time,
+    pos: [player.pos.x, player.pos.y, player.pos.z],
+  });
+}
+
+function clearWorldMeshes() {
   for (const [k, chunk] of [...world.chunks]) {
     for (const key of ['mesh', 'water']) {
       if (chunk[key]) { scene.remove(chunk[key]); chunk[key].geometry.dispose(); }
@@ -486,6 +506,50 @@ function newRun() {
     world.chunks.delete(k);
   }
   world.queue.length = 0;
+}
+
+function resumeRun(d) {
+  setSeed(d.seed);
+  clearWorldMeshes();
+  world.edits.clear();
+  save.unpackEdits(d.edits, world.edits);
+
+  state.inventory = new Map(d.inventory);
+  state.selected = d.selected ?? B.erde;
+  state.tier = d.tier ?? 0;
+  state.hp = d.hp ?? 100;
+  state.food = d.food ?? 100;
+  state.time = d.time ?? 0.28;
+  state.dead = false;
+  state.fallFrom = null;
+  state.digTarget = null;
+  mobs.clear();
+  juice.reset();
+
+  torches.clear();
+  for (const t of d.torches ?? []) torches.add(t);
+
+  const [px, py, pz] = d.pos;
+  world.update(px, pz, 60);
+  player.pos.set(px, py, pz);
+  player.vel.set(0, 0, 0);
+
+  updateTorchLights();
+  state.cut = HEIGHT + 4;
+  cutPlane.constant = state.cut;
+  state.camPos.copy(player.pos).addScaledVector(CAM_DIR, camDist);
+  camera.position.copy(state.camPos);
+  camera.lookAt(player.pos);
+  renderHotbar();
+  updateHUD();
+  state.running = true;
+}
+
+/* ------------------------------- Neuer Lauf ------------------------------- */
+function newRun() {
+  save.clear();
+  setSeed((Math.random() * 1e9) | 0);
+  clearWorldMeshes();
   world.edits.clear();
 
   state.inventory.clear();
@@ -525,6 +589,7 @@ function newRun() {
   renderHotbar();
   updateHUD();
   state.running = true;
+  writeSave();
 }
 
 /* -------------------------------- Schleife -------------------------------- */
@@ -613,6 +678,8 @@ function frame() {
 
     hudTimer -= dt;
     if (hudTimer <= 0) { hudTimer = 0.25; updateHUD(); }
+    saveTimer -= dt;
+    if (saveTimer <= 0) { saveTimer = 8; writeSave(); }
   }
 
   const want = state.camPos.copy(player.pos).addScaledVector(CAM_DIR, camDist);
@@ -702,6 +769,22 @@ document.getElementById('startBtn').addEventListener('click', () => {
   newRun();
 });
 
+// Ein alter Stand darf weitergehen - sonst waere jedes Zumachen des Browsers
+// das Ende der Grabung.
+const saved = save.load();
+if (saved) {
+  const btn = document.getElementById('resumeBtn');
+  btn.classList.remove('hidden');
+  btn.addEventListener('click', () => {
+    audio.unlock();
+    document.getElementById('start').classList.add('hidden');
+    resumeRun(saved);
+  });
+}
+
+window.addEventListener('pagehide', writeSave);
+document.addEventListener('visibilitychange', () => { if (document.hidden) writeSave(); });
+
 document.getElementById('againBtn').addEventListener('click', () => {
   document.getElementById('dead').classList.add('hidden');
   newRun();
@@ -713,7 +796,7 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
 window.__game = { state, player, world, scene, camera, renderer, juice, audio, post, B, BLOCKS, give,
-  torchCount: () => torches.size, mobs, eat, hurt };
+  torchCount: () => torches.size, mobs, eat, hurt, writeSave, save };
 
 resize();
 applyQuality();

@@ -61,6 +61,7 @@ export const BIOMES = {
 
 let SEED = 1337;
 export function setSeed(s) { SEED = s | 0; }
+export function getSeed() { return SEED; }
 
 /** Temperatur und Feuchte entscheiden, welches Biom hier liegt. */
 export function biomeAt(x, z) {
