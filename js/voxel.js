@@ -17,33 +17,51 @@ export const SEA = 14;
 /* ----------------------------- Blocksorten -------------------------------- */
 export const AIR = 0;
 export const B = {
-  gras:    1, erde:  2, stein:   3, sand:    4, schnee: 5,
-  stamm:   6, laub:  7, wasser:  8, kohle:   9, eisen: 10,
-  gold:   11, kristall: 12, bretter: 13, eis: 14, lehm: 15,
-  kaktus: 16, pilz:  17, grundstein: 18, fackel: 19,
+  gras:  1, erde: 2, stein: 3, sand: 4, schnee: 5,
+  stamm: 6, laub: 7, wasser: 8, glimm: 9, moos: 10,
+  eis:  11, grundstein: 12,
 };
+
+/* ---------------------------- Die Erdschichten ----------------------------
+ * Hier liegt der Charakter des Spiels. Nicht jedes Material hat eine eigene
+ * Farbe - die Tiefe hat eine. Wer nach unten gräbt, wandert durch Farbbänder
+ * wie durch einen geologischen Querschnitt: Krume, Lehm, Roterde, Tiefstein,
+ * Kaltstein, Abgrund. Das macht den Abstieg auf einen Blick lesbar und sieht
+ * nach nichts sonst aus.
+ * -------------------------------------------------------------------------- */
+export const STRATA = [
+  { bis:  2, color: 0xbe8d5a, zaeh: 0.7,  name: 'Krume' },
+  { bis:  7, color: 0xdcb87d, zaeh: 0.9,  name: 'Lehm' },
+  { bis: 13, color: 0xc97050, zaeh: 1.1,  name: 'Roterde' },
+  { bis: 20, color: 0xb85f5c, zaeh: 1.35, name: 'Rostband' },
+  { bis: 28, color: 0xa1708d, zaeh: 1.7,  name: 'Malvenstein' },
+  { bis: 37, color: 0x7793a6, zaeh: 2.1,  name: 'Blaustein' },
+  { bis: 99, color: 0x5b7391, zaeh: 2.6,  name: 'Tiefblau' },
+];
+
+/** Welche Schicht liegt in dieser Tiefe? */
+export function stratumAt(depth) {
+  for (const st of STRATA) if (depth <= st.bis) return st;
+  return STRATA[STRATA.length - 1];
+}
 
 /** Farbe, Härte (Sekunden Grabzeit) und was der Block hergibt. */
 export const BLOCKS = {
-  [B.gras]:     { name: 'Gras',     color: 0x6cc357, side: 0x7d5a3c, hard: 0.35, drop: B.erde },
-  [B.erde]:     { name: 'Erde',     color: 0x8a6242, hard: 0.35 },
-  [B.stein]:    { name: 'Stein',    color: 0x9b9a92, hard: 0.9, needs: 1 },
-  [B.sand]:     { name: 'Sand',     color: 0xe3cf9a, hard: 0.3 },
-  [B.schnee]:   { name: 'Schnee',   color: 0xf0f4f7, side: 0xdfe6ec, hard: 0.25 },
-  [B.stamm]:    { name: 'Holz',     color: 0x8a5a38, side: 0x77492c, hard: 0.7 },
-  [B.laub]:     { name: 'Laub',     color: 0x4fa34f, hard: 0.25 },
-  [B.wasser]:   { name: 'Wasser',   color: 0x3fb0a8, liquid: true, hard: 0 },
-  [B.kohle]:    { name: 'Kohle',    color: 0x413f45, hard: 1.2, needs: 1 },
-  [B.eisen]:    { name: 'Eisen',    color: 0xc0a58c, hard: 1.8, needs: 2 },
-  [B.gold]:     { name: 'Gold',     color: 0xf0c44a, hard: 2.2, needs: 3 },
-  [B.kristall]: { name: 'Kristall', color: 0x6fd6e8, hard: 2.8, needs: 3, glow: 0.45 },
-  [B.bretter]:  { name: 'Bretter',  color: 0xc79a5e, hard: 0.5 },
-  [B.eis]:      { name: 'Eis',      color: 0xa8dbe8, hard: 0.5 },
-  [B.lehm]:     { name: 'Lehm',     color: 0xa8968a, hard: 0.5 },
-  [B.kaktus]:   { name: 'Kaktus',   color: 0x4d8c46, hard: 0.4 },
-  [B.pilz]:     { name: 'Pilz',     color: 0xcf5340, side: 0xe8dcc8, hard: 0.2, thin: true, slim: [0.42, 0.46], food: 26 },
-  [B.grundstein]: { name: 'Grundstein', color: 0x2e2c33, hard: Infinity },
-  [B.fackel]:   { name: 'Fackel',   color: 0xffd489, hard: 0.1, glow: 1, thin: true, slim: [0.18, 0.7] },
+  // Die Erde selbst nimmt ihre Farbe aus der Schicht (erdig: true) - nur die
+  // Besonderheiten haben eine eigene.
+  [B.gras]:     { name: 'Wiese',   color: 0x93bd6d, side: 0xbe8d5a, hard: 0.22 },
+  [B.erde]:     { name: 'Erde',    erdig: true, hard: 0.34 },
+  [B.stein]:    { name: 'Stein',   erdig: true, hard: 0.5 },
+  [B.sand]:     { name: 'Sand',    color: 0xefdcb2, hard: 0.26 },
+  [B.schnee]:   { name: 'Firn',    color: 0xf6f1e6, side: 0xbe8d5a, hard: 0.26 },
+  [B.stamm]:    { name: 'Stamm',   color: 0xb5794a, side: 0xa06a40, hard: 0.4 },
+  [B.laub]:     { name: 'Laub',    color: 0x4f8f5c, hard: 0.22 },
+  [B.wasser]:   { name: 'Wasser',  color: 0x6cb8b4, liquid: true, hard: 0 },
+  [B.glimm]:    { name: 'Glimm',   color: 0xf5c451, hard: 0.7, glow: 1, licht: 34 },
+  [B.moos]:     { name: 'Leuchtmoos', color: 0xa8d8a0, hard: 0.2, glow: 0.7, licht: 14,
+                  thin: true, slim: [0.8, 0.14] },
+  [B.eis]:      { name: 'Eis',     color: 0xbfdfe4, hard: 0.4 },
+  [B.grundstein]: { name: 'Urgestein', color: 0x46597a, hard: Infinity },
 };
 
 export const isSolid = (b) => b !== AIR && b !== B.wasser && !BLOCKS[b]?.thin;
@@ -51,12 +69,12 @@ export const isOpaque = (b) => b !== AIR && b !== B.wasser && !BLOCKS[b]?.thin;
 
 /* -------------------------------- Biome ----------------------------------- */
 export const BIOMES = {
-  wiese:  { name: 'Wiese',      top: B.gras,   filler: B.erde, tree: 0.012, treeKind: 'laub' },
-  wald:   { name: 'Wald',       top: B.gras,   filler: B.erde, tree: 0.07,  treeKind: 'nadel' },
-  wueste: { name: 'Wüste',      top: B.sand,   filler: B.sand, tree: 0.008, treeKind: 'kaktus' },
-  schnee: { name: 'Schneefeld', top: B.schnee, filler: B.erde, tree: 0.03,  treeKind: 'nadel' },
-  berg:   { name: 'Gebirge',    top: B.stein,  filler: B.stein, tree: 0.004, treeKind: 'nadel' },
-  sumpf:  { name: 'Sumpf',      top: B.gras,   filler: B.lehm, tree: 0.05,  treeKind: 'pilz' },
+  wiese:  { name: 'Wiese',   top: B.gras,   tree: 0.012, treeKind: 'laub' },
+  wald:   { name: 'Wald',    top: B.gras,   tree: 0.03,  treeKind: 'nadel' },
+  wueste: { name: 'Düne',    top: B.sand,   tree: 0.004, treeKind: 'laub' },
+  schnee: { name: 'Firnfeld', top: B.schnee, tree: 0.016, treeKind: 'nadel' },
+  berg:   { name: 'Grat',    top: B.stein,  tree: 0.004, treeKind: 'nadel' },
+  sumpf:  { name: 'Bruch',   top: B.gras,   tree: 0.022, treeKind: 'laub' },
 };
 
 let SEED = 1337;
@@ -90,21 +108,27 @@ export function surfaceAt(x, z) {
   return Math.max(3, Math.min(HEIGHT - 6, Math.round(h)));
 }
 
-/** Höhlen: ein 3D-Rauschen frisst Gänge ins Gestein. */
+/* Höhlen als Röhren, nicht als Schächte.
+ *
+ * Zwei Rauschfelder werden je auf ihren Nulldurchgang eingedampft - das gibt
+ * zwei gewundene Flächen. Hohl ist nur, wo beide zugleich nahe null sind, also
+ * ihre Schnittlinie: eine Röhre. Beide Felder nehmen y mit auf, sonst laufen
+ * die Gänge senkrecht durch und die halbe Welt fällt in sich zusammen. */
 function isCave(x, y, z) {
-  if (y < 3) return false;
-  const a = fbm(x * 0.045, z * 0.045, SEED + 71, 2) + Math.sin(y * 0.35) * 0.1;
-  const b = fbm(x * 0.05 + 40, z * 0.05 - 20, SEED + 83, 2);
-  const c = noise2(x * 0.06, y * 0.09 + z * 0.02, SEED + 97);
-  return a * 0.5 + b * 0.3 + c * 0.35 > 0.62;
+  if (y < 2) return false;
+  const a = Math.abs(fbm(x * 0.026, z * 0.026 + y * 0.052, SEED + 71, 2) - 0.5);
+  const b = Math.abs(fbm(x * 0.029 + y * 0.048, z * 0.031, SEED + 83, 2) - 0.5);
+  const weite = 0.05 + Math.max(0, y < 12 ? (12 - y) * 0.0035 : 0);
+  return a < weite && b < weite;
 }
 
+/* Es gibt nur einen einzigen Fund: Glimm. Kein Erzsortiment, keine Tabelle
+   im Kopf - man sieht ein Leuchten im Fels und weiss sofort, was es ist.
+   Je tiefer, desto mehr davon: das ist der ganze Grund, weiterzugraben. */
 function oreAt(x, y, z, depth) {
   const n = noise2(x * 0.22 + y * 0.13, z * 0.22 - y * 0.07, SEED + 151);
-  if (depth > 22 && n > 0.965) return B.kristall;
-  if (depth > 16 && n > 0.955) return B.gold;
-  if (depth > 8 && n > 0.935) return B.eisen;
-  if (depth > 3 && n > 0.905) return B.kohle;
+  const dichte = 0.955 - Math.min(0.06, depth * 0.0022);
+  if (depth > 2 && n > dichte) return B.glimm;
   return B.stein;
 }
 
@@ -121,11 +145,11 @@ export function generate(x, y, z) {
   }
 
   if (isCave(x, y, z) && y < surface - 2) {
-    // Auf Hoehlenboeden wachsen Pilze - das Einzige, was der Zwerg essen kann,
-    // und damit der Grund, ueberhaupt in die Hoehlen zu gehen.
+    // Auf Hoehlenboeden waechst Leuchtmoos. Es ist der Grund, Hoehlen
+    // ueberhaupt zu betreten: eine Hoehle ist der billige Weg nach unten.
     if (!isCave(x, y - 1, z) && y - 1 < surface - 2 && y > 2) {
       const r = mulberry32(((x * 374761393) ^ (y * 668265263) ^ (z * 2246822519) ^ SEED) >>> 0)();
-      if (r < 0.035) return B.pilz;
+      if (r < 0.022) return B.moos;
     }
     return AIR;
   }
@@ -135,7 +159,7 @@ export function generate(x, y, z) {
     if (surface <= SEA + 1 && biome !== BIOMES.wueste) return B.sand;
     return biome.top;
   }
-  if (depth < 4) return biome.filler;
+  if (depth < 4) return B.erde;
   return oreAt(x, y, z, depth);
 }
 
@@ -158,30 +182,13 @@ function plantInto(set, ox, oz) {
       if (s <= SEA) continue;
       const rand = mulberry32(((x * 2654435761) ^ (z * 40503) ^ SEED) >>> 0);
 
-      if (biome.treeKind === 'kaktus') {
-        const h = 2 + Math.floor(rand() * 3);
-        for (let i = 1; i <= h; i++) set(x, s + i, z, B.kaktus);
-        continue;
-      }
-      if (biome.treeKind === 'pilz') {
-        const h = 2 + Math.floor(rand() * 2);
-        for (let i = 1; i <= h; i++) set(x, s + i, z, B.stamm);
-        for (let ddx = -2; ddx <= 2; ddx++) {
-          for (let ddz = -2; ddz <= 2; ddz++) {
-            if (Math.abs(ddx) + Math.abs(ddz) > 2) continue;
-            set(x + ddx, s + h + 1, z + ddz, B.pilz);
-          }
-        }
-        continue;
-      }
-
       const nadel = biome.treeKind === 'nadel';
       const h = nadel ? 5 + Math.floor(rand() * 4) : 4 + Math.floor(rand() * 3);
       for (let i = 1; i <= h; i++) set(x, s + i, z, B.stamm);
 
       if (nadel) {
-        for (let layer = 0; layer < 3; layer++) {
-          const r = 2 - layer;
+        for (let layer = 0; layer < 4; layer++) {
+          const r = layer === 0 ? 1 : layer === 1 ? 1 : 0;
           const y = s + h - 2 + layer;
           for (let ddx = -r; ddx <= r; ddx++) {
             for (let ddz = -r; ddz <= r; ddz++) {
@@ -190,14 +197,13 @@ function plantInto(set, ox, oz) {
             }
           }
         }
-        set(x, s + h + 1, z, B.laub);
       } else {
-        for (let ddx = -2; ddx <= 2; ddx++) {
+        for (let ddx = -1; ddx <= 1; ddx++) {
           for (let ddy = 0; ddy <= 2; ddy++) {
-            for (let ddz = -2; ddz <= 2; ddz++) {
-              const d = Math.abs(ddx) + Math.abs(ddz) + ddy;
-              if (d > 3) continue;
-              set(x + ddx, s + h - 1 + ddy, z + ddz, B.laub);
+            for (let ddz = -1; ddz <= 1; ddz++) {
+              const d = Math.abs(ddx) + Math.abs(ddz) + Math.abs(ddy - 1);
+              if (d > 2) continue;
+              set(x + ddx, s + h + ddy, z + ddz, B.laub);
             }
           }
         }
@@ -217,6 +223,7 @@ const FACES = [
 ];
 
 const _c = new THREE.Color();
+const _glow = new THREE.Color(0xffe0a8);
 
 /* ---------------------------------- Welt ----------------------------------- */
 export class VoxelWorld {
@@ -323,6 +330,8 @@ export class VoxelWorld {
     for (let lz = 0; lz < CHUNK; lz++) {
       for (let lx = 0; lx < CHUNK; lx++) {
         const x = ox + lx, z = oz + lz;
+        // Einmal je Spalte: ab hier zaehlt die Tiefe, und die Tiefe gibt die Farbe.
+        const surf = surfaceAt(x, z);
         for (let y = 0; y < HEIGHT; y++) {
           const block = data[(lz * CHUNK + lx) * HEIGHT + y];
           if (block === AIR) continue;
@@ -338,8 +347,20 @@ export class VoxelWorld {
             if (liquid ? (neighbour === block || isOpaque(neighbour)) : isOpaque(neighbour)) continue;
 
             const shade = face.shade;
-            const base = def.side !== undefined && face.dir[1] === 0 ? def.side : def.color;
+            let base;
+            if (def.erdig) {
+              base = stratumAt(surf - y).color;
+            } else {
+              base = def.side !== undefined && face.dir[1] === 0 ? def.side : def.color;
+            }
             _c.setHex(base).multiplyScalar(shade);
+
+            // Wo der Spieler gegraben hat, glimmt die Wand nach. So bleibt der
+            // eigene Gang als leuchtendes Geflecht in der Erde stehen - die
+            // einzige Spur, die man hier hinterlaesst.
+            if (this.edits.has(this.ekey(nx, ny, nz))) {
+              _c.lerp(_glow, 0.34).multiplyScalar(1.1);
+            }
 
             const start = P.length / 3;
             const top = liquid ? 0.88 : def.slim ? def.slim[1] : 1;

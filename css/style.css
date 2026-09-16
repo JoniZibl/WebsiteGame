@@ -1,18 +1,25 @@
+/* ==========================================================================
+ *  Glimm — die Oberfläche.
+ *
+ *  Alles hier soll nach Laterne aussehen: tiefe Tinte, warmes Bernstein, und
+ *  so wenig wie möglich davon. Auf dem Schirm stehen genau drei Dinge — wie
+ *  tief du bist, wo du bist, und wie lange dein Licht noch hält.
+ * ========================================================================== */
 :root {
-  --sky: #bfe0ea;
-  --ink: #2f3440;
-  --cream: #fdf7ea;
-  --coral: #d9843f;
-  --mint: #6cc357;
-  --shadow: 0 8px 24px rgba(62, 74, 44, .18);
+  --ink: #4a3b30;
+  --ink-soft: #fdf6e8;
+  --ember: #d9643f;
+  --ember-hot: #e8874f;
+  --bone: #fdf6e8;
+  --shadow: 0 10px 30px rgba(74, 59, 48, .22);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body {
   margin: 0; padding: 0; height: 100%; overflow: hidden;
-  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;   /* kein Font-Boosting auf Android */
-  background: var(--sky);
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  background: #ede2cd;
   font-family: "Nunito", "Quicksand", ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--ink);
   overscroll-behavior: none;
@@ -22,69 +29,78 @@ html, body {
 
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
-/* ---------- HUD ---------- */
+/* ------------------------------- Ablesung --------------------------------- */
 #hud {
-  position: fixed; inset: 0; pointer-events: none;
-  padding: calc(env(safe-area-inset-top, 0px) + 14px) calc(env(safe-area-inset-right, 0px) + 14px)
-           calc(env(safe-area-inset-bottom, 0px) + 14px) calc(env(safe-area-inset-left, 0px) + 14px);
+  position: fixed; inset: 0; pointer-events: none; z-index: 4;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 16px)
+           calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 16px);
 }
 
-.top-left { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-
-.bar {
-  position: relative; width: 158px; height: 24px; border-radius: 14px;
-  background: rgba(253, 246, 232, .75); box-shadow: var(--shadow);
-  overflow: hidden;
+.readout { display: flex; flex-direction: column; line-height: 1; }
+.readout b {
+  font-size: 42px; font-weight: 900; letter-spacing: -2px;
+  color: #4a3b30; text-shadow: 0 2px 0 rgba(253, 246, 232, .7);
 }
-.bar .fill {
-  position: absolute; inset: 3px; width: calc(100% - 6px); border-radius: 11px;
-  background: linear-gradient(180deg, #a8bd78, #7d9455);
-  transform-origin: left center; transition: transform .18s ease-out;
+.readout small {
+  margin-top: 5px; font-size: 13px; font-weight: 800; opacity: .66;
+  color: #4a3b30; text-shadow: 0 1px 2px rgba(253, 246, 232, .7);
 }
-
-/* Die Laterne: der einzige Balken des Spiels */
-.bar.flame .fill {
-  background: linear-gradient(180deg, #ffe9a6, #ff9f45);
-  box-shadow: 0 0 14px rgba(255, 168, 72, .75);
-}
-.bar.flame.low .fill {
-  background: linear-gradient(180deg, #ff9f6a, #e2542f);
-  animation: pulse 1s ease-in-out infinite;
-}
-@keyframes pulse { 50% { opacity: .55; } }
-
-.card .claim { font-size: 15px; opacity: .8; line-height: 1.45; margin-bottom: 18px; }
-.bar span {
-  position: absolute; inset: 0; display: grid; place-items: center;
-  font-weight: 800; font-size: 13px; letter-spacing: .3px; color: #34411f;
-}
-
-.chips { display: flex; gap: 8px; }
-.chip {
-  display: flex; align-items: center; gap: 6px;
-  padding: 5px 11px; border-radius: 13px;
-  background: rgba(253, 246, 232, .75); box-shadow: var(--shadow);
-  font-weight: 800; font-size: 13px;
-}
-.chip .ic { font-size: 13px; }
+.readout .best { margin-top: 2px; font-size: 11px; opacity: .45; }
 
 .side-btns {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 14px); right: calc(env(safe-area-inset-right, 0px) + 14px);
-  display: flex; flex-direction: column; gap: 8px;
+  position: absolute; top: calc(env(safe-area-inset-top, 0px) + 16px);
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  display: flex; flex-direction: column; gap: 8px; pointer-events: auto;
 }
-
 .ghost-btn {
-  pointer-events: auto;
-  width: 40px; height: 40px; border: 0; border-radius: 14px;
-  background: rgba(253, 246, 232, .75); box-shadow: var(--shadow);
-  font-size: 18px; cursor: pointer;
+  width: 40px; height: 40px; border: 0; border-radius: 13px;
+  background: rgba(253, 246, 232, .72); color: var(--ink);
+  font-size: 17px; line-height: 1; cursor: pointer;
+  backdrop-filter: blur(6px);
 }
 .ghost-btn:active { transform: scale(.94); }
-.ghost-btn.off { opacity: .45; }
+.ghost-btn.off { opacity: .4; }
 
-/* ---------- Joystick ---------- */
-#stick { position: fixed; inset: 0; pointer-events: none; opacity: 1; transition: opacity .18s; }
+/* ------------------------------ Der Knopf ---------------------------------
+ * Einer. Groß. Unter dem Daumen.
+ * -------------------------------------------------------------------------- */
+#modeBtn {
+  position: fixed; z-index: 6;
+  right: calc(env(safe-area-inset-right, 0px) + 22px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+  width: 86px; height: 86px; border: 0; border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #f0a077, var(--ember) 60%, #b84e2f);
+  box-shadow: 0 6px 0 #8e3a22, 0 12px 26px rgba(74, 59, 48, .3);
+  color: #fdf6e8; font-size: 34px; line-height: 1; cursor: pointer;
+  transition: background .18s, box-shadow .18s;
+}
+#modeBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 #8e3a22, 0 6px 14px rgba(74, 59, 48, .3); }
+#modeBtn.walk {
+  background: radial-gradient(circle at 34% 30%, #bcd9a4, #7fae5e 60%, #5d8a45);
+  box-shadow: 0 6px 0 #4a6f36, 0 12px 26px rgba(74, 59, 48, .3);
+  color: #fdf6e8;
+}
+
+/* ------------------------------- Der Ring ---------------------------------
+ * Das Licht als Kreis um den Knopf: ein Blick genügt.
+ * -------------------------------------------------------------------------- */
+#lightRing {
+  position: fixed; z-index: 5; pointer-events: none;
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+  width: 110px; height: 110px; border-radius: 50%;
+  --fill: 100%;
+  background: conic-gradient(#f5c451 var(--fill), rgba(74, 59, 48, .16) 0);
+  -webkit-mask: radial-gradient(circle, transparent 46px, #000 47px);
+  mask: radial-gradient(circle, transparent 46px, #000 47px);
+  transition: opacity .2s;
+}
+#lightRing span { display: none; }
+#lightRing.low { animation: flicker .5s ease-in-out infinite; }
+@keyframes flicker { 50% { opacity: .35; } }
+
+/* ------------------------------- Joystick ---------------------------------- */
+#stick { position: fixed; inset: 0; pointer-events: none; opacity: 1; transition: opacity .18s; z-index: 3; }
 #stick.hidden { opacity: 0; }
 #stickBase, #stickNub {
   position: absolute; border-radius: 50%; transform: translate(-50%, -50%);
@@ -92,313 +108,65 @@ html, body {
 }
 #stickBase {
   width: 118px; height: 118px;
-  background: rgba(253, 246, 232, .26);
-  border: 2px solid rgba(253, 246, 232, .5);
+  background: rgba(253, 246, 232, .34);
+  border: 2px solid rgba(253, 246, 232, .66);
 }
 #stickNub {
   width: 54px; height: 54px;
-  background: rgba(253, 246, 232, .85);
-  box-shadow: var(--shadow);
+  background: rgba(253, 246, 232, .92);
+  box-shadow: 0 6px 16px rgba(74, 59, 48, .25);
 }
 
-/* ---------- Overlays ---------- */
+/* ------------------------------- Overlays ---------------------------------- */
 .overlay {
-  position: fixed; inset: 0; display: grid; place-items: center; z-index: 10;
-  background: rgba(62, 74, 44, .34); backdrop-filter: blur(6px);
-  padding: 22px; transition: opacity .25s; overflow-y: auto;
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  padding: 22px; background: rgba(120, 96, 74, .38);
+  backdrop-filter: blur(10px);
+  transition: opacity .25s;
 }
 .overlay.hidden { opacity: 0; pointer-events: none; }
 
 .card {
-  width: min(380px, 100%); text-align: center;
-  max-height: calc(100vh - 44px); max-height: calc(100dvh - 44px); overflow-y: auto;
-  background: var(--cream); border-radius: 26px; padding: 26px 24px 22px;
-  box-shadow: 0 18px 50px rgba(62, 74, 44, .3);
+  width: min(400px, 92vw); text-align: center;
+  background: var(--ink-soft); border-radius: 26px; padding: 28px 24px 22px;
+  box-shadow: var(--shadow);
 }
-.card h1 { margin: 0 0 2px; font-size: 30px; letter-spacing: -.5px; }
-.card .sub { margin: 0 0 16px; opacity: .65; font-size: 14px; font-weight: 600; }
-.card .big { font-size: 26px; font-weight: 800; margin: 4px 0 16px; }
+.card h1 {
+  margin: 0 0 6px; font-size: 40px; font-weight: 900; letter-spacing: -1.5px;
+  color: var(--ember);
+}
+.card .sub { margin: 0 0 18px; opacity: .62; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.card .claim { font-size: 15px; opacity: .8; }
+.card .big { font-size: 24px; font-weight: 800; margin: 4px 0 18px; color: var(--ember); }
 
-.how { list-style: none; margin: 0 0 20px; padding: 0; text-align: left; font-size: 14px; }
+.how { list-style: none; margin: 0 0 22px; padding: 0; text-align: left; font-size: 14px; }
 .how li {
-  padding: 9px 13px; margin-bottom: 7px; border-radius: 13px;
-  background: rgba(168, 189, 120, .26); font-weight: 600;
+  padding: 9px 14px; margin-bottom: 7px; border-radius: 14px;
+  background: rgba(74, 59, 48, .07); line-height: 1.4;
 }
+.how b { color: #a8402f; }
 
 .primary {
-  width: 100%; border: 0; border-radius: 16px; padding: 14px 20px;
-  background: var(--coral); color: #fff; font: inherit; font-weight: 800; font-size: 16px;
-  box-shadow: 0 6px 0 #ab6127; cursor: pointer;
+  width: 100%; padding: 15px; border: 0; border-radius: 17px;
+  background: var(--ember); color: #fdf6e8;
+  font: inherit; font-size: 17px; font-weight: 900; cursor: pointer;
+  box-shadow: 0 5px 0 #8e3a22;
 }
-.primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #ab6127; }
+.primary:active { transform: translateY(3px); box-shadow: 0 2px 0 #8e3a22; }
 
-/* ---------- Aktionsknöpfe ---------- */
-.action-btn {
-  pointer-events: auto; position: absolute;
-  left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
-  border: 0; border-radius: 17px; padding: 12px 22px;
-  background: var(--cream); color: var(--ink); font: inherit; font-weight: 800; font-size: 15px;
-  box-shadow: 0 5px 0 #cbbf9d, var(--shadow);
-  transition: opacity .2s;
+#resumeBtn.hidden { display: none; }
+#resumeBtn + #startBtn {
+  margin-top: 9px; background: transparent; color: var(--ink);
+  box-shadow: inset 0 0 0 2px rgba(74, 59, 48, .2);
 }
-.action-btn:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 2px 0 #cbbf9d; }
-.action-btn.hidden { opacity: 0; pointer-events: none; }
+#resumeBtn + #startBtn:active { transform: translateY(2px); box-shadow: inset 0 0 0 2px rgba(74, 59, 48, .2); }
 
-.round-btn {
-  pointer-events: auto; position: absolute;
-  right: calc(env(safe-area-inset-right, 0px) + 16px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
-  width: 56px; height: 56px; border: 0; border-radius: 20px;
-  background: var(--cream); font-size: 24px;
-  box-shadow: 0 5px 0 #cbbf9d, var(--shadow); cursor: pointer;
-}
-.round-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #cbbf9d; }
-.round-btn.eat { bottom: calc(env(safe-area-inset-bottom, 0px) + 140px); }
-.round-btn.hidden { display: none; }
-
-.chips.res { flex-wrap: wrap; }
-.chips.res .chip { padding: 4px 9px; font-size: 12px; gap: 4px; }
-.chip.area { font-size: 12px; padding: 4px 10px; opacity: .85; }
-
-/* ---------- Handeln-Knopf ---------- */
-.trade-btn {
-  pointer-events: auto; position: absolute;
-  left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
-  border: 0; border-radius: 17px; padding: 12px 22px;
-  background: var(--coral); color: #fff; font: inherit; font-weight: 800; font-size: 15px;
-  box-shadow: 0 5px 0 #bf7049, var(--shadow);
-  transition: opacity .25s;
-}
-.trade-btn:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 2px 0 #bf7049; }
-.trade-btn.hidden { opacity: 0; pointer-events: none; }
-
-/* ---------- Lichtkarte ---------- */
-.map-card { width: min(420px, 100%); }
-#mapCanvas {
-  width: 100%; aspect-ratio: 1; display: block; margin: 0 0 16px;
-  border-radius: 18px; background: #1b2130;
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, .55);
-}
-
-/* ---------- Ladenzeilen ---------- */
-.upgrade.buy .lvl { font-size: 13px; opacity: .8; }
-.upgrade[disabled] { opacity: .45; }
-.upgrade .cost {
-  margin-left: auto; display: flex; align-items: center; gap: 4px;
-  font-size: 13px; font-weight: 800; white-space: nowrap;
-}
-
-#shopList { margin-bottom: 16px; max-height: 46vh; overflow-y: auto; }
-
-/* ---------- Werkzeugleiste und Aktionen ---------- */
-#hotbar {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 116px);
-  display: flex; gap: 6px; padding: 6px; border-radius: 16px;
-  background: rgba(253, 247, 234, .8); box-shadow: var(--shadow);
-  pointer-events: auto; z-index: 4; max-width: 92vw; overflow-x: auto;
-}
-#hotbar .slot {
-  position: relative; width: 46px; height: 46px; border: 0; border-radius: 12px;
-  background: rgba(47, 52, 64, .09); cursor: pointer; padding: 0;
-  display: grid; place-items: center;
-}
-#hotbar .slot.on { background: rgba(217, 132, 63, .3); box-shadow: inset 0 0 0 2px var(--coral); }
-#hotbar .slot .swatch {
-  width: 26px; height: 26px; border-radius: 7px;
-  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .22), 0 1px 2px rgba(0, 0, 0, .25);
-}
-#hotbar .slot .n {
-  position: absolute; right: 3px; bottom: 1px;
-  font-size: 11px; font-weight: 900; color: var(--ink);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .7);
-}
-#hotbar .slot.empty {
-  width: auto; padding: 0 14px; font-size: 12px; font-weight: 800; opacity: .55; background: none;
-}
-
-#actions {
-  position: fixed; right: calc(env(safe-area-inset-right, 0px) + 14px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
-  display: grid; grid-template-columns: repeat(2, auto); gap: 10px;
-  pointer-events: auto; z-index: 4;
-}
-.act {
-  width: 56px; height: 56px; border: 0; border-radius: 18px;
-  background: var(--cream); font-size: 24px; cursor: pointer;
-  box-shadow: 0 5px 0 #cbbf9d, var(--shadow);
-  -webkit-user-select: none; user-select: none; touch-action: none;
-}
-.act:active, .act.on { transform: translateY(3px); box-shadow: 0 2px 0 #cbbf9d; }
-.act.big { background: var(--coral); }
-.act.dig.on { background: #ffcf9a; }
-
-/* ---------- Rang-Anzeige ---------- */
-.rank {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px 8px 10px; border-radius: 18px;
-  background: rgba(253, 247, 234, .82); box-shadow: var(--shadow);
-}
-.rank .ic { font-size: 24px; }
-.rank-body { min-width: 132px; }
-.rank-body b { display: block; font-size: 14px; line-height: 1.1; }
-.rank-body small { font-size: 11px; opacity: .65; font-weight: 700; }
-.rank .size { font-size: 15px; font-weight: 900; opacity: .75; }
-
-.bar.grow { width: 100%; height: 8px; margin: 4px 0 3px; background: rgba(51, 50, 74, .16); }
-.bar.grow .fill {
-  inset: 1px; width: calc(100% - 2px); border-radius: 5px;
-  background: linear-gradient(180deg, #8f7cf0, #6d5bd0);
-  box-shadow: none;
-}
-
-.banner {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top, 0px) + 96px);
-  padding: 10px 20px; border-radius: 16px;
-  background: rgba(51, 50, 74, .82); color: var(--cream);
-  font-weight: 900; font-size: 15px; letter-spacing: .2px;
-  box-shadow: var(--shadow); transition: opacity .3s; z-index: 6;
-}
-.banner.hidden { opacity: 0; }
-
-/* ---------- Aufsteigende Zahlen ---------- */
+/* ------------------------------ Einblendungen ------------------------------ */
 #popups { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 .pop {
   position: absolute; left: 0; top: 0; opacity: 0;
   font-weight: 900; font-size: 20px; letter-spacing: -.5px;
-  text-shadow: 0 2px 0 rgba(40, 30, 20, .45), 0 0 12px rgba(255, 200, 120, .5);
+  text-shadow: 0 2px 0 rgba(253, 246, 232, .8);
   will-change: transform, opacity;
 }
-
-/* ---------- Bossleiste ---------- */
-.bossbar {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top, 0px) + 16px);
-  width: min(320px, 68vw); text-align: center;
-  transition: opacity .3s;
-}
-.bossbar.hidden { opacity: 0; }
-
-/* auf schmalen Schirmen unter den HUD-Stapel rutschen, statt ihn zu überdecken */
-@media (max-width: 620px) {
-  .bossbar { top: calc(env(safe-area-inset-top, 0px) + 104px); width: min(320px, 82vw); }
-}
-.bossbar .name {
-  display: block; margin-bottom: 5px; font-size: 12px; font-weight: 800;
-  letter-spacing: .4px; color: var(--cream);
-  text-shadow: 0 2px 6px rgba(62, 74, 44, .55);
-}
-.bossbar .track {
-  height: 12px; border-radius: 7px; overflow: hidden;
-  background: rgba(62, 74, 44, .45); box-shadow: var(--shadow);
-}
-.bossbar .fill {
-  height: 100%; width: 100%; transform-origin: left center;
-  background: linear-gradient(180deg, #e2643c, #b8452a);
-  transition: transform .16s ease-out;
-}
-
-/* ---------- Erfahrungsleiste & Rast ---------- */
-.bar.xp { width: 158px; height: 15px; }
-.bar.xp .fill { background: linear-gradient(180deg, #f0b27a, #df8a5c); }
-.bar.xp span { font-size: 11px; }
-
-.chip.rest { transition: opacity .3s; }
-.chip.rest.hidden { opacity: 0; }
-
-/* ---------- Upgrade-Karten ---------- */
-.cards { display: flex; flex-direction: column; gap: 10px; }
-
-.upgrade {
-  display: flex; align-items: center; gap: 12px; text-align: left;
-  width: 100%; border: 0; border-radius: 16px; padding: 13px 15px;
-  background: rgba(168, 189, 120, .22); font: inherit; color: inherit; cursor: pointer;
-  transition: transform .12s, background .12s;
-}
-.upgrade:active { transform: scale(.97); background: rgba(168, 189, 120, .38); }
-.upgrade .ic {
-  font-size: 22px; width: 42px; height: 42px; flex: 0 0 42px;
-  display: grid; place-items: center; border-radius: 13px; background: var(--cream);
-  box-shadow: var(--shadow);
-}
-.upgrade b { display: block; font-size: 15px; }
-.upgrade small { display: block; font-size: 12.5px; opacity: .7; font-weight: 600; }
-.upgrade .lvl { margin-left: auto; font-size: 12px; font-weight: 800; opacity: .55; }
-
-/* ---------- Hinweis ---------- */
-.hint {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
-  padding: 9px 16px; border-radius: 15px;
-  background: rgba(253, 246, 232, .82); box-shadow: var(--shadow);
-  font-size: 13px; font-weight: 800; pointer-events: none; white-space: nowrap;
-  transition: opacity .6s ease;
-}
-.hint.hidden { opacity: 0; }
-
-/* ---------- Fehlerhinweis ---------- */
-#fatal { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; z-index: 20; }
-
-/* ------------------------------- Werkbank --------------------------------- */
-.craft-box {
-  width: min(420px, 92vw);
-  max-height: 78vh; overflow-y: auto;
-  background: var(--cream); border-radius: 24px;
-  padding: 18px 16px 14px;
-  box-shadow: 0 18px 46px rgba(30, 24, 18, .34);
-}
-.craft-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  margin: 0 4px 12px; font-size: 19px;
-}
-.craft-head span { font-size: 13px; opacity: .7; }
-
-.craft-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  width: 100%; margin-bottom: 8px; padding: 11px 14px;
-  border: 0; border-radius: 16px; background: rgba(47, 52, 64, .06);
-  font: inherit; color: inherit; text-align: left; cursor: pointer;
-}
-.craft-row:active { transform: scale(.98); }
-.craft-row.off { opacity: .45; }
-.craft-name { font-weight: 700; font-size: 15px; display: flex; flex-direction: column; }
-.craft-name small { font-weight: 400; font-size: 12px; opacity: .62; margin-top: 2px; }
-.craft-cost { display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-align: right; }
-.craft-cost .has { color: #3f7a4a; }
-.craft-cost .lacks { color: #b5543f; }
-
-.craft-close {
-  width: 100%; margin-top: 6px; padding: 12px;
-  border: 0; border-radius: 16px; background: var(--coral); color: #fff;
-  font: inherit; font-weight: 700; cursor: pointer;
-}
-
-/* -------------------------- Leben und Sättigung --------------------------- */
-.vitals { display: flex; flex-direction: column; gap: 5px; margin-bottom: 7px; }
-.vitals .bar {
-  position: relative; width: 132px; height: 15px;
-  border-radius: 9px; background: rgba(47, 52, 64, .26);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .18);
-  overflow: hidden;
-}
-.vitals .fill { height: 100%; width: 100%; border-radius: 9px; transition: width .18s ease-out; }
-.vitals .hp .fill { background: linear-gradient(90deg, #e06a55, #f09a6a); }
-.vitals .food .fill { background: linear-gradient(90deg, #cf8f3f, #e8c06a); }
-.vitals .ic {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-  font-size: 10px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
-}
-.vitals .bar.low .fill { animation: pulse .7s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .5; } }
-
-#eatBtn.hidden { display: none; }
-
-/* Die Chips duerfen nicht unter die Knoepfe rechts laufen */
-#hud .top-left { max-width: calc(100% - 78px); }
-#hud .chips { flex-wrap: wrap; }
-
-#resumeBtn.hidden { display: none; }
-#resumeBtn + #startBtn { margin-top: 8px; background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px rgba(47,52,64,.18); }

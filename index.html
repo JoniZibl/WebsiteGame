@@ -1,15 +1,11 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#bfe0ea" />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Grabwelt</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#ede2cd" />
+<title>Glimm</title>
 <link rel="stylesheet" href="css/style.css" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⛏️</text></svg>" />
 <script type="importmap">
 {
   "imports": {
@@ -24,17 +20,10 @@
   <div id="popups"></div>
 
   <div id="hud">
-    <div class="top-left">
-      <div class="vitals">
-        <div class="bar hp"><div class="fill" id="hpFill"></div><span class="ic">❤️</span></div>
-        <div class="bar food"><div class="fill" id="foodFill"></div><span class="ic">🍄</span></div>
-      </div>
-      <div class="chips">
-        <div class="chip"><span class="ic">🗺️</span><span id="biome">Wiese</span></div>
-        <div class="chip"><span class="ic">⛏️</span><span id="depth">über Tage</span></div>
-        <div class="chip"><span id="clock">☀️ Tag</span></div>
-        <div class="chip"><span class="ic" id="toolIcon">✋</span><span id="tool">Bloße Hände</span></div>
-      </div>
+    <div class="readout">
+      <b id="depth">oben</b>
+      <small id="stratum">Wiese</small>
+      <small class="best">tiefster Punkt <span id="deepest">0 m</span></small>
     </div>
     <div class="side-btns">
       <button id="qualityBtn" class="ghost-btn" title="Grafik">✨</button>
@@ -42,47 +31,34 @@
     </div>
   </div>
 
-  <div id="hotbar"></div>
-
-  <div id="actions">
-    <button id="downBtn" class="act dig" title="nach unten graben">⬇️</button>
-    <button id="digBtn" class="act dig big" title="graben">⛏️</button>
-    <button id="buildBtn" class="act" title="Block setzen">🧱</button>
-    <button id="upBtn" class="act" title="Treppe bauen">⬆️</button>
-    <button id="jumpBtn" class="act" title="springen">🦘</button>
-    <button id="craftBtn" class="act" title="Werkbank">⚒️</button>
-    <button id="eatBtn" class="act hidden" title="essen">🍄</button>
-  </div>
-
-  <div id="craft" class="overlay hidden"></div>
+  <!-- Der einzige Knopf: graben oder laufen -->
+  <button id="modeBtn" title="graben / laufen">⛏</button>
+  <div id="lightRing"><span>🔥</span></div>
 
   <div id="stick" class="hidden"><div id="stickBase"></div><div id="stickNub"></div></div>
 
   <div id="start" class="overlay">
     <div class="card">
-      <h1>Grabwelt</h1>
-      <p class="sub claim">Eine Blockwelt von oben: Biome, H&ouml;hlen, Erze &mdash; und du mittendrin mit einer Spitzhacke.</p>
+      <h1>Glimm</h1>
+      <p class="sub claim">Du tr&auml;gst das letzte Licht in die Erde. Es brennt, solange du gr&auml;bst.</p>
       <ul class="how">
-        <li><b>Ziehen</b> (oder <b>WASD</b>) &rarr; laufen. Stufen nimmst du von allein.</li>
-        <li><b>⛏️ halten</b> &rarr; den Block vor dir abbauen <i>(Taste E)</i></li>
-        <li><b>⬇️ halten</b> &rarr; dich nach unten eingraben <i>(Taste Q)</i></li>
-        <li><b>🧱</b> setzt einen Block, <b>⬆️</b> baut dir eine Stufe nach oben</li>
-        <li><b>⚒️</b> Werkbank: aus Holz wird eine Hacke, damit geht Stein &mdash; und so weiter nach unten</li>
-        <li>Unter Tage wird die Welt &uuml;ber dir <b>weggeschnitten</b> &mdash; du siehst in deinen Tunnel</li>
-        <li>Im Dunkeln lauert etwas. Halte <b>⛏️</b>, wenn es nah ist &mdash; dann schl&auml;gst du zu</li>
-        <li><b>🍄</b> Pilze wachsen in H&ouml;hlen und S&uuml;mpfen. Ohne sie wirst du hungrig</li>
+        <li><b>Ziehen</b> &rarr; du l&auml;ufst. Was im Weg ist, gr&auml;bst du weg.</li>
+        <li><b>Loslassen</b> &rarr; du sinkst. Tiefer ist immer nach unten.</li>
+        <li><b>⛏ / 👣</b> der einzige Knopf: gr&auml;bst du, oder gehst du nur?</li>
+        <li>Das <b>Glimm</b> im Fels f&uuml;llt dein Licht. Geht es aus, ist Schluss.</li>
+        <li>Deine G&auml;nge <b>leuchten nach</b>. Sie sind das Einzige, was bleibt.</li>
       </ul>
       <button id="resumeBtn" class="primary hidden">Weitergraben</button>
-      <button id="startBtn" class="primary">Neue Welt</button>
+      <button id="startBtn" class="primary">Hinabsteigen</button>
     </div>
   </div>
 
   <div id="dead" class="overlay hidden">
     <div class="card">
-      <h1>Ausgegraben.</h1>
-      <p class="sub" id="deadWhy">Das Dunkel hat dich erwischt.</p>
-      <p class="big" id="deadStats"></p>
-      <button id="againBtn" class="primary">Neue Welt</button>
+      <h1>Erloschen.</h1>
+      <p class="sub">Das Dunkel hat dich eingeholt bei <span id="deadDepth">0 m</span>.</p>
+      <p class="big">tiefster Punkt <span id="deadBest">0 m</span></p>
+      <button id="againBtn" class="primary">Noch einmal hinab</button>
     </div>
   </div>
 

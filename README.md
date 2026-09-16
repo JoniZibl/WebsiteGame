@@ -1,53 +1,43 @@
-# Grabwelt
+# Glimm
 
-Ein Survival-Spiel im Blockstil, von oben gesehen — im Browser, ohne Installation,
-auf dem Handy spielbar.
+Ein Grabspiel im Browser, von oben gesehen, auf dem Handy spielbar.
 
-Du bist ein Gartenzwerg mit einer Laterne. Über Tage liegt eine prozedural
-erzeugte Welt aus Wiesen, Wäldern, Wüsten, Schnee, Bergen und Sümpfen. Darunter
-liegt alles, was interessanter ist: Höhlen, Kohle, Eisen, Gold, Kristall.
+Die Welt ist ein Modell, das du aufschneidest. Wer nach unten gräbt, wandert
+durch Farbbänder wie durch einen geologischen Querschnitt — Krume, Lehm,
+Roterde, Rostband, Malvenstein, Blaustein, Tiefblau. Jede Schicht hat ihre
+eigene Farbe und ihren eigenen Widerstand: je tiefer, desto zäher der Fels.
 
-## Der Kniff: die Deckenschnitt-Ansicht
+## Die ganze Steuerung
 
-Ein Spiel von oben und ein Spiel, in dem man sich eingräbt, vertragen sich
-normalerweise nicht — sobald du unter der Erde bist, siehst du nur noch Erde.
-Grabwelt schneidet deshalb die Welt über dir weg: eine Schnittebene folgt dir
-nach unten, sodass dein Stollen immer wie ein Querschnitt vor dir liegt. Über
-Tage fällt außerdem alles weg, was zwischen Kamera und Zwerg steht — kein
-Blätterdach verdeckt dich mehr.
+- **Ziehen** — du läufst. Was im Weg ist, gräbst du weg.
+- **Loslassen** — du sinkst. Tiefer ist immer nach unten.
+- **Ein Knopf** — gräbst du, oder gehst du nur?
 
-## Überleben
+Mehr gibt es nicht. Kein Inventar, keine Werkbank, keine Leiste.
 
-Leben und Sättigung stehen oben links. Die Sättigung hält rund sieben Minuten,
-danach zieht der Hunger am Leben — gegessen werden Pilze, die in Höhlen und
-Sümpfen wachsen. Stürze ab vier Metern tun weh, unter Wasser geht die Luft aus,
-und im Dunkeln laufen Höhlenschleime und Steinbeißer herum.
+## Was bleibt
 
-Die Werkzeugstufe entscheidet, was überhaupt abbaubar ist: Holz → Bretter →
-Holzspitzhacke → Stein → Steinspitzhacke → Eisen → Eisenspitzhacke → Gold und
-Kristall. Gebaut wird an der Werkbank (⚒️).
+Deine Gänge leuchten nach. Wo du gegraben hast, glimmt die Wand — der eigene
+Weg steht als warmes Geflecht in der Erde und ist das Einzige, was du hier
+hinterlässt.
 
-Der Spielstand liegt im Browser: nur das Saatkorn und deine Änderungen, ein paar
-Kilobyte. Beim nächsten Öffnen gräbst du weiter, wo du aufgehört hast.
-
-## Steuerung
-
-- **Ziehen** (oder **WASD**) — laufen
-- **⛏️** — vor dir abbauen, **⬇️** — nach unten graben, **⬆️** — nach oben
-- **🧱** — den gewählten Block setzen
-- **🦘** — springen
-- **⚒️** — Werkbank, **🍄** — essen
-- Die **Leiste unten** wählt aus, was du in der Hand hast
-- Steht ein Wesen in Reichweite, schlägt **⛏️** zu statt zu graben
+Das **Glimm** im Fels füllt deine Laterne. Ein harter Sturz lässt die Flamme
+ausschlagen; geht sie aus, ist der Abstieg zu Ende. Oben an der Luft füllt sich
+das Licht von allein — die Oberfläche ist der sichere Hafen.
 
 ## Technik
 
 - three.js (lokal unter `vendor/three/`, kein CDN, kein Build-Schritt)
-- Chunk-Welt in `Uint8Array`, flächenweises Culling, Schattierung direkt in die
-  Vertex-Farben gebacken — zwei Materialien pro Chunk
+- Chunk-Welt in `Uint8Array`, flächenweises Culling, Schattierung und
+  Schichtfarbe direkt in die Vertex-Farben gebacken
+- Die Welt über dem Kopf wird per Clipping-Ebene weggeschnitten; zusätzlich
+  fällt weg, was zwischen Kamera und Figur steht
+- Höhlen als Röhren: zwei Rauschfelder auf ihren Nulldurchgang eingedampft,
+  hohl ist nur die Schnittlinie
 - Nachbearbeitung (`js/postfx.js`): Tilt-Shift wie bei Miniaturen, Bloom,
-  Farbgradierung, Vignette, Korn und tiefenbasierte Konturen
+  Farbgradierung, Vignette, Korn, tiefenbasierte Konturen
 - Ton komplett prozedural über WebAudio, keine Audiodateien
+- Spielstand in `localStorage`: nur Saatkorn und Änderungen
 
 ## Starten
 

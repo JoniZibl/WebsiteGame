@@ -14,43 +14,65 @@ export class Player {
   constructor(scene) {
     this.group = new THREE.Group();
 
-    const coat = new THREE.MeshLambertMaterial({ color: '#4d7ec8', flatShading: true });
-    const skin = new THREE.MeshLambertMaterial({ color: '#f0cfa8', flatShading: true });
-    const hair = new THREE.MeshLambertMaterial({ color: '#5a3d2b', flatShading: true });
-    const boot = new THREE.MeshLambertMaterial({ color: '#3a3f4d', flatShading: true });
-    const dark = new THREE.MeshBasicMaterial({ color: '#241f2e' });
+    /* Der Lichtträger. Fast alles an ihm ist Silhouette — was man sieht, ist
+       die Laterne und zwei Augen, die sie spiegeln. Bei der Größe, in der er
+       auf dem Schirm steht, zählt nur die Umrisslinie. */
+    const kutte = new THREE.MeshLambertMaterial({ color: '#c9543f', flatShading: true });
+    const saum  = new THREE.MeshLambertMaterial({ color: '#a8402f', flatShading: true });
+    const haut  = new THREE.MeshLambertMaterial({ color: '#f0cba0', flatShading: true });
+    const glas  = new THREE.MeshBasicMaterial({ color: '#ffe9b0' });
+    const metall = new THREE.MeshLambertMaterial({ color: '#f3e7d1', flatShading: true });
+    const auge  = new THREE.MeshBasicMaterial({ color: '#3f3328' });
 
     const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
-    this.torso = new THREE.Mesh(box(0.62, 0.72, 0.36), coat);
-    this.torso.position.y = 1.02;
-    this.head = new THREE.Mesh(box(0.52, 0.5, 0.48), skin);
-    this.head.position.y = 1.62;
-    const cap = new THREE.Mesh(box(0.56, 0.16, 0.52), hair);
-    cap.position.y = 1.85;
-    const eyeL = new THREE.Mesh(box(0.1, 0.12, 0.05), dark); eyeL.position.set(-0.13, 1.63, 0.25);
-    const eyeR = new THREE.Mesh(box(0.1, 0.12, 0.05), dark); eyeR.position.set(0.13, 1.63, 0.25);
+    // Rumpf: eine Kutte, unten breiter als oben
+    this.torso = new THREE.Mesh(box(0.56, 0.78, 0.44), kutte);
+    this.torso.position.y = 0.92;
+    const rock = new THREE.Mesh(box(0.7, 0.36, 0.54), saum);
+    rock.position.y = 0.36;
 
-    this.armL = new THREE.Mesh(box(0.18, 0.62, 0.2), coat);
-    this.armL.position.set(-0.4, 1.05, 0);
-    this.armR = new THREE.Mesh(box(0.18, 0.62, 0.2), coat);
-    this.armR.position.set(0.4, 1.05, 0);
+    // Kopf steckt in der Kapuze — nur ein Streifen Gesicht bleibt frei
+    this.head = new THREE.Mesh(box(0.46, 0.4, 0.42), haut);
+    this.head.position.y = 1.5;
+    const kapuze = new THREE.Mesh(box(0.56, 0.42, 0.52), kutte);
+    kapuze.position.set(0, 1.58, -0.06);
+    const schirm = new THREE.Mesh(box(0.58, 0.12, 0.2), saum);
+    schirm.position.set(0, 1.62, 0.2);
 
-    this.legL = new THREE.Mesh(box(0.22, 0.62, 0.24), boot);
-    this.legL.position.set(-0.15, 0.34, 0);
-    this.legR = new THREE.Mesh(box(0.22, 0.62, 0.24), boot);
-    this.legR.position.set(0.15, 0.34, 0);
+    const augeL = new THREE.Mesh(box(0.08, 0.08, 0.04), auge);
+    augeL.position.set(-0.11, 1.45, 0.22);
+    const augeR = augeL.clone(); augeR.position.x = 0.11;
 
-    // Werkzeug in der Hand — dreht sich beim Graben
-    this.tool = new THREE.Mesh(box(0.1, 0.52, 0.1), hair);
-    this.tool.position.set(0.44, 1.1, 0.2);
-    this.head2 = new THREE.Mesh(box(0.34, 0.12, 0.12), new THREE.MeshLambertMaterial({
-      color: '#b9c0c8', flatShading: true,
-    }));
-    this.head2.position.set(0.44, 1.36, 0.2);
+    // Die Laterne: das eigentliche Gesicht der Figur
+    this.armR = new THREE.Mesh(box(0.16, 0.5, 0.18), kutte);
+    this.armR.position.set(0.34, 0.98, 0.1);
+    this.armL = new THREE.Mesh(box(0.16, 0.5, 0.18), kutte);
+    this.armL.position.set(-0.34, 0.98, 0.04);
 
-    [this.torso, this.head, cap, eyeL, eyeR, this.armL, this.armR, this.legL, this.legR,
-     this.tool, this.head2].forEach((m) => { m.castShadow = true; this.group.add(m); });
+    const buegel = new THREE.Mesh(box(0.04, 0.22, 0.04), metall);
+    buegel.position.set(0.42, 0.98, 0.34);
+    this.laterne = new THREE.Mesh(box(0.26, 0.28, 0.26), glas);
+    this.laterne.position.set(0.42, 0.74, 0.34);
+    const deckel = new THREE.Mesh(box(0.32, 0.07, 0.32), metall);
+    deckel.position.set(0.42, 0.91, 0.34);
+    const boden = new THREE.Mesh(box(0.32, 0.07, 0.32), metall);
+    boden.position.set(0.42, 0.58, 0.34);
+
+    this.legL = new THREE.Mesh(box(0.2, 0.3, 0.22), saum);
+    this.legL.position.set(-0.14, 0.15, 0);
+    this.legR = new THREE.Mesh(box(0.2, 0.3, 0.22), saum);
+    this.legR.position.set(0.14, 0.15, 0);
+
+    // Die Schaufel in der freien Hand
+    this.tool = new THREE.Mesh(box(0.07, 0.46, 0.07), metall);
+    this.tool.position.set(-0.4, 0.92, 0.22);
+    this.head2 = new THREE.Mesh(box(0.2, 0.18, 0.1), metall);
+    this.head2.position.set(-0.4, 0.66, 0.22);
+
+    [this.torso, rock, this.head, kapuze, schirm, augeL, augeR, this.armL, this.armR,
+     buegel, this.laterne, deckel, boden, this.legL, this.legR, this.tool, this.head2]
+      .forEach((m) => { m.castShadow = true; this.group.add(m); });
 
     scene.add(this.group);
 
@@ -146,15 +168,21 @@ export class Player {
     const sp = Math.hypot(this.vel.x, this.vel.z);
     const stride = Math.sin(this.t * 10);
     const walking = sp > 0.4;
-    this.legL.rotation.x = walking ? stride * 0.7 : 0;
-    this.legR.rotation.x = walking ? -stride * 0.7 : 0;
-    this.armL.rotation.x = walking ? -stride * 0.5 : 0;
+    this.legL.rotation.x = walking ? stride * 0.55 : 0;
+    this.legR.rotation.x = walking ? -stride * 0.55 : 0;
+
+    // Die Laterne bleibt ruhig - sie ist das Einzige, was er nicht schwenkt.
+    this.armR.rotation.x = walking ? stride * 0.12 : 0;
 
     const swingK = Math.max(0, this.swing / 0.25);
-    this.armR.rotation.x = -swingK * 1.6 + (walking ? stride * 0.5 : 0);
-    this.tool.rotation.x = -swingK * 1.6;
-    this.head2.position.set(0.44, 1.36 - swingK * 0.5, 0.2 + swingK * 0.35);
-    this.tool.position.set(0.44, 1.1 - swingK * 0.28, 0.2 + swingK * 0.2);
+    this.armL.rotation.x = -swingK * 1.5 + (walking ? -stride * 0.4 : 0);
+    this.tool.rotation.x = -swingK * 1.5;
+    this.tool.position.set(-0.4, 0.92 - swingK * 0.22, 0.22 + swingK * 0.2);
+    this.head2.position.set(-0.4, 0.66 - swingK * 0.44, 0.22 + swingK * 0.36);
+
+    // Das Laternenglas atmet mit dem Licht
+    const puls = 0.94 + Math.sin(this.t * 4.5) * 0.06;
+    this.laterne.scale.setScalar(puls);
 
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.facing;
