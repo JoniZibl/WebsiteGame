@@ -23,9 +23,18 @@ export function anwenden(material, { radius } = {}) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uPeek = peek.uPeek;
     shader.uniforms.uPeekR = eigen;
+    /* Bei InstancedMesh steckt die Verschiebung in instanceMatrix, und die
+       wird erst in <project_vertex> angewandt. Wer sie hier vergisst, rechnet
+       für jeden Baum mit der Position des Ursprungs — und schneidet dann
+       nichts weg. */
     shader.vertexShader = 'varying vec3 vWorld;\n' + shader.vertexShader.replace(
       '#include <project_vertex>',
-      'vWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <project_vertex>'
+      `vec4 peekPos = vec4(transformed, 1.0);
+       #ifdef USE_INSTANCING
+         peekPos = instanceMatrix * peekPos;
+       #endif
+       vWorld = (modelMatrix * peekPos).xyz;
+       #include <project_vertex>`
     );
     shader.fragmentShader = 'varying vec3 vWorld;\nuniform vec3 uPeek;\nuniform float uPeekR;\n'
       + shader.fragmentShader.replace(

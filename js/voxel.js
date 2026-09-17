@@ -21,6 +21,7 @@ export const B = {
   gras:  1, erde: 2, stein: 3, sand: 4, schnee: 5,
   stamm: 6, laub: 7, wasser: 8, glimm: 9, moos: 10,
   eis:  11, grundstein: 12, weg: 13, planke: 14,
+  heide: 15, trocken: 16, rotfels: 17, taiga: 18, moor: 19, kies: 20,
 };
 
 /* ---------------------------- Die Erdschichten ----------------------------
@@ -62,6 +63,12 @@ export const BLOCKS = {
   [B.moos]:     { name: 'Leuchtmoos', color: 0xa8d8a0, hard: 0.2, glow: 0.7, licht: 14,
                   thin: true, slim: [0.8, 0.14] },
   [B.eis]:      { name: 'Eis',     color: 0xbfdfe4, hard: 0.4 },
+  [B.heide]:    { name: 'Heide',   color: 0x9d8f6e, side: 0xbe8d5a, hard: 0.26 },
+  [B.trocken]:  { name: 'Grasland', color: 0xc4b071, side: 0xbe8d5a, hard: 0.24 },
+  [B.rotfels]:  { name: 'Rotfels',  color: 0xb5643f, side: 0x9a5030, hard: 0.7 },
+  [B.taiga]:    { name: 'Moosgrund', color: 0x6d9b6c, side: 0xbe8d5a, hard: 0.24 },
+  [B.moor]:     { name: 'Moor',     color: 0x6f8452, side: 0x6b5a3c, hard: 0.24 },
+  [B.kies]:     { name: 'Geröll',   color: 0xa9a293, side: 0x8d8778, hard: 0.5 },
   [B.weg]:      { name: 'Weg',     color: 0xdcc79a, side: 0xbe8d5a, hard: 0.3 },
   [B.planke]:   { name: 'Planke',  color: 0xc98f57, side: 0xa8743f, hard: 0.35 },
   [B.grundstein]: { name: 'Urgestein', color: 0x46597a, hard: Infinity },
@@ -71,13 +78,23 @@ export const isSolid = (b) => b !== AIR && b !== B.wasser && !BLOCKS[b]?.thin;
 export const isOpaque = (b) => b !== AIR && b !== B.wasser && !BLOCKS[b]?.thin;
 
 /* -------------------------------- Biome ----------------------------------- */
+/* Zwölf Gegenden. Jede hat eine eigene Oberfläche, eigene Gewächse und eine
+   eigene Dichte — das ist der ganze Unterschied zwischen „Gelände" und einer
+   Welt, durch die zu laufen sich lohnt. `busch` ist Kleinkram, der zusätzlich
+   zu den Bäumen gestreut wird. */
 export const BIOMES = {
-  wiese:  { name: 'Wiese',   top: B.gras,   tree: 0.012, treeKind: 'laub' },
-  wald:   { name: 'Wald',    top: B.gras,   tree: 0.03,  treeKind: 'nadel' },
-  wueste: { name: 'Düne',    top: B.sand,   tree: 0.004, treeKind: 'laub' },
-  schnee: { name: 'Firnfeld', top: B.schnee, tree: 0.016, treeKind: 'nadel' },
-  berg:   { name: 'Grat',    top: B.stein,  tree: 0.004, treeKind: 'nadel' },
-  sumpf:  { name: 'Bruch',   top: B.gras,   tree: 0.022, treeKind: 'laub' },
+  wiese:   { name: 'Wiese',        top: B.gras,    baum: 'laubbaum',   dichte: 0.010, busch: 0.05 },
+  bluete:  { name: 'Blütenwiese',  top: B.gras,    baum: 'laubbaum',   dichte: 0.006, busch: 0.11, blumen: true },
+  wald:    { name: 'Wald',         top: B.gras,    baum: 'tanne',      dichte: 0.042, busch: 0.05 },
+  birken:  { name: 'Birkenhain',   top: B.gras,    baum: 'birke',      dichte: 0.036, busch: 0.05 },
+  taiga:   { name: 'Taiga',        top: B.taiga,   baum: 'nadelbaum',  dichte: 0.050, busch: 0.03 },
+  schnee:  { name: 'Firnfeld',     top: B.schnee,  baum: 'schneetanne', dichte: 0.020, busch: 0.01 },
+  heide:   { name: 'Heide',        top: B.heide,   baum: 'busch',      dichte: 0.022, busch: 0.09 },
+  steppe:  { name: 'Grasland',     top: B.trocken, baum: 'laubbaum',   dichte: 0.004, busch: 0.05 },
+  wueste:  { name: 'Düne',         top: B.sand,    baum: 'palme',      dichte: 0.005, busch: 0.02, kakteen: true },
+  mesa:    { name: 'Roter Grund',  top: B.rotfels, baum: 'kaktus',     dichte: 0.004, busch: 0.01 },
+  berg:    { name: 'Gebirge',      top: B.kies,    baum: 'nadelbaum',  dichte: 0.004, busch: 0.02 },
+  sumpf:   { name: 'Bruch',        top: B.moor,    baum: 'totholz',    dichte: 0.028, busch: 0.07 },
 };
 
 let SEED = 1337;
@@ -92,16 +109,30 @@ export function getSeed() { return SEED; }
 /** Temperatur und Feuchte entscheiden, welches Biom hier liegt. */
 export function biomeAt(x, z) { return rohBiome(x, z); }
 
+/* Wärme und Feuchte spannen ein Feld auf, ein drittes Rauschen sorgt für die
+   selteneren Gegenden. So liegen ähnliche Landschaften beieinander, ohne dass
+   die Karte in Streifen zerfällt. */
 function rohBiome(x, z) {
-  const t = fbm(x * 0.0022, z * 0.0022, SEED + 11, 3);
-  const h = fbm(x * 0.0026, z * 0.0026, SEED + 29, 3);
-  const berg = fbm(x * 0.0035, z * 0.0035, SEED + 47, 2);
-  if (berg > 0.68) return BIOMES.berg;
-  if (t < 0.36) return BIOMES.schnee;
-  if (t > 0.66 && h < 0.45) return BIOMES.wueste;
-  if (h > 0.66) return t > 0.5 ? BIOMES.sumpf : BIOMES.wald;
-  if (h > 0.46) return BIOMES.wald;
-  return BIOMES.wiese;
+  const waerme = fbm(x * 0.0022, z * 0.0022, SEED + 11, 3);
+  const feucht = fbm(x * 0.0026, z * 0.0026, SEED + 29, 3);
+  const berg   = fbm(x * 0.0035, z * 0.0035, SEED + 47, 2);
+  const laune  = fbm(x * 0.0061, z * 0.0061, SEED + 67, 2);
+
+  if (berg > 0.70) return BIOMES.berg;
+
+  if (waerme < 0.30) return BIOMES.schnee;
+  if (waerme < 0.42) return feucht > 0.45 ? BIOMES.taiga : BIOMES.heide;
+
+  if (waerme > 0.72) {
+    if (feucht < 0.34) return laune > 0.58 ? BIOMES.mesa : BIOMES.wueste;
+    if (feucht < 0.55) return BIOMES.steppe;
+    return BIOMES.sumpf;
+  }
+
+  if (feucht > 0.68) return BIOMES.sumpf;
+  if (feucht > 0.52) return laune > 0.55 ? BIOMES.birken : BIOMES.wald;
+  if (feucht > 0.40) return laune > 0.62 ? BIOMES.bluete : BIOMES.wiese;
+  return laune > 0.6 ? BIOMES.heide : BIOMES.steppe;
 }
 
 /* ---------------------------------- Dörfer --------------------------------
@@ -281,55 +312,31 @@ export function generate(x, y, z) {
   return generateIn(spalte(x, z), x, y, z);
 }
 
-/* --------------------------- Bäume und Gewächse ---------------------------- */
-/** Steht auf dieser Spalte ein Baum? Rein deterministisch. */
-function treeHere(x, z, biome) {
-  const r = mulberry32(((x * 73856093) ^ (z * 19349663) ^ SEED) >>> 0)();
-  return r < biome.tree;
-}
+/* --------------------------- Bäume und Gewächse ----------------------------
+ * Hier wächst nichts mehr. Was auf dem Gelände steht, sind richtige Modelle
+ * (js/flora.js) — Blockbäume aus Stamm- und Laubwürfeln sahen aus wie ein
+ * anderes Spiel als das Dorf daneben. Diese Datei sagt nur noch, *wo* etwas
+ * steht, damit Gelände und Bewuchs aus derselben Rechnung kommen.
+ * -------------------------------------------------------------------------- */
 
-/** Trägt Bäume und Gewächse in einen Chunk ein. */
-function plantInto(set, ox, oz) {
-  for (let dz = -3; dz < CHUNK + 3; dz++) {
-    for (let dx = -3; dx < CHUNK + 3; dx++) {
-      const x = ox + dx, z = oz + dz;
-      const biome = biomeAt(x, z);
-      if (!treeHere(x, z, biome)) continue;
+/** Steht auf dieser Spalte ein Gewächs? Rein deterministisch. */
+export function gewaechsBei(x, z) {
+  const biome = biomeAt(x, z);
+  const r = mulberry32(((x * 73856093) ^ (z * 19349663) ^ SEED) >>> 0);
+  const w = r();
 
-      const s = surfaceAt(x, z);
-      if (s <= SEA) continue;
-      const dorf = dorfBei(x, z);
-      if (dorf && Math.hypot(x - dorf.x, z - dorf.z) < dorf.r * 0.95) continue;
-      const rand = mulberry32(((x * 2654435761) ^ (z * 40503) ^ SEED) >>> 0);
-
-      const nadel = biome.treeKind === 'nadel';
-      const h = nadel ? 5 + Math.floor(rand() * 4) : 4 + Math.floor(rand() * 3);
-      for (let i = 1; i <= h; i++) set(x, s + i, z, B.stamm);
-
-      if (nadel) {
-        for (let layer = 0; layer < 4; layer++) {
-          const r = layer === 0 ? 1 : layer === 1 ? 1 : 0;
-          const y = s + h - 2 + layer;
-          for (let ddx = -r; ddx <= r; ddx++) {
-            for (let ddz = -r; ddz <= r; ddz++) {
-              if (Math.abs(ddx) + Math.abs(ddz) > r) continue;
-              set(x + ddx, y, z + ddz, B.laub);
-            }
-          }
-        }
-      } else {
-        for (let ddx = -1; ddx <= 1; ddx++) {
-          for (let ddy = 0; ddy <= 2; ddy++) {
-            for (let ddz = -1; ddz <= 1; ddz++) {
-              const d = Math.abs(ddx) + Math.abs(ddz) + Math.abs(ddy - 1);
-              if (d > 2) continue;
-              set(x + ddx, s + h + ddy, z + ddz, B.laub);
-            }
-          }
-        }
-      }
-    }
+  if (w < biome.dichte) {
+    return { art: biome.baum, gross: true, wuerfel: r };
   }
+  const kleinAb = biome.dichte;
+  if (w < kleinAb + biome.busch) {
+    if (biome.kakteen && r() < 0.35) return { art: 'kaktus', wuerfel: r };
+    if (biome.blumen && r() < 0.55) return { art: 'blume', wuerfel: r };
+    return { art: r() < 0.4 ? 'busch' : 'halm', wuerfel: r };
+  }
+  // Findlinge, überall selten
+  if (w < kleinAb + biome.busch + 0.004) return { art: 'fels', wuerfel: r };
+  return null;
 }
 
 /* -------------------------------- Vernetzung ------------------------------- */
@@ -410,14 +417,6 @@ export class VoxelWorld {
         for (let y = 0; y < HEIGHT; y++) data[base + y] = generateIn(sp, x, y, z);
       }
     }
-
-    // Pflanzen greifen über Chunkgrenzen, deshalb erst hier eintragen
-    plantInto((x, y, z, block) => {
-      if (y < 0 || y >= HEIGHT) return;
-      if (x < ox || x >= ox + CHUNK || z < oz || z >= oz + CHUNK) return;
-      const i = ((z - oz) * CHUNK + (x - ox)) * HEIGHT + y;
-      if (data[i] === AIR) data[i] = block;
-    }, ox, oz);
 
     // Veränderungen des Spielers gewinnen immer
     for (const [k, block] of this.edits) {

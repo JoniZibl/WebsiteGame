@@ -9,6 +9,7 @@ const RADIUS = 0.32;
 const BODY = 1.72;
 const GRAVITY = 26;
 const JUMP = 8.2;
+const HUEPFER = 7.4;      // reicht knapp über eine Stufe von einem Block
 
 export class Player {
   constructor(scene) {
@@ -88,6 +89,7 @@ export class Player {
     this.inWater = false;
     this.t = 0;
     this.swing = 0;
+    this.huepft = 0;
     this.tempo = 1;
   }
 
@@ -131,25 +133,34 @@ export class Player {
     this.vel.y -= (this.inWater ? GRAVITY * 0.28 : GRAVITY) * dt;
     if (this.inWater) this.vel.y = Math.max(this.vel.y, -2.4);
 
-    // Waagerecht bewegen, dabei Stufen von einem Block automatisch nehmen
+    /* Waagerecht bewegen. Steht eine Stufe von einem Block im Weg, wird sie
+       nicht mehr übersprungen, indem die Figur einen Meter nach oben gesetzt
+       wird - das sah aus wie ein Fehler. Stattdessen hüpft sie: ein Stoß nach
+       oben, und die Schwerkraft macht den Rest. Oben angekommen greift die
+       waagerechte Bewegung von allein wieder. */
+    const huepfenWenn = (frei) => {
+      if (!this.onGround || !frei) return false;
+      this.vel.y = HUEPFER;
+      this.onGround = false;
+      this.huepft = 0.36;          // fürs Anwinkeln der Beine
+      return true;
+    };
+
+    /* In der Luft wird der Schwung nicht genommen: wer gegen die Kante hüpft,
+       drückt weiter dagegen und rutscht oben drüber, sobald Platz ist. Nur wer
+       am Boden vor einer echten Wand steht, bleibt stehen. */
     const stepX = this.vel.x * dt;
     if (!this.blocked(world, this.pos.x + stepX, this.pos.y, this.pos.z)) {
       this.pos.x += stepX;
-    } else if (this.onGround && !this.blocked(world, this.pos.x + stepX, this.pos.y + 1.02, this.pos.z)) {
-      this.pos.y += 1.02;
-      this.pos.x += stepX;
-    } else {
-      this.vel.x = 0;
+    } else if (!huepfenWenn(!this.blocked(world, this.pos.x + stepX, this.pos.y + 1.05, this.pos.z))) {
+      if (this.onGround) this.vel.x = 0;
     }
 
     const stepZ = this.vel.z * dt;
     if (!this.blocked(world, this.pos.x, this.pos.y, this.pos.z + stepZ)) {
       this.pos.z += stepZ;
-    } else if (this.onGround && !this.blocked(world, this.pos.x, this.pos.y + 1.02, this.pos.z + stepZ)) {
-      this.pos.y += 1.02;
-      this.pos.z += stepZ;
-    } else {
-      this.vel.z = 0;
+    } else if (!huepfenWenn(!this.blocked(world, this.pos.x, this.pos.y + 1.05, this.pos.z + stepZ))) {
+      if (this.onGround) this.vel.z = 0;
     }
 
     // Senkrecht
@@ -172,8 +183,17 @@ export class Player {
     const sp = Math.hypot(this.vel.x, this.vel.z);
     const stride = Math.sin(this.t * 10);
     const walking = sp > 0.4;
-    this.legL.rotation.x = walking ? stride * 0.55 : 0;
-    this.legR.rotation.x = walking ? -stride * 0.55 : 0;
+    if (this.huepft > 0) this.huepft -= dt;
+
+    // Beim Hüpfen ziehen sich die Beine an, statt weiterzulaufen
+    if (this.huepft > 0 || !this.onGround) {
+      const k = Math.min(1, Math.max(0, this.huepft / 0.36));
+      this.legL.rotation.x = -0.75 * k;
+      this.legR.rotation.x = -0.45 * k;
+    } else {
+      this.legL.rotation.x = walking ? stride * 0.55 : 0;
+      this.legR.rotation.x = walking ? -stride * 0.55 : 0;
+    }
 
     // Die Laterne bleibt ruhig - sie ist das Einzige, was er nicht schwenkt.
     this.armR.rotation.x = walking ? stride * 0.12 : 0;

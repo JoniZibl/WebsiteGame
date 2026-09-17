@@ -33,6 +33,13 @@ export const FARBEN = {
   dunkel:   '#4a3b30',
 };
 
+/** Geometrie und Material eines Bauteils — für InstancedMesh. */
+export function bauteil(bauer) {
+  const gruppe = bauer();
+  const mesh = gruppe.userData.mesh;
+  return { geometry: mesh.geometry, material: mesh.material };
+}
+
 const mats = new Map();
 function mat(color, basic = false) {
   const key = color + (basic ? '!' : '');
@@ -231,6 +238,127 @@ export function kisteBauen() {
   add(g, box(1.1, 0.7, 0.8), FARBEN.balken, 0, 0.35, 0);
   add(g, box(1.16, 0.26, 0.86), FARBEN.balkenTief, 0, 0.78, 0);
   add(g, box(0.2, 0.26, 0.9), FARBEN.gold, 0, 0.72, 0);
+  return flattenGroup(g);
+}
+
+/* ------------------------------ Weitere Gewächse ---------------------------
+ * Draußen standen bisher Blockbäume aus Stamm- und Laubwürfeln — das sah aus
+ * wie ein anderes Spiel als das Dorf. Hier sind die Sorten, die das Gelände
+ * jetzt bevölkern, alle in derselben Bauweise wie die Dorftannen.
+ * -------------------------------------------------------------------------- */
+
+/** Dunkle, schlanke Nadel für Taiga und Bergwald. */
+export function nadelbaumBauen({ hoehe = 6.5, farbe = '#2f5e40', hell = '#3d7450' } = {}) {
+  const g = new THREE.Group();
+  add(g, box(0.34, 1.4, 0.34), FARBEN.stamm, 0, 0.7, 0);
+  for (let i = 0; i < 4; i++) {
+    const t = i / 4;
+    const r = 1.35 * (1 - t * 0.62);
+    const h = hoehe / 4 * 1.15;
+    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7, 1), mat(i % 2 ? hell : farbe));
+    m.position.y = 1.15 + i * (hoehe / 4) * 0.66 + h / 2;
+    m.rotation.y = i * 0.7;
+    m.castShadow = true;
+    g.add(m);
+  }
+  return flattenGroup(g);
+}
+
+/** Verschneite Tanne: dieselbe Form, weiße Kappen. */
+export function schneetanneBauen({ hoehe = 5.4 } = {}) {
+  const g = new THREE.Group();
+  add(g, box(0.36, 1.1, 0.36), '#6b4a34', 0, 0.55, 0);
+  for (let i = 0; i < 3; i++) {
+    const t = i / 3;
+    const r = 1.45 * (1 - t * 0.55);
+    const h = hoehe / 3 * 1.1;
+    const y = 0.95 + i * (hoehe / 3) * 0.7 + h / 2;
+    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7, 1), mat('#3f6b52'));
+    m.position.y = y; m.rotation.y = i * 0.6; m.castShadow = true; g.add(m);
+    const kappe = new THREE.Mesh(new THREE.ConeGeometry(r * 0.78, h * 0.42, 7, 1), mat('#f6f1e6'));
+    kappe.position.y = y + h * 0.3; kappe.rotation.y = i * 0.6; g.add(kappe);
+  }
+  return flattenGroup(g);
+}
+
+/** Birke: heller Stamm mit runder Krone. */
+export function birkeBauen({ hoehe = 5 } = {}) {
+  const g = new THREE.Group();
+  add(g, box(0.3, hoehe * 0.72, 0.3), '#e4dccb', 0, hoehe * 0.36, 0);
+  for (const y of [1.2, 2.1, 3.0]) add(g, box(0.34, 0.12, 0.34), '#6b6152', 0, y, 0);
+  const krone = new THREE.IcosahedronGeometry(1.25, 0);
+  for (const [dx, dy, dz, sk, f] of [
+    [0, 0, 0, 1, '#8cc06a'], [0.75, -0.3, 0.3, 0.64, '#7ab05c'], [-0.62, -0.18, -0.4, 0.58, '#9ecf78'],
+  ]) {
+    const m = new THREE.Mesh(krone, mat(f));
+    m.position.set(dx, hoehe * 0.8 + dy, dz);
+    m.scale.setScalar(sk);
+    m.castShadow = true;
+    g.add(m);
+  }
+  return flattenGroup(g);
+}
+
+/** Palme für die Dünen. */
+export function palmeBauen({ hoehe = 5 } = {}) {
+  const g = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const t = i / 5;
+    const seg = add(g, box(0.34 - t * 0.08, hoehe / 5, 0.34 - t * 0.08), '#a8814f',
+      Math.sin(t * 1.5) * 0.5, hoehe / 5 * (i + 0.5), 0);
+    seg.rotation.z = -t * 0.18;
+  }
+  /* Die Wedel hängen deutlich nach unten. Liegen sie waagerecht, sieht die
+     Palme von oben aus wie ein flacher Stern statt wie ein Baum. */
+  const spitze = new THREE.Vector3(Math.sin(1.5) * 0.5, hoehe, 0);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.3;
+    const lang = 1.5 + (i % 2) * 0.35;
+    const wedel = add(g, box(lang, 0.18, 0.5), i % 2 ? '#4f8f5c' : '#5da368',
+      spitze.x + Math.cos(a) * lang * 0.42, spitze.y - 0.35, spitze.z + Math.sin(a) * lang * 0.42);
+    wedel.rotation.y = -a;
+    wedel.rotation.z = 0.62;
+    const spitzeWedel = add(g, box(lang * 0.5, 0.14, 0.34), '#3f7a4f',
+      spitze.x + Math.cos(a) * lang * 0.82, spitze.y - 0.92, spitze.z + Math.sin(a) * lang * 0.82);
+    spitzeWedel.rotation.y = -a;
+    spitzeWedel.rotation.z = 1.0;
+  }
+  add(g, box(0.62, 0.5, 0.62), '#8a6a3a', spitze.x, spitze.y - 0.12, spitze.z);
+  add(g, box(0.28, 0.28, 0.28), '#c9a23f', spitze.x + 0.3, spitze.y - 0.5, spitze.z + 0.2);
+  return flattenGroup(g);
+}
+
+/** Totholz für den Bruch. */
+export function totholzBauen({ hoehe = 4 } = {}) {
+  const g = new THREE.Group();
+  add(g, box(0.42, hoehe, 0.42), '#6b5a4a', 0, hoehe / 2, 0);
+  for (const [y, a, l] of [[hoehe * 0.6, 0.7, 1.5], [hoehe * 0.78, -1.9, 1.2], [hoehe * 0.44, 2.6, 1.0]]) {
+    const ast = add(g, box(l, 0.2, 0.2), '#5e4e40', Math.cos(a) * l * 0.4, y, Math.sin(a) * l * 0.4);
+    ast.rotation.y = -a;
+    ast.rotation.z = 0.5;
+  }
+  return flattenGroup(g);
+}
+
+/** Ein Kaktus. */
+export function kaktusBauen() {
+  const g = new THREE.Group();
+  add(g, box(0.62, 2.6, 0.62), '#4f8f5c', 0, 1.3, 0);
+  add(g, box(0.4, 0.4, 0.4), '#4f8f5c', 0.5, 1.5, 0);
+  add(g, box(0.38, 1.0, 0.38), '#5da368', 0.66, 1.9, 0);
+  add(g, box(0.4, 0.4, 0.4), '#4f8f5c', -0.5, 1.1, 0);
+  add(g, box(0.38, 0.8, 0.38), '#5da368', -0.66, 1.4, 0);
+  return flattenGroup(g);
+}
+
+/** Ein Grasbüschel oder eine Blume — Kleinkram, der die Fläche belebt. */
+export function halmBauen({ farbe = '#6da34e', bluete = null } = {}) {
+  const g = new THREE.Group();
+  for (const [dx, dz, h, n] of [[0, 0, 0.7, 0], [0.22, 0.1, 0.5, 1], [-0.18, -0.14, 0.58, 2]]) {
+    const halm = add(g, box(0.09, h, 0.09), farbe, dx, h / 2, dz);
+    halm.rotation.z = (n - 1) * 0.22;
+    if (bluete) add(g, box(0.2, 0.2, 0.2), bluete, dx + (n - 1) * 0.06, h + 0.08, dz);
+  }
   return flattenGroup(g);
 }
 

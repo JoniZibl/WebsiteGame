@@ -8,6 +8,7 @@ import { Input } from './input.js';
 import { TiltShift } from './postfx.js';
 import * as save from './save.js';
 import { Doerfer } from './village.js';
+import { Flora } from './flora.js';
 import { Leute } from './npc.js';
 import { Feinde, ARTEN } from './combat.js';
 import * as gruft from './dungeon.js';
@@ -76,6 +77,7 @@ const waterMat = new THREE.MeshLambertMaterial({
 const post = new TiltShift(renderer);
 const world = new VoxelWorld(scene, blockMat, waterMat, 4);
 const doerfer = new Doerfer(scene);
+const flora = new Flora(scene, 4);
 const leute = new Leute(scene);
 const input = new Input();
 const player = new Player(scene);
@@ -1364,11 +1366,13 @@ function frame() {
     const move = input.read();
     player.tempo = fert.werte.tempo(h);
     player.update(dt, move, world);
-    // Häuser sind Modelle, keine Blöcke — hier erst werden sie fest
-    const raus = doerfer.wegSchieben(player.pos.x, player.pos.z);
+    // Häuser und Stämme sind Modelle, keine Blöcke — hier erst werden sie fest
+    const raus = doerfer.wegSchieben(player.pos.x, player.pos.z)
+      || flora.wegSchieben(player.pos.x, player.pos.z);
     if (raus) { player.pos.x = raus.x; player.pos.z = raus.z; }
     world.update(player.pos.x, player.pos.z, 1);
     doerfer.update(player.pos.x, player.pos.z);
+    flora.update(player.pos.x, player.pos.z);
     leute.update(dt, world, doerfer, player.pos);
     gruftenPflegen(player.pos.x, player.pos.z);
     feinde.update(dt, world, player.pos, !state.dead);
@@ -1610,6 +1614,7 @@ function weltLeeren() {
   }
   world.queue.length = 0;
   doerfer.clear();
+  flora.clear();
   leute.clear();
   feinde.clear();
   for (const t of truhen) scene.remove(t.obj);
@@ -1654,6 +1659,7 @@ function welteinrichtung(heimat) {
 function aufstellen(x, z) {
   world.update(x, z, 95);
   doerfer.update(x, z);
+  flora.update(x, z, true);
   player.spawn(world, x, z);
   leute.update(0.016, world, doerfer, player.pos);
   gruftenPflegen(x, z);
@@ -1778,6 +1784,7 @@ window.__game = {
   state, player, world, scene, camera, renderer, juice, audio, post, B, BLOCKS,
   doerfer, leute, feinde, truhen, tore, gruft, fert, held,
   handeln, zuschlagen, zaubern, writeSave, save, ortsname, was,
+  flora, biomeAt, surfaceAt,
   dinge, trinken, ladenOeffnen, ladenZeichnen, beutelZeichnen,
   story, chronistOeffnen, waechterAnsprechen, endeZeigen, kapitelGeschafft,
   pfeil, zielPunkt, questsZeichnen,

@@ -6,10 +6,18 @@ allem, was darauf steht, als richtiges kleines Modell.
 
 ## Was es gibt
 
-**Die Welt** rechnet sich aus ihren Koordinaten aus und hört nie auf. Sechs
-Biome, Flusstäler, Höhlenröhren, Erz in der Tiefe. Dörfer liegen auf einem
-groben Raster mit Versatz; wo eines steht, wird das Gelände eingeebnet und
-bekommt Wege.
+**Die Welt** rechnet sich aus ihren Koordinaten aus und hört nie auf. Zwölf
+Gegenden — Wiese, Blütenwiese, Wald, Birkenhain, Taiga, Firnfeld, Heide,
+Grasland, Düne, Roter Grund, Gebirge, Bruch — jede mit eigener Oberfläche,
+eigenen Gewächsen und eigener Dichte. Dazu Flusstäler, Höhlenröhren und Erz in
+der Tiefe. Dörfer liegen auf einem groben Raster mit Versatz; wo eines steht,
+wird das Gelände eingeebnet und bekommt Wege.
+
+**Was darauf wächst**, sind überall dieselben Modelle wie im Dorf: Kegeltannen,
+Birken, Palmen, Totholz, Kakteen, Büsche, Grasbüschel, Findlinge. Blockbäume aus
+Stamm- und Laubwürfeln sahen neben den Dorftannen aus wie ein anderes Spiel. Je
+Sorte wird ein einziges InstancedMesh gezeichnet — tausend Gewächse kosten zwölf
+Zeichenaufrufe statt tausend.
 
 **Die Dörfer** sind gebaut, nicht gewürfelt zusammengeschoben: Häuser mit
 Satteldach um einen Brunnen, Laternen am Wegkreuz, Zäune, Tannen. Vor jedem
@@ -62,7 +70,8 @@ als gar keiner.
 
 ## Steuerung
 
-- **Ziehen** (oder **WASD**) — laufen
+- **Ziehen** (oder **WASD**) — laufen. Stufen von einem Block nimmt die Figur
+  mit einem Hüpfer; sie wird nicht mehr stumm einen Meter nach oben gesetzt.
 - **⚔️** zuschlagen *(Leertaste)* · **✨** zaubern *(K)*
 - **💎** Glimmadern im Fels brechen *(E)*
 - **💬 / 🧰 / 🚪** ansprechen, Truhe öffnen, Gruft betreten *(E)*
@@ -95,6 +104,7 @@ nimmt.
 | --- | --- |
 | `js/voxel.js` | Gelände, Biome, Dörfer, Höhlen, Vernetzung |
 | `js/props.js` | Häuser, Bäume, Zäune, Truhen, Tore |
+| `js/flora.js` | der Bewuchs des Geländes, je Sorte ein InstancedMesh |
 | `js/village.js` | Dorfgrundrisse und ihr Auf- und Abbau |
 | `js/dungeon.js` | Gruften: Grundriss, Bewohner, Beute |
 | `js/npc.js` | die Leute im Dorf |
