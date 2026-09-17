@@ -142,9 +142,7 @@ const ui = {
   mag: document.querySelector('.balken.magicka i'),
   ortName: el('ortName'), ortInfo: el('ortInfo'),
   stufe: el('stufeZahl'), xp: el('xpFill'), gold: el('goldZahl'),
-  auftrag: el('auftragTafel'), aTitel: el('auftragTitel'), aStand: el('auftragStand'),
   ziel: el('zielleiste'), zielName: el('zielName'), zielHp: el('zielHp'),
-  weg: el('wegweiser'), wegText: el('wegText'),
   rede: el('redeBtn'), wirk: el('wirkBtn'),
 };
 
@@ -186,32 +184,11 @@ function updateHUD() {
   ui.ortInfo.textContent = state.imDungeon
     ? `Gruft · Stufe ${state.imDungeon.stufe}`
     : biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).name;
-
-  const v = verfolgtes();
-  ui.auftrag.classList.toggle('hidden', !v);
-  if (v && v.art === 'haupt') {
-    const st = state.geschichte;
-    const k = v.kapitel;
-    const fertig = st.gestartet && story.kapitelFertig(st);
-    ui.aTitel.textContent = `✦ ${k.titel}`;
-    ui.aStand.textContent = !st.gestartet
-      ? 'sprich mit dem Chronisten'
-      : fertig ? 'zurück zum Chronisten'
-      : `${story.fuellen(k.ziel, st)} · ${st.ziel}/${k.menge}`;
-    ui.auftrag.classList.toggle('fertig', fertig);
-  } else if (v) {
-    const q = v.q;
-    ui.aTitel.textContent = q.titel;
-    ui.aStand.textContent = q.fertig
-      ? 'erledigt — bring die Nachricht zurück'
-      : `${q.stand} / ${q.menge}`;
-    ui.auftrag.classList.toggle('fertig', q.fertig);
-  }
 }
 
 /* ------------------------------ Was wird verfolgt? -------------------------
- * HUD, Pfeil und Auftragsliste müssen sich einig sein. Also entscheidet das
- * eine Funktion, und die anderen fragen sie.
+ * Pfeil und Auftragsliste müssen sich einig sein. Also entscheidet das
+ * eine Funktion, und die andere fragt sie.
  * -------------------------------------------------------------------------- */
 function verfolgtes() {
   const st = state.geschichte;
@@ -633,41 +610,29 @@ function naechsteGruft() {
 
 function pfeilPflegen(dt) {
   const ziel = zielPunkt();
-  if (!ziel) {
-    pfeil.visible = false; pfeilRand.visible = false;
-    ui.weg.classList.add('hidden');
-    ui.wegText.textContent = '';    // kein alter Text unter dem Vorhang
-    return;
-  }
+  if (!ziel) { pfeil.visible = false; pfeilRand.visible = false; return; }
 
   const dx = ziel.x - player.pos.x, dz = ziel.z - player.pos.z;
   const d = Math.hypot(dx, dz);
 
   // Steht man schon da, hilft kein Pfeil mehr
-  if (d < 12) {
-    pfeil.visible = false; pfeilRand.visible = false;
-    ui.weg.classList.remove('hidden');
-    ui.wegText.textContent = `${ziel.name} — du bist da`;
-    return;
-  }
+  if (d < 12) { pfeil.visible = false; pfeilRand.visible = false; return; }
 
   pfeil.visible = true;
   pfeilRand.visible = true;
   const w = Math.atan2(dx, dz);
-  const puls = 1.5 + Math.sin(state.time * 2400) * 0.12;
+  // Klein genug, um ein Hinweis zu bleiben statt ein Wegweiser mitten im Bild
+  const puls = 0.5 + Math.sin(state.time * 2400) * 0.04;
   // Über dem Kopf, damit er auch im Gedränge sichtbar bleibt
-  const px = player.pos.x + Math.sin(w) * 2.2;
-  const pz = player.pos.z + Math.cos(w) * 2.2;
-  const py = player.pos.y + 2.6;
+  const px = player.pos.x + Math.sin(w) * 1.5;
+  const pz = player.pos.z + Math.cos(w) * 1.5;
+  const py = player.pos.y + 2.2;
   pfeil.rotation.y = w;
   pfeil.position.set(px, py, pz);
   pfeil.scale.setScalar(puls);
   pfeilRand.rotation.y = w;
   pfeilRand.position.set(px, py - 0.04, pz);
-  pfeilRand.scale.setScalar(puls * 1.2);
-
-  ui.weg.classList.remove('hidden');
-  ui.wegText.textContent = `${ziel.name} — ${Math.round(d)} Schritt`;
+  pfeilRand.scale.setScalar(puls * 1.26);
 }
 
 /* ------------------------------ Die Geschichte ----------------------------- */
