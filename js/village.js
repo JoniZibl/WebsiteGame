@@ -231,6 +231,7 @@ export class Doerfer {
         if (t.art === 'haus') {
           t.obj = obj;
           t.dach = obj.getObjectByName('dach');
+          t.oben = obj.getObjectByName('oben');
           t.bodenY = surfaceAt(t.x, t.z) + 1;
         }
         gruppe.add(obj);
@@ -304,31 +305,38 @@ export class Doerfer {
     return null;
   }
 
-  /** In welchem Haus steht dieser Punkt? */
+  /* In welchem Haus steht dieser Punkt? Gerechnet wird gegen den äußeren
+     Grundriss: in einer Wand kann man nicht stehen, also heißt „drin“ hier
+     entweder im Raum oder in der Tür — und das Haus öffnet sich schon beim
+     Eintreten statt erst einen Schritt später. */
   hausUnter(x, z) {
     for (const { plan, dorf } of this.aktiv.values()) {
       for (const t of plan.teile) {
         if (t.art !== 'haus') continue;
         if (Math.abs(x - t.x) > 9 || Math.abs(z - t.z) > 9) continue;
         const l = Doerfer.lokal(t, x, z);
-        const w = props.WAND;
-        if (Math.abs(l.x) < t.breite / 2 - w && Math.abs(l.z) < t.tiefe / 2 - w) {
-          return { t, dorf };
-        }
+        if (Math.abs(l.x) < t.breite / 2 && Math.abs(l.z) < t.tiefe / 2) return { t, dorf };
       }
     }
     return null;
   }
 
-  /** Das Dach des Hauses, in dem jemand steht, kommt weg — sonst sähe man nichts. */
+  /* Wer eintritt, dem werden Dach und Wände abgenommen. Stehen bleibt die
+     kniehohe Brüstung — sie zeichnet den Raum nach, ohne den Blick zu nehmen. */
   daecherPflegen(x, z) {
     const drin = this.hausUnter(x, z);
     const neu = drin ? drin.t : null;
     if (neu === this.offenesHaus) return drin;
-    if (this.offenesHaus && this.offenesHaus.dach) this.offenesHaus.dach.visible = true;
+    this.hausZeigen(this.offenesHaus, true);
     this.offenesHaus = neu;
-    if (neu && neu.dach) neu.dach.visible = false;
+    this.hausZeigen(neu, false);
     return drin;
+  }
+
+  hausZeigen(t, sichtbar) {
+    if (!t) return;
+    if (t.dach) t.dach.visible = sichtbar;
+    if (t.oben) t.oben.visible = sichtbar;
   }
 
   /** Wo im Haus die Bettstelle liegt — in Weltkoordinaten. */

@@ -110,64 +110,77 @@ export const TUER = 1.5;
  * -------------------------------------------------------------------------- */
 export function hausBauen({ breite = 5, tiefe = 4, hoehe = 3, dachFarbe = FARBEN.dach,
                             innen = null } = {}) {
-  const k = new THREE.Group();
+  /* Drei Teile statt einem: `unten` bleibt immer stehen (Boden, Einrichtung
+     und eine kniehohe Brüstung), `oben` sind die Wände darüber, `dach` das
+     Dach. Wer eintritt, dem werden `oben` und `dach` abgenommen — dann sieht
+     man den ganzen Raum von oben und nicht nur durch ein Guckloch. */
+  const u = new THREE.Group();     // bleibt
+  const o = new THREE.Group();     // kommt weg, sobald jemand drin ist
   const hw = breite / 2, ht = tiefe / 2;
   const tuerHalb = Math.min(TUER, breite * 0.36) / 2;
+  const BRUEST = 0.55;             // wie hoch die Brüstung stehen bleibt
+  const rest = hoehe - BRUEST;
 
   // Sockel und Boden
-  add(k, box(breite + 0.5, 0.4, tiefe + 0.5), FARBEN.stein, 0, 0.2, 0);
-  add(k, box(breite - WAND * 2, 0.12, tiefe - WAND * 2), FARBEN.balkenTief, 0, 0.44, 0);
+  add(u, box(breite + 0.5, 0.4, tiefe + 0.5), FARBEN.stein, 0, 0.2, 0);
+  add(u, box(breite - WAND * 2, 0.12, tiefe - WAND * 2), FARBEN.balken, 0, 0.44, 0);
 
-  const wand = (w, t, x, z) => add(k, box(w, hoehe, t), FARBEN.putz, x, 0.4 + hoehe / 2, z);
+  // Jede Wand zweimal: unten die Brüstung, darüber der Rest
+  const wand = (w, t, x, z) => {
+    add(u, box(w, BRUEST, t), FARBEN.putzWarm, x, 0.4 + BRUEST / 2, z);
+    add(o, box(w, rest, t), FARBEN.putz, x, 0.4 + BRUEST + rest / 2, z);
+  };
   wand(breite, WAND, 0, -ht + WAND / 2);                       // hinten
   wand(WAND, tiefe - WAND * 2, -hw + WAND / 2, 0);             // links
   wand(WAND, tiefe - WAND * 2, hw - WAND / 2, 0);              // rechts
-  // Front mit Türlücke
+  // Front mit Türlücke — in der Tür bleibt auch unten nichts stehen
   const seite = hw - tuerHalb;
   for (const sx of [-1, 1]) {
     wand(seite, WAND, sx * (hw - seite / 2), ht - WAND / 2);
   }
   // Sturz über der Tür
-  add(k, box(tuerHalb * 2, hoehe - 2.0, WAND), FARBEN.putz,
+  add(o, box(tuerHalb * 2, hoehe - 2.0, WAND), FARBEN.putz,
     0, 0.4 + 2.0 + (hoehe - 2.0) / 2, ht - WAND / 2);
 
-  // Eckbalken
+  // Eckbalken, ebenfalls geteilt — sie zeichnen den Grundriss nach
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
-      add(k, box(0.34, hoehe, 0.34), FARBEN.balken,
-        sx * (breite / 2 - 0.1), 0.4 + hoehe / 2, sz * (tiefe / 2 - 0.1));
+      add(u, box(0.34, BRUEST + 0.1, 0.34), FARBEN.balken,
+        sx * (hw - 0.1), 0.4 + (BRUEST + 0.1) / 2, sz * (ht - 0.1));
+      add(o, box(0.34, rest, 0.34), FARBEN.balken,
+        sx * (hw - 0.1), 0.4 + BRUEST + rest / 2, sz * (ht - 0.1));
     }
   }
-  add(k, box(breite + 0.2, 0.28, tiefe + 0.2), FARBEN.balken, 0, 0.4 + hoehe - 0.12, 0);
+  add(o, box(breite + 0.2, 0.28, tiefe + 0.2), FARBEN.balken, 0, 0.4 + hoehe - 0.12, 0);
 
   // Türrahmen und Stufe
   for (const sx of [-1, 1]) {
-    add(k, box(0.16, 2.1, WAND + 0.1), FARBEN.balken, sx * tuerHalb, 1.45, ht - WAND / 2);
+    add(o, box(0.16, 2.1, WAND + 0.1), FARBEN.balken, sx * tuerHalb, 1.45, ht - WAND / 2);
   }
-  add(k, box(tuerHalb * 2 + 0.3, 0.2, WAND + 0.1), FARBEN.balken, 0, 2.5, ht - WAND / 2);
-  add(k, box(tuerHalb * 2 + 0.6, 0.22, 0.6), FARBEN.stein, 0, 0.45, ht + 0.25);
+  add(o, box(tuerHalb * 2 + 0.3, 0.2, WAND + 0.1), FARBEN.balken, 0, 2.5, ht - WAND / 2);
+  add(u, box(tuerHalb * 2 + 0.6, 0.22, 0.6), FARBEN.stein, 0, 0.45, ht + 0.25);
 
   // Fenster in den Seitenwänden, eines hinten
   for (const sx of [-1, 1]) {
-    add(k, box(0.16, 0.86, 0.86), FARBEN.balken, sx * (hw - WAND / 2), 2.0, 0);
-    add(k, box(0.1, 0.62, 0.62), FARBEN.fenster, sx * (hw - WAND / 2 - 0.02), 2.0, 0);
+    add(o, box(0.16, 0.86, 0.86), FARBEN.balken, sx * (hw - WAND / 2), 2.0, 0);
+    add(o, box(0.1, 0.62, 0.62), FARBEN.fenster, sx * (hw - WAND / 2 - 0.02), 2.0, 0);
   }
-  add(k, box(0.86, 0.86, 0.14), FARBEN.balken, 0, 2.0, -ht + 0.02);
-  add(k, box(0.62, 0.62, 0.1), FARBEN.fenster, 0, 2.0, -ht + 0.09);
+  add(o, box(0.86, 0.86, 0.14), FARBEN.balken, 0, 2.0, -ht + 0.02);
+  add(o, box(0.62, 0.62, 0.1), FARBEN.fenster, 0, 2.0, -ht + 0.09);
 
-  einrichten(k, hw, ht, innen);
+  einrichten(u, hw, ht, innen);
 
-  // Das Dach für sich, damit es abnehmbar bleibt
   const d = new THREE.Group();
   satteldach(d, breite + 0.6, tiefe, hoehe * 0.62, 0.4 + hoehe, dachFarbe, FARBEN.putzWarm);
 
   const haus = new THREE.Group();
-  const korpus = flattenGroup(k);
+  const unten = flattenGroup(u);
+  const oben = flattenGroup(o);
   const dach = flattenGroup(d);
-  korpus.name = 'korpus';
+  unten.name = 'unten';
+  oben.name = 'oben';
   dach.name = 'dach';
-  haus.add(korpus, dach);
-  haus.userData.dach = dach;
+  haus.add(unten, oben, dach);
   return haus;
 }
 
@@ -176,6 +189,10 @@ export function hausBauen({ breite = 5, tiefe = 4, hoehe = 3, dachFarbe = FARBEN
    das Spiel weiß, wo man sich hinlegen kann. */
 function einrichten(g, hw, ht, innen = null) {
   const art = innen || 'kammer';
+
+  // Ein Teppich vor dem Herd — die Stube war sonst ein brauner Kasten
+  add(g, box(hw * 1.1, 0.04, ht * 0.9), FARBEN.rot, 0.2, 0.51, -ht * 0.1);
+  add(g, box(hw * 0.8, 0.05, ht * 0.6), FARBEN.putzWarm, 0.2, 0.52, -ht * 0.1);
 
   // Bett
   add(g, box(1.0, 0.36, 1.9), FARBEN.balken, -hw + 0.85, 0.68, -ht + 1.3);
