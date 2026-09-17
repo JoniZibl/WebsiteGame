@@ -28,10 +28,26 @@ const DACH_ZU_GEGEND = {
 /* Drei Größen. Ein Weiler ist ein halbes Dutzend Katen an einem Brunnen, ein
    Marktflecken hat einen Platz mit Ständen und zwei Händlerinnen. */
 const ARTEN = {
-  weiler:       { haeuser: [5, 7],   haendler: 1, staende: 0, tor: false, name: 'Weiler' },
-  dorf:         { haeuser: [9, 13],  haendler: 1, staende: 0, tor: false, name: 'Dorf' },
-  marktflecken: { haeuser: [14, 18], haendler: 2, staende: 3, tor: true,  name: 'Marktflecken' },
+  weiler:       { haeuser: [5, 7],   haendler: 1, staende: 0, tor: false, name: 'Weiler',
+                  sonder: [] },
+  dorf:         { haeuser: [9, 13],  haendler: 1, staende: 0, tor: false, name: 'Dorf',
+                  sonder: ['wirtshaus'] },
+  marktflecken: { haeuser: [14, 18], haendler: 2, staende: 3, tor: true,  name: 'Marktflecken',
+                  sonder: ['wirtshaus', 'schmiede'] },
 };
+
+/* Die großen Häuser: sie brauchen mehr Platz, mehr Höhe — und Leute, die
+   nicht draußen herumstehen, sondern drinnen sind. */
+const SONDER = {
+  wirtshaus: { breite: 9.0, tiefe: 7.0, hoehe: 3.6, beruf: 'Wirt', gaeste: 3 },
+  schmiede:  { breite: 7.0, tiefe: 6.0, hoehe: 3.4, beruf: 'Schmiedin', gaeste: 1 },
+};
+
+/** Ein Punkt im Haus, in Weltkoordinaten. */
+function imHaus(x, z, dreh, lx, lz) {
+  const c = Math.cos(dreh), s = Math.sin(dreh);
+  return { x: x + 0.5 + (lx * c + lz * s), z: z + 0.5 + (-lx * s + lz * c) };
+}
 
 /** Welche Sorte Dorf steht hier? Immer dieselbe für dieselben Koordinaten. */
 export function dorfArt(dorf) {
@@ -77,8 +93,11 @@ export function bauplan(dorf) {
 
   let gesetzt = 0;
   for (let i = 0; i < anzahl; i++) {
-    const breite = 4.4 + rand() * 1.6;
-    const tiefe = 3.8 + rand() * 1.2;
+    // Die ersten Plätze gehören den großen Häusern
+    const sonderId = art.sonder[gesetzt] || null;
+    const gross = sonderId ? SONDER[sonderId] : null;
+    const breite = gross ? gross.breite : 4.4 + rand() * 1.6;
+    const tiefe = gross ? gross.tiefe : 3.8 + rand() * 1.2;
     const r = Math.hypot(breite, tiefe) / 2 + 1.1;
 
     // Mehrere Anläufe für denselben Platz, bevor ein Haus ausfällt
@@ -109,18 +128,40 @@ export function bauplan(dorf) {
 
     // `dreh` dreht die lokale +z-Achse (die Türseite) in die Blickrichtung
     const dreh = Math.atan2(blickX, blickZ);
-    const handel = gesetzt < art.haendler;
+    const handel = !gross && gesetzt - art.sonder.length < art.haendler
+                   && gesetzt >= art.sonder.length;
     teile.push({
       art: 'haus', x, z, dreh, breite, tiefe,
-      hoehe: 2.6 + rand() * 0.6,
+      hoehe: gross ? gross.hoehe : 2.6 + rand() * 0.6,
       dach: farben[Math.floor(rand() * farben.length)],
-      innen: handel ? 'laden' : 'kammer',
+      innen: sonderId || (handel ? 'laden' : 'kammer'),
+      gross: !!gross,
     });
-    leute.push({
-      x: x + blickX * 3.2, z: z + blickZ * 3.2,
-      saat: (rand() * 1e9) | 0, heimX: x, heimZ: z,
-      handel,
-    });
+
+    if (gross) {
+      // Wirt und Gäste wohnen im Haus — hier ist auch nachts jemand
+      const hw = breite / 2, ht = tiefe / 2;
+      const wirtP = imHaus(x, z, dreh, -hw * 0.35, -ht + 2.0);
+      leute.push({
+        x: wirtP.x, z: wirtP.z, saat: (rand() * 1e9) | 0, heimX: x, heimZ: z,
+        handel: sonderId === 'wirtshaus', beruf: gross.beruf, stubenhocker: true,
+      });
+      for (let k = 0; k < gross.gaeste; k++) {
+        const lx = (k % 2 ? 1 : -1) * hw * 0.42;
+        const lz = ht * 0.12 + (k > 1 ? ht * 0.5 : -ht * 0.5);
+        const p2 = imHaus(x, z, dreh, lx + (rand() - 0.5), lz);
+        leute.push({
+          x: p2.x, z: p2.z, saat: (rand() * 1e9) | 0, heimX: x, heimZ: z,
+          stubenhocker: true,
+        });
+      }
+    } else {
+      leute.push({
+        x: x + blickX * 3.2, z: z + blickZ * 3.2,
+        saat: (rand() * 1e9) | 0, heimX: x, heimZ: z,
+        handel,
+      });
+    }
     gesetzt++;
   }
 
@@ -219,8 +260,12 @@ export class Doerfer {
       if (this.aktiv.has(key)) continue;
 
       const plan = bauplan(dorf);
-      // Der Chronist wohnt nur an einem einzigen Ort auf der Welt
-      if (key === this.heimatKey && plan.leute[1]) plan.leute[1].chronist = true;
+      // Der Chronist wohnt nur an einem einzigen Ort auf der Welt — und er
+      // ist kein Wirt und keine Händlerin, sondern einer, der draußen steht.
+      if (key === this.heimatKey) {
+        const wer = plan.leute.find((l) => !l.stubenhocker && !l.handel);
+        if (wer) wer.chronist = true;
+      }
       const gruppe = new THREE.Group();
       for (const t of plan.teile) {
         const muster = t.art === 'haus' ? this.hausMuster(t) : this.muster[t.art];

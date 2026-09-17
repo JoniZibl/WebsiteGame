@@ -382,6 +382,10 @@ html, body {
   width: 11px; height: 11px; border-radius: 3px;
 }
 .punkt.dorf  { background: var(--terra); box-shadow: 0 0 0 2px var(--putz); }
+.punkt.ort   { background: #9a8b79; border-radius: 50%; width: 9px; height: 9px; }
+.punkt.ort.turm    { background: #b9aa98; border-radius: 2px; height: 13px; width: 7px; }
+.punkt.ort.schrein { background: var(--gold); }
+.punkt.ort.lager   { background: #8c7a5c; }
 .punkt.gruft { background: var(--tinte); border-radius: 50%; width: 9px; height: 9px;
                box-shadow: 0 0 0 2px var(--putz); }
 .punkt.ziel  { background: var(--gold); border-radius: 50%; width: 13px; height: 13px;

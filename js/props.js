@@ -184,9 +184,10 @@ export function hausBauen({ breite = 5, tiefe = 4, hoehe = 3, dachFarbe = FARBEN
   return haus;
 }
 
-/* Was in einem Haus steht. `innen` sagt, wessen Haus es ist — ein Laden sieht
-   anders aus als eine Kammer. Die Bettstelle liegt immer links hinten, damit
-   das Spiel weiß, wo man sich hinlegen kann. */
+/* Was in einem Haus steht. `innen` sagt, wessen Haus es ist — eine Kammer
+   sieht anders aus als ein Laden, ein Wirtshaus anders als eine Schmiede. Die
+   Bettstelle liegt immer links hinten, damit das Spiel weiß, wo man sich
+   hinlegen kann. */
 function einrichten(g, hw, ht, innen = null) {
   const art = innen || 'kammer';
 
@@ -213,6 +214,41 @@ function einrichten(g, hw, ht, innen = null) {
     }
     add(g, box(0.7, 0.5, 0.5), FARBEN.balkenTief, -hw + 0.8, 0.7, ht - 2.4);
     add(g, box(0.6, 0.45, 0.45), FARBEN.balken, -hw + 0.8, 1.18, ht - 2.4);
+
+  } else if (art === 'wirtshaus') {
+    // Zwei lange Tafeln mit Bänken, dazu der Schanktisch an der Wand
+    for (const sx of [-1, 1]) {
+      const x = sx * hw * 0.42;
+      add(g, box(1.5, 0.16, ht * 1.1), FARBEN.balken, x, 1.02, ht * 0.12);
+      for (const sz of [-1, 1]) {
+        add(g, box(1.3, 0.86, 0.16), FARBEN.balkenTief, x, 0.59, ht * 0.12 + sz * ht * 0.55);
+        add(g, box(1.6, 0.14, 0.4), FARBEN.balkenTief, x, 0.74, ht * 0.12 + sz * 0.95);
+      }
+      // Krug und Kerze auf jeder Tafel
+      add(g, box(0.22, 0.26, 0.22), FARBEN.putzWarm, x - 0.3, 1.23, ht * 0.1);
+      add(g, box(0.12, 0.3, 0.12), FARBEN.gold, x + 0.35, 1.25, ht * 0.3);
+    }
+    // Schanktisch und Fässer
+    add(g, box(hw * 0.9, 0.2, 0.8), FARBEN.balken, -hw * 0.35, 1.1, -ht + 1.1);
+    add(g, box(hw * 0.9, 0.9, 0.7), FARBEN.balkenTief, -hw * 0.35, 0.6, -ht + 1.1);
+    for (let i = 0; i < 3; i++) {
+      add(g, box(0.6, 0.8, 0.6), FARBEN.balkenTief, -hw + 0.7 + i * 0.8, 0.85, ht - 0.9);
+      add(g, box(0.66, 0.16, 0.66), FARBEN.balken, -hw + 0.7 + i * 0.8, 1.3, ht - 0.9);
+    }
+
+  } else if (art === 'schmiede') {
+    // Esse, Amboss, Löschtrog — und Werkzeug an der Wand
+    add(g, box(1.6, 1.0, 1.2), FARBEN.stein, -hw + 1.2, 1.0, ht - 1.4);
+    add(g, box(1.0, 0.4, 0.8), FARBEN.rot, -hw + 1.2, 1.6, ht - 1.4);
+    add(g, box(0.5, 0.24, 0.5), FARBEN.gold, -hw + 1.2, 1.8, ht - 1.4);
+    add(g, box(0.7, 0.5, 0.7), FARBEN.dunkel, 0.4, 0.75, 0.2);
+    add(g, box(1.1, 0.34, 0.5), FARBEN.steinTief, 0.4, 1.15, 0.2);
+    add(g, box(1.2, 0.6, 0.8), FARBEN.balkenTief, hw - 1.0, 0.8, ht - 1.2);
+    add(g, box(1.0, 0.1, 0.6), FARBEN.fenster, hw - 1.0, 1.12, ht - 1.2);
+    for (let i = 0; i < 4; i++) {
+      add(g, box(0.1, 0.7, 0.1), FARBEN.stahlHell || '#b9aa98', -hw + 0.5 + i * 0.35, 1.7, -ht + 0.35);
+    }
+
   } else {
     // Tisch, Bank, Regal
     add(g, box(1.3, 0.16, 0.9), FARBEN.balken, 0.2, 1.0, ht - 1.6);
@@ -224,7 +260,7 @@ function einrichten(g, hw, ht, innen = null) {
     add(g, box(0.3, 0.9, 1.2), FARBEN.balken, -hw + 0.5, 0.95, ht - 1.4);
   }
   // Ein Licht auf dem Tisch, damit es drinnen warm wirkt
-  add(g, box(0.16, 0.26, 0.16), FARBEN.gold, 0.2, 1.22, ht - 1.6);
+  if (art !== 'wirtshaus') add(g, box(0.16, 0.26, 0.16), FARBEN.gold, 0.2, 1.22, ht - 1.6);
 }
 
 /* -------------------------------- Kegeltanne ------------------------------- */
@@ -347,6 +383,103 @@ export function standBauen({ tuch = FARBEN.rot } = {}) {
   add(g, box(0.4, 0.3, 0.4), FARBEN.putzWarm, -0.6, 1.19, 0);
   add(g, box(0.3, 0.24, 0.3), FARBEN.gold, 0.1, 1.16, 0.1);
   add(g, box(0.34, 0.34, 0.34), FARBEN.tanne, 0.7, 1.21, -0.1);
+  return flattenGroup(g);
+}
+
+/* ------------------------------- Landmarken --------------------------------
+ * Was draußen steht, damit die Welt nicht nur aus Dorf und Gruft besteht:
+ * ein Wachturm, den man von weitem sieht, Mauerreste, ein Räuberlager und
+ * ein Schrein. Alles in derselben Bauweise wie die Häuser.
+ * -------------------------------------------------------------------------- */
+
+/** Ein Wachturm — hoch genug, um ihn über den Wald hinweg zu sehen. */
+export function turmBauen({ hoehe = 10.5 } = {}) {
+  const g = new THREE.Group();
+  add(g, box(5.4, 0.6, 5.4), FARBEN.steinTief, 0, 0.3, 0);
+  add(g, box(4.4, hoehe, 4.4), FARBEN.stein, 0, 0.6 + hoehe / 2, 0);
+  // Eckkanten, damit die Wand nicht wie ein Karton wirkt
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    add(g, box(0.5, hoehe, 0.5), FARBEN.steinTief, sx * 2.1, 0.6 + hoehe / 2, sz * 2.1);
+  }
+  // Schießscharten
+  for (let i = 1; i < 3; i++) {
+    add(g, box(0.5, 1.1, 0.3), FARBEN.dunkel, 0, 2.4 + i * 4.2, 2.25);
+  }
+  // Wehrgang mit Zinnen
+  add(g, box(5.8, 0.5, 5.8), FARBEN.steinTief, 0, 0.6 + hoehe + 0.25, 0);
+  for (let i = -2; i <= 2; i++) {
+    for (const sz of [-1, 1]) {
+      add(g, box(0.7, 0.9, 0.7), FARBEN.stein, i * 1.25, 0.6 + hoehe + 0.95, sz * 2.5);
+    }
+    for (const sx of [-1, 1]) {
+      add(g, box(0.7, 0.9, 0.7), FARBEN.stein, sx * 2.5, 0.6 + hoehe + 0.95, i * 1.25);
+    }
+  }
+  // Ein Licht ganz oben — daran erkennt man ihn nachts
+  add(g, box(0.7, 0.5, 0.7), FARBEN.gold, 0, 0.6 + hoehe + 1.2, 0);
+  add(g, box(1.1, 1.0, 1.1), FARBEN.balken, 0, 0.6 + hoehe + 2.0, 0, [0, 0.4, 0]);
+  return flattenGroup(g);
+}
+
+/** Mauerreste: was von einem Haus übrig ist, das niemand mehr kennt. */
+export function ruineBauen() {
+  const g = new THREE.Group();
+  add(g, box(9, 0.4, 8), FARBEN.steinTief, 0, 0.2, 0);
+  // Zwei stehende Wände, eine halb eingestürzt
+  add(g, box(8.4, 3.4, 0.6), FARBEN.stein, 0, 1.9, -3.7);
+  add(g, box(0.6, 2.8, 5.6), FARBEN.stein, -4.0, 1.6, -1.2);
+  add(g, box(0.6, 1.4, 3.0), FARBEN.stein, 4.0, 0.9, -2.4);
+  add(g, box(2.4, 0.9, 0.6), FARBEN.steinTief, 2.6, 0.65, 1.4, [0, 0.3, 0]);
+  // Ein Torbogen, der noch steht
+  for (const sx of [-1, 1]) add(g, box(0.8, 3.0, 0.8), FARBEN.steinTief, sx * 1.6, 1.7, 3.4);
+  add(g, box(4.0, 0.8, 0.9), FARBEN.steinTief, 0, 3.4, 3.4);
+  // Schutt und ein umgestürzter Pfeiler
+  add(g, box(0.9, 0.9, 3.4), FARBEN.stein, -1.8, 0.65, 0.8, [0, 0.2, 0.08]);
+  add(g, box(0.7, 0.5, 0.7), FARBEN.steinTief, 1.2, 0.45, -1.6);
+  add(g, box(1.6, 0.3, 1.2), FARBEN.moos || '#6f7f55', 0.4, 0.42, -2.6);
+  return flattenGroup(g);
+}
+
+/** Ein Zelt aus Fellen über zwei Stangen. */
+export function zeltBauen({ tuch = '#8c7a5c' } = {}) {
+  const g = new THREE.Group();
+  const seiten = 2.3;
+  for (const s of [-1, 1]) {
+    add(g, box(seiten, 0.24, 3.2), tuch, s * 0.82, 1.05, 0, [0, 0, -s * 0.72]);
+  }
+  add(g, box(0.16, 2.2, 0.16), FARBEN.balkenTief, 0, 1.1, -1.5);
+  add(g, box(0.16, 2.2, 0.16), FARBEN.balkenTief, 0, 1.1, 1.5);
+  add(g, box(2.6, 0.18, 0.3), FARBEN.balkenTief, 0, 0.09, -1.6);
+  add(g, box(2.6, 0.18, 0.3), FARBEN.balkenTief, 0, 0.09, 1.6);
+  return flattenGroup(g);
+}
+
+/** Ein Lagerfeuer mit Steinkranz. */
+export function feuerBauen() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    add(g, box(0.5, 0.34, 0.5), FARBEN.stein, Math.cos(a) * 0.95, 0.17, Math.sin(a) * 0.95);
+  }
+  add(g, box(1.3, 0.22, 0.3), FARBEN.balkenTief, 0, 0.2, 0, [0, 0.4, 0]);
+  add(g, box(1.3, 0.22, 0.3), FARBEN.balkenTief, 0, 0.3, 0, [0, -0.7, 0.1]);
+  add(g, box(0.6, 0.7, 0.6), FARBEN.rot, 0, 0.6, 0);
+  add(g, box(0.34, 0.5, 0.34), FARBEN.gold, 0, 1.0, 0);
+  return flattenGroup(g);
+}
+
+/** Ein Schrein: zwei Stelen, ein Sturz, eine Schale mit Licht. */
+export function schreinBauen() {
+  const g = new THREE.Group();
+  add(g, box(4.2, 0.4, 3.4), FARBEN.steinTief, 0, 0.2, 0);
+  for (const sx of [-1, 1]) {
+    add(g, box(0.7, 3.2, 0.7), FARBEN.stein, sx * 1.5, 2.0, 0);
+    add(g, box(0.9, 0.4, 0.9), FARBEN.steinTief, sx * 1.5, 3.8, 0);
+  }
+  add(g, box(4.0, 0.6, 0.8), FARBEN.stein, 0, 4.0, 0);
+  add(g, box(1.2, 0.8, 1.2), FARBEN.steinTief, 0, 0.8, 0);
+  add(g, box(1.0, 0.24, 1.0), FARBEN.gold, 0, 1.28, 0);
+  add(g, box(0.5, 0.5, 0.5), '#f5c451', 0, 1.6, 0);
   return flattenGroup(g);
 }
 

@@ -14,6 +14,7 @@ import { Feinde, ARTEN } from './combat.js';
 import { Geschosse } from './geschoss.js';
 import { wesenWaehlen, gefahrVon, GEFAHRWORT } from './wesen.js';
 import * as gruft from './dungeon.js';
+import * as orte from './orte.js';
 import * as fert from './skills.js';
 import { Auftragsbuch, auftragFuer } from './quest.js';
 import * as dinge from './items.js';
@@ -21,7 +22,10 @@ import * as story from './story.js';
 import { ICONS, symbol } from './icons.js';
 import { peek, anwenden } from './peek.js';
 import { DINGE } from './items.js';
-import { kisteBauen, torBauen, beutelBauen } from './props.js';
+import {
+  kisteBauen, torBauen, beutelBauen,
+  turmBauen, ruineBauen, zeltBauen, feuerBauen, schreinBauen, felsBauen,
+} from './props.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 
@@ -526,6 +530,130 @@ function beutelPflegen(dt) {
   }
 }
 
+/* ------------------------------- Landmarken --------------------------------
+ * Dasselbe Spiel wie mit den Gruften: was in Reichweite liegt, hängt in der
+ * Szene, alles andere nicht. Bewohner und Truhen kommen erst, wenn man nah
+ * genug ist — sonst kämpfte die halbe Karte gegen sich selbst.
+ * -------------------------------------------------------------------------- */
+function saatSetzen(s) {
+  setSeed(s);
+  orte.verbinden(getSeed);   // setzt das Saatkorn und wirft die alten Zellen weg
+}
+
+const ortMuster = {};
+function ortMusterVon(art) {
+  if (!ortMuster[art]) {
+    ortMuster[art] = art === 'turm' ? turmBauen()
+      : art === 'ruine' ? ruineBauen()
+      : art === 'zelt' ? zeltBauen()
+      : art === 'feuer' ? feuerBauen()
+      : art === 'schrein' ? schreinBauen()
+      : art === 'kiste' ? kisteBauen()
+      : felsBauen();
+  }
+  return ortMuster[art];
+}
+
+const orteAktiv = new Map();     // id -> { gruppe, ort, gefuellt }
+
+function ortePflegen(px, pz) {
+  const nah = orte.orteUm(px, pz, 260);
+  const gewollt = new Set(nah.map((o) => o.id));
+
+  for (const [id, e] of [...orteAktiv]) {
+    if (gewollt.has(id)) continue;
+    scene.remove(e.gruppe);
+    // Die Truhen des Orts gehören zu ihm — sie dürfen nicht allein stehen bleiben
+    for (let i = truhen.length - 1; i >= 0; i--) {
+      if (truhen[i].gruft === e.ort) { scene.remove(truhen[i].obj); truhen.splice(i, 1); }
+    }
+    orteAktiv.delete(id);
+  }
+
+  for (const o of nah) {
+    if (orteAktiv.has(o.id)) continue;
+    const plan = orte.inhalt(o);
+    const gruppe = new THREE.Group();
+    for (const t of plan.teile) {
+      const obj = ortMusterVon(t.art).clone();
+      const bx = Math.round(o.x + t.x), bz = Math.round(o.z + t.z);
+      obj.position.set(o.x + t.x, surfaceAt(bx, bz) + 1, o.z + t.z);
+      obj.rotation.y = t.dreh || 0;
+      gruppe.add(obj);
+    }
+    scene.add(gruppe);
+    orteAktiv.set(o.id, { gruppe, ort: o, plan, gefuellt: false });
+  }
+
+  // Leben und Beute erst aus der Nähe
+  for (const e of orteAktiv.values()) {
+    if (e.gefuellt) continue;
+    if (Math.hypot(px - e.ort.x, pz - e.ort.z) > 60) continue;
+    e.gefuellt = true;
+    for (const f of e.plan.feinde) {
+      feinde.spawn(f.art, e.ort.x + f.x, f.y + 1, e.ort.z + f.z, e.ort.stufe, e.ort.id);
+    }
+    for (const [i, t] of e.plan.truhen.entries()) {
+      const id = `${e.ort.id}#${i}`;
+      if (held().dungeons.has(id)) continue;
+      const bx = Math.round(e.ort.x + t.x), bz = Math.round(e.ort.z + t.z);
+      const obj = truhenMuster.clone();
+      obj.position.set(e.ort.x + t.x, surfaceAt(bx, bz) + 1, e.ort.z + t.z);
+      scene.add(obj);
+      truhen.push({ obj, pos: obj.position.clone(), id, gross: t.gross, gruft: e.ort });
+    }
+  }
+}
+
+/** Turm und Mauern sind Modelle — hier erst werden sie fest. */
+function orteSchieben(x, z, rand = 0.34) {
+  for (const e of orteAktiv.values()) {
+    const art = orte.ORTSARTEN[e.ort.art];
+    if (!art || !art.fest.length) continue;
+    if (Math.abs(x - e.ort.x) > 14 || Math.abs(z - e.ort.z) > 14) continue;
+    for (const [fx, fz, fr] of art.fest) {
+      const cx = e.ort.x + fx, cz = e.ort.z + fz;
+      const dx = x - cx, dz = z - cz;
+      const d = Math.hypot(dx, dz);
+      const r = fr + rand;
+      if (d >= r) continue;
+      if (d < 1e-6) return { x: cx + r + 0.02, z: cz };
+      return { x: cx + (dx / d) * (r + 0.02), z: cz + (dz / d) * (r + 0.02) };
+    }
+  }
+  return null;
+}
+
+/** Steht man vor einem Schrein? */
+function schreinInReichweite() {
+  for (const e of orteAktiv.values()) {
+    if (e.ort.art !== 'schrein') continue;
+    if (Math.hypot(player.pos.x - e.ort.x, player.pos.z - e.ort.z) < 3.2) return e.ort;
+  }
+  return null;
+}
+
+/* Ein Schrein gibt einmal etwas und danach nie wieder — sonst stünde man
+   davor und drückte. Dafür ist es dauerhaft. */
+function schreinAnrufen(ort) {
+  const h = held();
+  h.orte = h.orte || new Set();
+  if (h.orte.has(ort.id)) {
+    meldung('Der Schrein schweigt', '#7d5227', 2.6);
+    return;
+  }
+  h.orte.add(ort.id);
+  h.hpMax += 4;
+  h.hp = fert.werte.lebenMax(h);
+  h.magicka = fert.werte.magickaMax(h);
+  fert.xpGeben(h, 40);
+  audio.gem(3);
+  juice.ring({ x: ort.x, y: player.pos.y + 0.5, z: ort.z }, 3.4, '#f5c451');
+  meldung('Der Schrein nimmt dich an — +4 Leben', '#e8a83c', 3.4);
+  updateHUD();
+  writeSave();
+}
+
 /* ------------------------------ Truhen & Gruften --------------------------- */
 const truhenMuster = kisteBauen();
 const torMuster = torBauen();
@@ -588,7 +716,7 @@ function truheOeffnen(t) {
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
   if (story.melden(state.geschichte, 'truhe', { gruftId: t.gruft.id })) {
     dinge.nehmen(h, 'siegel');
-    meldung('📜 Altes Siegel', '#e8a83c', 3.2);
+    meldung('Altes Siegel', '#e8a83c', 3.2);
     kapitelGeschafft();
   }
   updateHUD();
@@ -649,6 +777,8 @@ function was() {
   for (const t of tore) {
     if (Math.hypot(t.pos.x - p.x, t.pos.z - p.z) < 4.5) return { art: 'tor', ziel: t };
   }
+  const schrein = schreinInReichweite();
+  if (schrein) return { art: 'schrein', ziel: schrein };
   const ader = glimmInReichweite();
   if (ader) return { art: 'glimm', ziel: ader };
   const weiter = bettInReichweite(2.2);
@@ -694,6 +824,7 @@ function handeln() {
   if (w.art === 'glimm') { glimmBrechen(w.ziel); return; }
   if (w.art === 'tor') { gruftBetreten(w.ziel.gruft); return; }
   if (w.art === 'bett') { schlafen(); return; }
+  if (w.art === 'schrein') { schreinAnrufen(w.ziel); return; }
   if (w.art === 'npc') {
     if (w.ziel.chronist) chronistOeffnen(w.ziel);
     else redeOeffnen(w.ziel);
@@ -1427,6 +1558,7 @@ function karteZeichnen() {
   };
   for (const d of doerferUm(px, pz, R)) setz(d.x, d.z, 'dorf');
   for (const g of gruft.grueftUm(px, pz, R)) setz(g.x, g.z, 'gruft');
+  for (const o of orte.orteUm(px, pz, R)) setz(o.x, o.z, `ort ${o.art}`);
   const ziel = zielPunkt();
   if (ziel) setz(ziel.x, ziel.z, 'ziel');
   setz(px, pz, 'du');
@@ -1435,6 +1567,7 @@ function karteZeichnen() {
   leg.className = 'karte-legende';
   leg.innerHTML = '<span class="punkt dorf"></span> Dorf'
     + ' <span class="punkt gruft"></span> Gruft'
+    + ' <span class="punkt ort turm"></span> Landmarke'
     + ' <span class="punkt ziel"></span> Ziel'
     + ' <span class="punkt du"></span> du'
     + `<span class="legende-weite">Umkreis ${R * 2} Schritt</span>`;
@@ -1576,6 +1709,7 @@ function frame() {
     player.update(dt, move, world);
     // Häuser und Stämme sind Modelle, keine Blöcke — hier erst werden sie fest
     const raus = doerfer.wegSchieben(player.pos.x, player.pos.z)
+      || orteSchieben(player.pos.x, player.pos.z)
       || flora.wegSchieben(player.pos.x, player.pos.z);
     if (raus) { player.pos.x = raus.x; player.pos.z = raus.z; }
     world.update(player.pos.x, player.pos.z, 1);
@@ -1585,6 +1719,7 @@ function frame() {
     // Wer in ein Haus tritt, dem wird das Dach abgenommen
     state.imHaus = doerfer.daecherPflegen(player.pos.x, player.pos.z);
     gruftenPflegen(player.pos.x, player.pos.z);
+    ortePflegen(player.pos.x, player.pos.z);
     feinde.update(dt, world, player.pos, !state.dead);
     geschosse.update(dt, world, feinde, player.pos, {
       trefferFeind: (f, schaden, g) => {
@@ -1714,7 +1849,7 @@ function frame() {
       ui.rede.dataset.art = w.art;
       symbol(ui.rede, w.art === 'npc' ? 'rede' : w.art === 'truhe' ? 'truhe'
         : w.art === 'glimm' ? 'kristall' : w.art === 'waechter' ? 'kerze'
-        : w.art === 'bett' ? 'kerze' : 'tor');
+        : w.art === 'bett' ? 'kerze' : w.art === 'schrein' ? 'glanz' : 'tor');
     }
 
     pfeilPflegen(dt);
@@ -1831,7 +1966,7 @@ function writeSave(auchTot = false) {
       hp: h.hp, hpMax: h.hpMax, ausdauer: h.ausdauer, ausdauerMax: h.ausdauerMax,
       magicka: h.magicka, magickaMax: h.magickaMax, fert: h.fert, fertXp: h.fertXp || {},
       vorteile: [...h.vorteile], getoetet: h.getoetet, hilfen: h.hilfen || 0,
-      dungeons: [...h.dungeons],
+      dungeons: [...h.dungeons], orte: [...(h.orte || [])],
       beutel: h.beutel, rue: h.rue,
     },
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8),
@@ -1861,6 +1996,8 @@ function weltLeeren() {
   for (const t of tore) scene.remove(t.obj);
   tore.length = 0;
   if (beutelObj) { scene.remove(beutelObj); beutelObj = null; }
+  for (const e of orteAktiv.values()) scene.remove(e.gruppe);
+  orteAktiv.clear();
 }
 
 function startplatz() {
@@ -1908,6 +2045,7 @@ function aufstellen(x, z) {
   leute.update(0.016, world, doerfer, player.pos, istNacht());
   state.imHaus = doerfer.daecherPflegen(x, z);
   gruftenPflegen(x, z);
+  ortePflegen(x, z);
   state.cut = HEIGHT + 4;
   cutPlane.constant = state.cut;
   state.camPos.copy(player.pos).addScaledVector(CAM_DIR, camDist);
@@ -1987,7 +2125,7 @@ function hinweisZeigen(an) {
 
 function neuesSpiel() {
   save.clear();
-  setSeed((Math.random() * 1e9) | 0);
+  saatSetzen((Math.random() * 1e9) | 0);
   weltLeeren();
   world.edits.clear();
   state.held = fert.neuerHeld();
@@ -2008,7 +2146,7 @@ function neuesSpiel() {
 }
 
 function weiterSpielen(d) {
-  setSeed(d.seed);
+  saatSetzen(d.seed);
   weltLeeren();
   world.edits.clear();
   save.unpackEdits(d.edits, world.edits);
@@ -2017,6 +2155,7 @@ function weiterSpielen(d) {
   Object.assign(h, d.held);
   h.vorteile = new Set(d.held.vorteile || []);
   h.dungeons = new Set(d.held.dungeons || []);
+  h.orte = new Set(d.held.orte || []);
   state.held = h;
 
   state.buch = new Auftragsbuch();
@@ -2104,11 +2243,12 @@ window.__game = {
   pfeil, zielPunkt, questsZeichnen,
   heimkehr, karteZeichnen, menuZeichnen,
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
+  orte, orteAktiv, truhen, was, handeln,
 };
 
 resize();
 applyQuality();
-setSeed(20260916);
+saatSetzen(20260916);
 world.update(0, 0, 95);
 player.spawn(world, 0, 0);
 camera.position.copy(player.pos).addScaledVector(CAM_DIR, camDist);

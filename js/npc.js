@@ -72,7 +72,9 @@ export class Leute {
   update(dt, world, doerfer, spielerPos, nacht = false) {
     const gewollt = new Map();
     for (const l of doerfer.alleLeute()) {
-      gewollt.set(`${l.dorf.i},${l.dorf.j},${l.heimX},${l.heimZ}`, l);
+      // Der Schlüssel muss die Person meinen, nicht das Haus — im Wirtshaus
+      // wohnen mehrere unter derselben Adresse.
+      gewollt.set(`${l.dorf.i},${l.dorf.j},${l.saat}`, l);
     }
 
     for (let i = this.liste.length - 1; i >= 0; i--) {
@@ -87,6 +89,7 @@ export class Leute {
       if (da.has(key)) continue;
       const rand = mulberry32(l.saat >>> 0);
       const gewerbe = l.chronist ? CHRONIST
+        : l.beruf ? (GEWERBE.find((g) => g.name === l.beruf) || GEWERBE[0])
         : l.handel ? GEWERBE.find((g) => g.name === 'Händlerin')
         : GEWERBE[Math.floor(rand() * GEWERBE.length)];
       const name = VORNAMEN[Math.floor(rand() * VORNAMEN.length)];
@@ -104,17 +107,22 @@ export class Leute {
         key, name, gewerbe, saat: l.saat, dorf: l.dorf,
         obj, pos: new THREE.Vector3(l.x, y, l.z), handel: !!l.handel, chronist: !!l.chronist,
         heimX: l.x, heimZ: l.z,
-        hausX: l.heimX, hausZ: l.heimZ, drinnen: false, stufe: 'draussen',
+        hausX: l.heimX, hausZ: l.heimZ,
+        // Stubenhocker gehen nie vor die Tür — Wirt, Gäste, Schmiedin
+        stubenhocker: !!l.stubenhocker,
+        drinnen: !!l.stubenhocker, stufe: l.stubenhocker ? 'drin' : 'draussen',
         takt: rand() * 6, ziel: null, auftrag: null,
       });
     }
 
     // Umherlaufen — tagsüber ums Haus, nachts hinein
     for (const n of this.liste) {
-      if (nacht) this.heimgehen(n, dt);
+      if (n.stubenhocker) this.stubenlauf(n, dt);
+      else if (nacht) this.heimgehen(n, dt);
       else this.tagslauf(n, dt);
       const nah = Math.hypot(n.pos.x - spielerPos.x, n.pos.z - spielerPos.z) < 3.2;
-      if (n.drinnen) { n.obj.position.copy(n.pos); if (nah) {
+      // Wer schlafen gegangen ist, steht still. Wirt und Gäste nicht.
+      if (n.drinnen && !n.stubenhocker) { n.obj.position.copy(n.pos); if (nah) {
         n.obj.rotation.y = Math.atan2(spielerPos.x - n.pos.x, spielerPos.z - n.pos.z);
       } continue; }
       if (nah) {
@@ -141,6 +149,19 @@ export class Leute {
         n.pos.y += 1;
       }
       n.obj.position.copy(n.pos);
+    }
+  }
+
+  /* Wer im Haus lebt, tritt nur ein paar Schritte hin und her — genug,
+     damit die Stube nicht wie ein Standbild wirkt. */
+  stubenlauf(n, dt) {
+    n.takt -= dt;
+    if (n.takt <= 0) {
+      n.takt = 4 + Math.random() * 6;
+      n.ziel = Math.random() < 0.5 ? null : {
+        x: n.heimX + (Math.random() - 0.5) * 1.6,
+        z: n.heimZ + (Math.random() - 0.5) * 1.6,
+      };
     }
   }
 

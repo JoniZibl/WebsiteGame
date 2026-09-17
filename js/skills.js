@@ -38,6 +38,7 @@ export function neuerHeld() {
     gold: 0,
     hp: 100, hpMax: 100,
     ausdauer: 100, ausdauerMax: 100,
+    orte: new Set(),          // welche Schreine schon geantwortet haben
     magicka: 60, magickaMax: 60,
     fert: { klinge: 1, zaehe: 1, magie: 1, spuren: 1, wandern: 1 },
     vorteile: new Set(),
