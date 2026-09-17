@@ -64,6 +64,8 @@ html, body {
   line-height: 15px; color: var(--putz); letter-spacing: .3px;
 }
 .balken.leben.wenig i { animation: pochen .55s steps(2, end) infinite; }
+.balken.ausdauer.wenig i { animation: pusten .5s steps(2, end) infinite; }
+@keyframes pusten { 50% { background: #e8a83c; } }
 @keyframes pochen { 50% { background: #e88b6a; } }
 
 .ort { margin-top: 6px; line-height: 1.15; }
@@ -215,6 +217,9 @@ html, body {
 #stickBase, #stickNub { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 #stickBase { width: 116px; height: 116px; background: rgba(253, 246, 232, .26); box-shadow: 0 0 0 3px rgba(168, 116, 63, .55); }
 #stickNub { width: 52px; height: 52px; background: var(--putz); box-shadow: 0 0 0 3px var(--holz), 0 4px 0 var(--holz-tief); }
+/* Weit hinausgezogen: der Knüppel glüht, der Ring zieht sich an — er rennt */
+#stick.rennt #stickNub { background: var(--gold); box-shadow: 0 0 0 3px var(--terra-tief), 0 0 16px rgba(232, 168, 60, .7); }
+#stick.rennt #stickBase { background: rgba(232, 168, 60, .18); box-shadow: 0 0 0 3px rgba(232, 168, 60, .75); }
 
 /* ------------------------------- Overlays ----------------------------------
  * Karten sind Pergament in einem Holzrahmen.

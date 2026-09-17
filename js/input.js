@@ -7,6 +7,7 @@ export class Input {
     this.dir = { x: 0, y: 0 };   // normalisierte Laufrichtung (Bildschirmachsen)
     this.strength = 0;           // 0..1
     this.active = false;
+    this.sprint = false;         // weit über den Ring hinaus gezogen
     this.keys = new Set();
 
     this.el = document.getElementById('stick');
@@ -15,6 +16,8 @@ export class Input {
     this.pointerId = null;
     this.origin = { x: 0, y: 0 };
     this.maxRadius = 58;
+    // Wer den Knüppel spürbar über den Ring hinauszieht, will rennen.
+    this.sprintRadius = 82;
 
     this._bind();
   }
@@ -28,7 +31,9 @@ export class Input {
       this.pointerId = e.pointerId;
       this.origin.x = e.clientX;
       this.origin.y = e.clientY;
+      this.sprint = false;
       this._place(e.clientX, e.clientY, e.clientX, e.clientY);
+      this.el.classList.remove('rennt');
       this.el.classList.remove('hidden');
       canvas.setPointerCapture?.(e.pointerId);
       e.preventDefault();
@@ -36,30 +41,30 @@ export class Input {
 
     const move = (e) => {
       if (e.pointerId !== this.pointerId) return;
-      let dx = e.clientX - this.origin.x;
-      let dy = e.clientY - this.origin.y;
+      // Der Ring bleibt liegen, wo der Daumen aufgesetzt hat. Nur der Knüppel
+      // wandert — so weiß man immer, wie weit man gerade ausgelenkt hat.
+      const dx = e.clientX - this.origin.x;
+      const dy = e.clientY - this.origin.y;
       const len = Math.hypot(dx, dy);
 
-      // Stick "mitziehen", wenn der Finger weit rausläuft
-      if (len > this.maxRadius) {
-        this.origin.x += dx * (1 - this.maxRadius / len);
-        this.origin.y += dy * (1 - this.maxRadius / len);
-        dx *= this.maxRadius / len;
-        dy *= this.maxRadius / len;
-      }
-
       const dead = 6;
-      const l2 = Math.hypot(dx, dy);
-      if (l2 > dead) {
-        this.dir.x = dx / l2;
-        this.dir.y = dy / l2;
-        this.strength = Math.min(1, (l2 - dead) / (this.maxRadius - dead));
+      if (len > dead) {
+        this.dir.x = dx / len;
+        this.dir.y = dy / len;
+        this.strength = Math.min(1, (len - dead) / (this.maxRadius - dead));
         this.active = true;
+        this.sprint = len >= this.sprintRadius;
       } else {
         this.strength = 0;
         this.active = false;
+        this.sprint = false;
       }
-      this._place(this.origin.x, this.origin.y, this.origin.x + dx, this.origin.y + dy);
+
+      // Der Knüppel bleibt im Ring; beim Rennen darf er ein Stück heraus
+      const zeig = Math.min(len, this.sprint ? this.maxRadius + 12 : this.maxRadius);
+      const k = len > 0 ? zeig / len : 0;
+      this._place(this.origin.x, this.origin.y, this.origin.x + dx * k, this.origin.y + dy * k);
+      this.el.classList.toggle('rennt', this.sprint);
       e.preventDefault();
     };
 
@@ -68,6 +73,8 @@ export class Input {
       this.pointerId = null;
       this.active = false;
       this.strength = 0;
+      this.sprint = false;
+      this.el.classList.remove('rennt');
       this.el.classList.add('hidden');
     };
 
@@ -81,7 +88,10 @@ export class Input {
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
-    window.addEventListener('blur', () => { this.keys.clear(); this.active = false; this.strength = 0; });
+    window.addEventListener('blur', () => {
+      this.keys.clear(); this.active = false; this.strength = 0; this.sprint = false;
+      this.el.classList.remove('rennt');
+    });
   }
 
   _place(bx, by, nx, ny) {
@@ -102,9 +112,13 @@ export class Input {
 
     if (kx || ky) {
       const l = Math.hypot(kx, ky);
-      return { x: kx / l, y: ky / l, strength: 1, active: true };
+      const shift = k.has('shift');
+      return { x: kx / l, y: ky / l, strength: 1, active: true, sprint: shift };
     }
-    if (this.active) return { x: this.dir.x, y: this.dir.y, strength: this.strength, active: true };
-    return { x: 0, y: 0, strength: 0, active: false };
+    if (this.active) {
+      return { x: this.dir.x, y: this.dir.y, strength: this.strength,
+               active: true, sprint: this.sprint };
+    }
+    return { x: 0, y: 0, strength: 0, active: false, sprint: false };
   }
 }

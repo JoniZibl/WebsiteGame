@@ -114,6 +114,8 @@ const state = {
   gespraech: null,
   camPos: new THREE.Vector3(),
   fallFrom: null,
+  rennt: false,       // Sprint: zieht am Atem
+  erschoepft: false,  // nach leerer Puste erst bei halbem Balken wieder rennen
   gelesen: new Set(), // schon geöffnete Truhen
   geschichte: story.neueGeschichte(),
   schlund: null,
@@ -139,6 +141,7 @@ const hpBar = el('hpText').parentElement;
 const ui = {
   hp: hpBar.querySelector('i'), hpText: el('hpText'), hpBar,
   aus: document.querySelector('.balken.ausdauer i'),
+  ausBalken: document.querySelector('.balken.ausdauer'),
   mag: document.querySelector('.balken.magicka i'),
   ortName: el('ortName'), ortInfo: el('ortInfo'),
   stufe: el('stufeZahl'), xp: el('xpFill'), gold: el('goldZahl'),
@@ -173,6 +176,7 @@ function updateHUD() {
   ui.hpText.textContent = Math.max(0, Math.round(h.hp));
   ui.hpBar.classList.toggle('wenig', h.hp < hpMax * 0.3);
   ui.aus.style.width = `${Math.max(0, h.ausdauer / h.ausdauerMax * 100)}%`;
+  ui.ausBalken.classList.toggle('wenig', h.ausdauer < 20);
   ui.mag.style.width = `${Math.max(0, h.magicka / magMax * 100)}%`;
   ui.stufe.textContent = h.stufe;
   ui.xp.style.width = `${Math.min(100, h.xp / h.xpZiel * 100)}%`;
@@ -1339,7 +1343,23 @@ function frame() {
   if (state.running && !state.gespraech && !ladenWirt) {
     const h = held();
     const move = input.read();
-    player.tempo = fert.werte.tempo(h);
+    /* Rennen: nur mit weit ausgelenktem Knüppel (oder Shift), und nur solange
+       der Atem reicht. Ist er leer, muss er sich erst wieder sammeln — sonst
+       stottert der Sprint im Sekundentakt. */
+    const willRennen = !!move.sprint && move.active && move.strength > 0.6;
+    if (h.ausdauer <= 0 && !state.erschoepft) {
+      state.erschoepft = true;
+      if (state.rennt) meldung('außer Puste', '#7d5227', 2.2);
+    } else if (state.erschoepft && h.ausdauer >= 45) {
+      state.erschoepft = false;
+    }
+    if (state.rennt) {
+      if (!willRennen || h.ausdauer <= 0) state.rennt = false;
+    } else if (willRennen && !state.erschoepft && h.ausdauer > 20) {
+      state.rennt = true;
+    }
+    player.tempo = fert.werte.tempo(h) * (state.rennt ? 1.6 : 1);
+    player.rennt = state.rennt;
     player.update(dt, move, world);
     // Häuser und Stämme sind Modelle, keine Blöcke — hier erst werden sie fest
     const raus = doerfer.wegSchieben(player.pos.x, player.pos.z)
@@ -1360,8 +1380,10 @@ function frame() {
     if (state.hieb > 0) state.hieb -= dt;
     if (state.zauber > 0) state.zauber -= dt;
 
-    // Ausdauer und Magicka füllen sich von allein
-    h.ausdauer = Math.min(h.ausdauerMax, h.ausdauer + 16 * dt);
+    // Ausdauer und Magicka füllen sich von allein — das Rennen zehrt daran
+    h.ausdauer = state.rennt
+      ? Math.max(0, h.ausdauer - 14 * dt)
+      : Math.min(h.ausdauerMax, h.ausdauer + 16 * dt);
     const magTempo = h.vorteile.has('magie4') ? 6 : 3.4;
     h.magicka = Math.min(fert.werte.magickaMax(h), h.magicka + magTempo * dt);
     // Nach dem Kampf heilt es langsam, wenn nichts in der Nähe ist

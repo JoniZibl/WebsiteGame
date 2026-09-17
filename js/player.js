@@ -91,6 +91,8 @@ export class Player {
     this.swing = 0;
     this.huepft = 0;
     this.tempo = 1;
+    this.rennt = false;
+    this.schritt = 0;   // Phase der Beinarbeit, läuft mit dem Tempo mit
   }
 
   spawn(world, x, z) {
@@ -181,8 +183,11 @@ export class Player {
 
     // Animation
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    const stride = Math.sin(this.t * 10);
+    // Die Beine gehen im Takt der Geschwindigkeit — beim Rennen sichtbar schneller
+    this.schritt += dt * Math.min(22, sp * 1.9);
+    const stride = Math.sin(this.schritt);
     const walking = sp > 0.4;
+    const weit = this.rennt && walking ? 0.85 : 0.55;
     if (this.huepft > 0) this.huepft -= dt;
 
     // Beim Hüpfen ziehen sich die Beine an, statt weiterzulaufen
@@ -191,12 +196,12 @@ export class Player {
       this.legL.rotation.x = -0.75 * k;
       this.legR.rotation.x = -0.45 * k;
     } else {
-      this.legL.rotation.x = walking ? stride * 0.55 : 0;
-      this.legR.rotation.x = walking ? -stride * 0.55 : 0;
+      this.legL.rotation.x = walking ? stride * weit : 0;
+      this.legR.rotation.x = walking ? -stride * weit : 0;
     }
 
     // Die Laterne bleibt ruhig - sie ist das Einzige, was er nicht schwenkt.
-    this.armR.rotation.x = walking ? stride * 0.12 : 0;
+    this.armR.rotation.x = walking ? stride * (this.rennt ? 0.3 : 0.12) : 0;
 
     const swingK = Math.max(0, this.swing / 0.25);
     this.armL.rotation.x = -swingK * 1.5 + (walking ? -stride * 0.4 : 0);
