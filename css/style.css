@@ -138,6 +138,36 @@ html, body {
   box-shadow: 0 0 0 2px var(--holz-tief); transition: width .12s;
 }
 
+/* Der Rueckweg aus einer Hoehle: nur sichtbar, wenn man wirklich feststeckt */
+.fest-hinweis {
+  position: fixed; z-index: 7; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 196px);
+  width: min(290px, 82vw); text-align: center;
+  padding: 11px 12px 12px; border-radius: 12px;
+  background: var(--putz); color: var(--tinte);
+  box-shadow: 0 0 0 3px var(--holz-tief), 0 6px 0 rgba(74, 59, 48, .25);
+}
+.fest-hinweis.hidden { display: none; }
+.fest-hinweis b { display: block; font-size: 13px; font-weight: 900; margin-bottom: 8px; }
+.fest-hinweis button {
+  width: 100%; padding: 10px; border: 0; border-radius: 9px;
+  background: var(--terra); color: var(--putz);
+  font: inherit; font-size: 13.5px; font-weight: 900; cursor: pointer;
+  box-shadow: 0 0 0 3px var(--holz-tief), 0 4px 0 var(--terra-tief);
+}
+.fest-hinweis button:active { transform: translateY(2px); box-shadow: 0 0 0 3px var(--holz-tief), 0 2px 0 var(--terra-tief); }
+
+.karten-knopf {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; margin-top: 10px; padding: 11px; border: 0; border-radius: 10px;
+  background: var(--putz-tief); color: var(--tinte);
+  font: inherit; font-size: 13px; font-weight: 900; cursor: pointer;
+  box-shadow: 0 0 0 3px var(--holz), 0 4px 0 var(--holz-tief);
+}
+.karten-knopf:active { transform: translateY(2px); box-shadow: 0 0 0 3px var(--holz), 0 2px 0 var(--holz-tief); }
+.karten-knopf .ic { width: 16px; height: 16px; display: block; }
+.karten-knopf .ic svg { display: block; width: 100%; height: 100%; }
+
 /* -------------------------------- Knöpfe -----------------------------------
  * Wie kleine bemalte Holzschilder: eine Fläche, ein Rahmen, eine Kante
  * darunter, die beim Drücken verschwindet.

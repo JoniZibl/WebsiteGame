@@ -1276,6 +1276,16 @@ function karteZeichnen() {
     + ' <span class="punkt du"></span> du'
     + `<span class="legende-weite">Umkreis ${R * 2} Schritt</span>`;
   feld.append(leg);
+
+  const heim = document.createElement('button');
+  heim.className = 'karten-knopf';
+  heim.innerHTML = `${sym('stiefel')}<span>Heimkehr — zum nächsten Dorf</span>`;
+  heim.addEventListener('click', () => { el('menu').classList.add('hidden'); heimkehr(); });
+  feld.append(heim);
+  const wort = document.createElement('p');
+  wort.className = 'punkte-hinweis';
+  wort.textContent = 'Steckst du in einer Höhle fest, bringt dich die Heimkehr heraus.';
+  feld.append(wort);
 }
 
 /* ------------------------------ Tag und Nacht ------------------------------ */
@@ -1457,6 +1467,8 @@ function frame() {
     state.cut += (wantCut - state.cut) * Math.min(1, dt * 7);
     cutPlane.constant = Math.round(state.cut) - 0.03;
 
+    steckenPruefen(dt, move, tief);
+
     state.under = Math.max(0, Math.min(1, tief / 4));
     applyDaytime();
     const night = state.time > 0.78 && state.time < 0.97 ? 1 : 0;
@@ -1517,6 +1529,7 @@ el('menuBtn').addEventListener('click', () => {
   el('menu').classList.remove('hidden');
 });
 el('menuZu').addEventListener('click', () => el('menu').classList.add('hidden'));
+el('festKnopf').addEventListener('click', heimkehr);
 for (const b of document.querySelectorAll('.reiter')) {
   b.addEventListener('click', () => menuZeichnen(b.dataset.tab));
 }
@@ -1529,6 +1542,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'e') handeln();
   if (k === 'h') trinken();
   if (k === 'i') { menuZeichnen('fert'); el('menu').classList.toggle('hidden'); }
+  if (k === 'r') heimkehr();
   if (k === 'escape') { redeSchliessen(); ladenSchliessen(); el('menu').classList.add('hidden'); }
 });
 
@@ -1673,6 +1687,73 @@ function aufstellen(x, z) {
   state.running = true;
 }
 
+/* Naturhoehlen haben keinen gegrabenen Ausgang mehr, seit das Graben raus ist:
+   wer durch eine Kluft faellt, saesse sonst fuer immer fest. Die Heimkehr setzt
+   uns am naechsten Dorf wieder ab — sie kostet nichts als den Weg zurueck. */
+function heimkehr() {
+  if (!state.running || state.dead) return;
+  const px = player.pos.x, pz = player.pos.z;
+  const nah = doerferUm(px, pz, 900)
+    .sort((a, b) => Math.hypot(a.x - px, a.z - pz) - Math.hypot(b.x - px, b.z - pz));
+  const ziel = nah.length ? { x: nah[0].x + 4, z: nah[0].z + 4, dorf: nah[0] } : startplatz();
+
+  juice.ring({ x: px, y: player.pos.y + 0.6, z: pz }, 3.4, '#8fb8cf', 0.6);
+  audio.gem(1);
+
+  // Was in der Gruft stand, bleibt in der Gruft
+  if (state.imDungeon) {
+    state.imDungeon.gefuellt = false;
+    for (const t of [...truhen]) {
+      if (t.gruft === state.imDungeon) { scene.remove(t.obj); truhen.splice(truhen.indexOf(t), 1); }
+    }
+  }
+  feinde.clear();
+  state.imDungeon = null;
+  state.fallFrom = null;
+  festTimer = 0;
+  festOrt = null;
+  festAn = false;
+  hinweisZeigen(false);
+
+  aufstellen(ziel.x, ziel.z);
+  state.ort = ziel.dorf ? ortsname(ziel.dorf) : 'Wildnis';
+  meldung('Heimgekehrt', '#7fae5e', 3.0);
+  updateHUD();
+  writeSave();
+}
+
+/* Steckt der Spieler unter Tage laenger als ein paar Sekunden auf der Stelle,
+   obwohl er laeuft, blenden wir den Rueckweg von selbst ein. */
+let festTimer = 0;
+let festOrt = null;
+let festAn = false;
+const hier = () => ({ x: player.pos.x, y: player.pos.y, z: player.pos.z });
+const abstand = (o) => Math.hypot(player.pos.x - o.x, player.pos.z - o.z)
+  + Math.abs(player.pos.y - o.y);
+
+function steckenPruefen(dt, move, tief) {
+  // Steht das Angebot einmal da, bleibt es stehen — sonst verschwindet es
+  // genau in dem Moment, in dem man den Daumen vom Stick nimmt, um es zu tippen.
+  if (festAn) {
+    if (!festOrt || tief < 3 || abstand(festOrt) > 4) {
+      festAn = false; festOrt = null; festTimer = 0; hinweisZeigen(false);
+    }
+    return;
+  }
+  const laeuft = !!move && move.active && move.strength > 0.25;
+  if (tief < 3 || !laeuft) { festTimer = 0; festOrt = null; return; }
+  if (!festOrt) { festOrt = hier(); festTimer = 0; return; }
+  if (abstand(festOrt) > 1.6) { festOrt = hier(); festTimer = 0; return; }
+  festTimer += dt;
+  if (festTimer > 5) { festAn = true; hinweisZeigen(true); }
+}
+
+function hinweisZeigen(an) {
+  const k = el('festHinweis');
+  if (!k) return;
+  k.classList.toggle('hidden', !an);
+}
+
 function neuesSpiel() {
   save.clear();
   setSeed((Math.random() * 1e9) | 0);
@@ -1788,6 +1869,7 @@ window.__game = {
   dinge, trinken, ladenOeffnen, ladenZeichnen, beutelZeichnen,
   story, chronistOeffnen, waechterAnsprechen, endeZeigen, kapitelGeschafft,
   pfeil, zielPunkt, questsZeichnen,
+  heimkehr, karteZeichnen, menuZeichnen,
 };
 
 resize();
