@@ -107,6 +107,9 @@ export function setSeed(s) {
 export function getSeed() { return SEED; }
 
 /** Temperatur und Feuchte entscheiden, welches Biom hier liegt. */
+// Jede Gegend kennt ihren eigenen Schlüssel — daran hängen Getier und Gefahr.
+for (const [schluessel, b] of Object.entries(BIOMES)) b.id = schluessel;
+
 export function biomeAt(x, z) { return rohBiome(x, z); }
 
 /* Wärme und Feuchte spannen ein Feld auf, ein drittes Rauschen sorgt für die
@@ -163,8 +166,10 @@ function rechneDorf(i, j) {
   const h = rohSurface(x, z);
   if (h <= SEA + 3) return null;
   const biome = rohBiome(x, z);
-  // Dörfer stehen auf Grün: im Fels, in der Düne und im Firn baut niemand.
-  if (biome === BIOMES.berg || biome === BIOMES.wueste || biome === BIOMES.schnee) return null;
+  // Dörfer stehen auf Grün: im Fels, in der Düne, im Firn und in der Asche
+  // baut niemand.
+  if (biome === BIOMES.berg || biome === BIOMES.wueste
+      || biome === BIOMES.schnee || biome === BIOMES.mesa) return null;
   return { i, j, x, z, h, r: 34 + Math.round(rand() * 12), saat: (rand() * 1e9) | 0 };
 }
 

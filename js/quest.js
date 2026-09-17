@@ -95,6 +95,8 @@ export class Auftragsbuch {
     for (const q of this.offen) {
       if (q.fertig || q.art !== art) continue;
       if (art === 'toeten') {
+        // Ein Hase ist kein erledigter Auftrag
+        if (daten.friedlich) continue;
         if (q.wo === 'dungeon' && !daten.imDungeon) continue;
         if (q.wo === 'draussen' && daten.imDungeon) continue;
       }

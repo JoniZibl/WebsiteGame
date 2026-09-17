@@ -75,6 +75,15 @@ html, body {
 }
 .ort small { font-size: 11px; font-weight: 800; opacity: .6; }
 
+/* Gefahrzeichen: ein Rhombus je Stufe, in der Wärme der Gegend */
+.gefahr { font-size: 9px; letter-spacing: 1px; vertical-align: 1px; opacity: .95; }
+.gefahr.g1 { color: #7fae5e; }
+.gefahr.g2 { color: #b39a3f; }
+.gefahr.g3 { color: #e8a83c; }
+.gefahr.g4 { color: #d4703a; }
+.gefahr.g5 { color: #c9543f; }
+#zielleiste .gefahr { text-shadow: 0 1px 0 rgba(253, 246, 232, .9); }
+
 .oben-rechts {
   position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px);
   right: calc(env(safe-area-inset-right, 0px) + 68px);

@@ -64,6 +64,37 @@ export const DINGE = {
                  text: 'Ein Wappen darauf, das keiner kennt.' },
   siegel:      { name: 'Altes Siegel',   art: 'beute', sym: 'siegel', wert: 120, rang: 3,
                  text: 'Hier stand einmal ein Name.' },
+
+  /* --------------------------- Was vom Getier bleibt ---------------------
+   * `wild` heißt: fällt nur bei dem Wesen an, das es trägt, und liegt nie in
+   * einer Truhe. So sagt die Beute einem, wo man gewesen ist.
+   * ---------------------------------------------------------------------- */
+  balg:        { name: 'Weicher Balg',   art: 'beute', sym: 'fell', wert: 10, rang: 0, wild: true,
+                 text: 'Wärmt eine Nacht lang.' },
+  wolle:       { name: 'Rohwolle',       art: 'beute', sym: 'fell', wert: 12, rang: 0, wild: true,
+                 text: 'Riecht nach Regen und Weide.' },
+  hauer:       { name: 'Keilerhauer',    art: 'beute', sym: 'knochen', wert: 22, rang: 1, wild: true,
+                 text: 'Er hat ihn nicht freiwillig hergegeben.' },
+  krummhorn:   { name: 'Krummhorn',      art: 'beute', sym: 'knochen', wert: 26, rang: 1, wild: true,
+                 text: 'Gedreht wie ein alter Weg.' },
+  falterstaub: { name: 'Falterstaub',    art: 'beute', sym: 'glanz', wert: 18, rang: 1, wild: true,
+                 text: 'Leuchtet noch an den Fingern.' },
+  giftstachel: { name: 'Giftstachel',    art: 'beute', sym: 'knochen', wert: 42, rang: 2, wild: true,
+                 text: 'Vorsichtig einpacken.' },
+  frostbalg:   { name: 'Firnbalg',       art: 'beute', sym: 'fell', wert: 48, rang: 2, wild: true,
+                 text: 'Bleibt kalt, egal wie warm es ist.' },
+  irrlichtkern:{ name: 'Irrlichtkern',   art: 'beute', sym: 'kerze', wert: 55, rang: 2, wild: true,
+                 text: 'Im Beutel ist es nie ganz dunkel.' },
+  felsschuppe: { name: 'Felsschuppe',    art: 'beute', sym: 'schild', wert: 62, rang: 3, wild: true,
+                 text: 'Schwerer, als ein Ding ihrer Größe sein sollte.' },
+  moosherz:    { name: 'Moosherz',       art: 'beute', sym: 'kristall', wert: 72, rang: 3, wild: true,
+                 text: 'Es schlägt noch. Langsam.' },
+  nachtauge:   { name: 'Nachtauge',      art: 'beute', sym: 'auge', wert: 95, rang: 3, wild: true,
+                 text: 'Es sieht dich an, auch im Beutel.' },
+  wyrmschuppe: { name: 'Wyrmschuppe',    art: 'beute', sym: 'kristall', wert: 140, rang: 4, wild: true,
+                 text: 'Warm wie ein Stein in der Sonne.' },
+  riesenzahn:  { name: 'Riesenzahn',     art: 'beute', sym: 'knochen', wert: 155, rang: 4, wild: true,
+                 text: 'So groß wie deine Hand. Mindestens.' },
 };
 
 export const TRAGBAR = ['waffe', 'ruestung', 'schmuck'];
@@ -74,6 +105,7 @@ export const verkaufswert = (id) => Math.max(1, Math.round(DINGE[id].wert * 0.45
 /* ------------------------------ Beutetabellen ------------------------------ */
 const NACH_RANG = {};
 for (const [id, d] of Object.entries(DINGE)) {
+  if (d.wild) continue;        // Getierbeute gibt es nur beim Getier
   (NACH_RANG[d.rang] ||= []).push(id);
 }
 

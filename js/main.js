@@ -11,6 +11,7 @@ import { Doerfer } from './village.js';
 import { Flora } from './flora.js';
 import { Leute } from './npc.js';
 import { Feinde, ARTEN } from './combat.js';
+import { wesenWaehlen, gefahrVon, GEFAHRWORT } from './wesen.js';
 import * as gruft from './dungeon.js';
 import * as fert from './skills.js';
 import { Auftragsbuch, auftragFuer } from './quest.js';
@@ -115,6 +116,7 @@ const state = {
   camPos: new THREE.Vector3(),
   fallFrom: null,
   rennt: false,       // Sprint: zieht am Atem
+  gegend: null,       // in welcher Gegend wir zuletzt standen
   erschoepft: false,  // nach leerer Puste erst bei halbem Balken wieder rennen
   gelesen: new Set(), // schon geöffnete Truhen
   geschichte: story.neueGeschichte(),
@@ -162,6 +164,7 @@ symbol(el('redeBtn'), 'rede');
 for (const m of document.querySelectorAll('.ic-muenze')) m.innerHTML = ICONS.muenze;
 
 let hudTimer = 0;
+let letztesZiel = null;
 function waffeZeigen() {
   const id = held().rue.waffe;
   player.setWaffe(id ? DINGE[id] : null);
@@ -185,9 +188,30 @@ function updateHUD() {
   trinkKnopfPflegen();
 
   ui.ortName.textContent = state.ort;
-  ui.ortInfo.textContent = state.imDungeon
-    ? `Gruft · Stufe ${state.imDungeon.stufe}`
-    : biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).name;
+  if (state.imDungeon) {
+    ui.ortInfo.textContent = `Gruft · Stufe ${state.imDungeon.stufe}`;
+  } else {
+    const gegend = biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
+    const g = gefahrVon(gegend.id);
+    ui.ortInfo.innerHTML = `${gegend.name} <span class="gefahr g${g}">${'◆'.repeat(g)}</span>`;
+    gegendWechsel(gegend, g);
+  }
+}
+
+/* Wer in eine raue Gegend läuft, soll es merken, bevor ihn dort etwas merkt.
+   Gewarnt wird nur, solange man dem Ort nicht gewachsen ist — später ist das
+   Firnfeld einfach das Firnfeld. */
+function gegendWechsel(gegend, g) {
+  if (gegend.id === state.gegend) return;
+  const vorher = state.gegend;
+  state.gegend = gegend.id;
+  if (!vorher || g < 3 || held().stufe >= g * 2 - 1) return;
+  const wort = g >= 5 ? 'kehr um, solange du kannst'
+    : g >= 4 ? 'hier jagt Größeres als du'
+    : 'hier wird es rau';
+  const farbe = g >= 5 ? '#c9543f' : g >= 4 ? '#d4703a' : '#e8a83c';
+  meldung(`${gegend.name} — ${wort}`, farbe, 3.4);
+  if (g >= 5) juice.shake(0.25);
 }
 
 /* ------------------------------ Was wird verfolgt? -------------------------
@@ -238,7 +262,16 @@ function feindGefallen(f) {
   // Was ein Gegner hinterlässt: meist Krempel, selten etwas Brauchbares
   const stufe = state.imDungeon ? state.imDungeon.stufe : 1;
   const rand = Math.random;
-  if (f.art.boss || rand() < 0.28 * fert.werte.beute(h)) {
+  // Was ein Wesen an sich trägt, fällt nur bei ihm — daran sieht man später,
+  // wo man überall gewesen ist.
+  if (f.art.beute && rand() < 0.55) {
+    dinge.nehmen(h, f.art.beute);
+    juice.popup({ x: f.pos.x, y: f.pos.y + 1.4, z: f.pos.z },
+      DINGE[f.art.beute].name, '#7fae5e');
+  }
+  // Krempel und Tränke tragen nur die, die überhaupt etwas mit sich führen
+  const traegt = f.art.boss || f.art.gold > 0;
+  if (traegt && (f.art.boss || rand() < 0.28 * fert.werte.beute(h))) {
     const id = f.art.boss ? dinge.beuteZiehen(rand, stufe + 2) : dinge.beuteZiehen(rand, stufe, true);
     dinge.nehmen(h, id);
     juice.popup({ x: f.pos.x, y: f.pos.y + 1.1, z: f.pos.z },
@@ -253,7 +286,8 @@ function feindGefallen(f) {
     audio.gem(3);
     meldung(`Stufe ${h.stufe}!`, '#e8a83c', 3.2);
   }
-  const fertigeQ = state.buch.melden('toeten', { imDungeon: !!state.imDungeon });
+  const fertigeQ = state.buch.melden('toeten',
+    { imDungeon: !!state.imDungeon, friedlich: f.gesinnung === 'friedlich' });
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
   if (f.id === 'waechter' && story.melden(state.geschichte, 'waechter', {})) {
      endeZeigen('klinge');
@@ -1307,27 +1341,46 @@ function applyDaytime() {
 
 /* ------------------------------- Draußen leben ----------------------------- */
 let wildTimer = 4;
+const istNacht = () => state.time > 0.76 || state.time < 0.12;
+
 function wildnisPflegen(dt) {
   wildTimer -= dt;
   if (wildTimer > 0) return;
-  wildTimer = 5 + Math.random() * 6;
+  wildTimer = 3 + Math.random() * 5;
+
+  // Was nur die Nacht hervorbringt, hält das Licht nicht aus. Wer bis zum
+  // Morgen durchhält, hat den Nachtmahr überstanden — wortwörtlich.
+  if (!istNacht()) {
+    for (const f of [...feinde.liste]) {
+      if (!f.art.nurNachts) continue;
+      juice.ring({ x: f.pos.x, y: f.pos.y + 0.8, z: f.pos.z }, 2.0, '#8fb8cf', 0.5);
+      feinde.entfernen(f);
+    }
+  }
+
   if (state.imDungeon) return;
-  if (feinde.anzahl >= 9) return;
+  if (feinde.anzahl >= 13) return;
 
   // Nicht im Dorf: dort soll man verschnaufen können
   if (dorfBei(Math.floor(player.pos.x), Math.floor(player.pos.z))) return;
 
-  const nacht = state.time > 0.76 || state.time < 0.12;
+  const nacht = istNacht();
   const a = Math.random() * Math.PI * 2;
-  const r = 32 + Math.random() * 22;
+  const r = 26 + Math.random() * 28;
   const x = Math.round(player.pos.x + Math.cos(a) * r);
   const z = Math.round(player.pos.z + Math.sin(a) * r);
   const y = surfaceAt(x, z);
   if (y <= SEA) return;
   if (dorfBei(x, z)) return;
 
-  const art = nacht && Math.random() < 0.45 ? 'raeuber' : 'wolf';
-  const stufe = 1 + Math.min(4, Math.floor(Math.hypot(x, z) / 500));
+  // Jede Gegend hat ihr eigenes Getier, und nachts ein anderes als am Tag
+  const gegend = biomeAt(x, z);
+  const art = wesenWaehlen(gegend.id, nacht);
+  // Die Gegend selbst bestimmt die Stärke, nicht die Entfernung vom Anfang:
+  // ein Firnfeld ist von der ersten Minute an ein Firnfeld.
+  const gefahr = gefahrVon(gegend.id);
+  const stufe = Math.min(5, Math.max(1,
+    Math.round(gefahr * 0.7) + (nacht ? 1 : 0) + Math.min(2, Math.floor(Math.hypot(x, z) / 900))));
   feinde.spawn(art, x + 0.5, y + 1, z + 0.5, stufe);
 }
 
@@ -1387,7 +1440,7 @@ function frame() {
     const magTempo = h.vorteile.has('magie4') ? 6 : 3.4;
     h.magicka = Math.min(fert.werte.magickaMax(h), h.magicka + magTempo * dt);
     // Nach dem Kampf heilt es langsam, wenn nichts in der Nähe ist
-    const ruhe = !feinde.ziel(player.pos, player.facing, 14);
+    const ruhe = !feinde.bedrohung(player.pos, 14);
     const hpMaxJetzt = fert.werte.lebenMax(h);
     if (ruhe && h.hp < hpMaxJetzt) {
       h.hp = Math.min(hpMaxJetzt, h.hp + (h.vorteile.has('zaehe4') ? 3.2 : 1.4) * dt);
@@ -1473,9 +1526,14 @@ function frame() {
     const z = feinde.ziel(player.pos, player.facing, 3.4);
     ui.ziel.classList.toggle('hidden', !z);
     if (z) {
-      ui.zielName.textContent = `${z.art.name}`;
+      if (z !== letztesZiel) {
+        letztesZiel = z;
+        const st = z.art.stufe || 1;
+        ui.zielName.innerHTML = `${z.art.name} `
+          + `<span class="gefahr g${st}">${'◆'.repeat(st)}</span>`;
+      }
       ui.zielHp.style.width = `${Math.max(0, z.hp / z.hpMax * 100)}%`;
-    }
+    } else letztesZiel = null;
     // Der Reden-Knopf erscheint nur, wenn es etwas zu tun gibt
     const w = was();
     ui.rede.classList.toggle('hidden', !w);
@@ -1626,7 +1684,11 @@ function weltLeeren() {
 
 function startplatz() {
   const nah = doerferUm(0, 0, 1200).sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));
-  if (nah.length) return { x: nah[0].x + 4, z: nah[0].z + 4, dorf: nah[0] };
+  // Angefangen wird in einer ruhigen Gegend. Wer im Bruch aufwacht, hat mit
+  // Stufe 1 nichts zu lachen — das Grauen soll man suchen, nicht erben.
+  const ruhig = nah.find((d) => gefahrVon(biomeAt(d.x, d.z).id) <= 2);
+  const wahl = ruhig || nah[0];
+  if (wahl) return { x: wahl.x + 4, z: wahl.z + 4, dorf: wahl };
   return { x: 0, z: 0, dorf: null };
 }
 
@@ -1857,6 +1919,7 @@ window.__game = {
   story, chronistOeffnen, waechterAnsprechen, endeZeigen, kapitelGeschafft,
   pfeil, zielPunkt, questsZeichnen,
   heimkehr, karteZeichnen, menuZeichnen,
+  ARTEN, wesenWaehlen, gefahrVon,
 };
 
 resize();
