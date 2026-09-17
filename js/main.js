@@ -20,7 +20,7 @@ import * as story from './story.js';
 import { ICONS, symbol } from './icons.js';
 import { peek, anwenden } from './peek.js';
 import { DINGE } from './items.js';
-import { kisteBauen, torBauen } from './props.js';
+import { kisteBauen, torBauen, beutelBauen } from './props.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 
@@ -117,6 +117,7 @@ const state = {
   fallFrom: null,
   rennt: false,       // Sprint: zieht am Atem
   gegend: null,       // in welcher Gegend wir zuletzt standen
+  beutel: null,       // was am Sterbeort liegen geblieben ist
   erschoepft: false,  // nach leerer Puste erst bei halbem Balken wieder rennen
   gelesen: new Set(), // schon geöffnete Truhen
   geschichte: story.neueGeschichte(),
@@ -397,11 +398,71 @@ function trinkKnopfPflegen() {
 }
 
 function sterben(von) {
+  const h = held();
   state.dead = true;
   state.running = false;
+
+  /* Sterben muss etwas kosten, sonst ist jede Gefahr nur eine Anzeige. Die
+     Hälfte des Goldes bleibt liegen, wo man gefallen ist — man kann es holen,
+     aber man muss noch einmal dorthin. Und man wacht erst am Morgen auf: die
+     Nacht, die einen umgebracht hat, ist dann vorbei. */
+  const verlust = Math.floor(h.gold * 0.5);
+  h.gold -= verlust;
+  if (verlust > 0) {
+    beutelFallenLassen(player.pos.x, player.pos.y, player.pos.z, verlust);
+  }
+
   el('deadWer').textContent = von ? `${von} war stärker als du.` : 'Etwas war stärker als du.';
-  el('deadStats').textContent = `Stufe ${held().stufe} · ${held().getoetet} erlegt · ${held().gold} Gold`;
+  el('deadStats').textContent = verlust > 0
+    ? `${verlust} Gold blieb liegen, wo du gefallen bist.`
+    : `Stufe ${h.stufe} · ${h.getoetet} erlegt`;
   el('dead').classList.remove('hidden');
+  writeTod();
+}
+
+/* ------------------------------ Der Beutel ---------------------------------
+ * Es liegt immer nur einer da. Wer stirbt, bevor er den alten geholt hat,
+ * verliert ihn — das ist hart, aber es hält einen ehrlich.
+ * -------------------------------------------------------------------------- */
+const beutelMuster = beutelBauen();
+let beutelObj = null;
+
+function beutelFallenLassen(x, y, z, gold) {
+  beutelAufloesen();
+  state.beutel = { x, y, z, gold };
+  beutelZeigen();
+}
+
+function beutelZeigen() {
+  if (!state.beutel || beutelObj) return;
+  beutelObj = beutelMuster.clone();
+  beutelObj.position.set(state.beutel.x, state.beutel.y + 0.1, state.beutel.z);
+  scene.add(beutelObj);
+}
+
+function beutelAufloesen() {
+  if (beutelObj) { scene.remove(beutelObj); beutelObj = null; }
+  state.beutel = null;
+}
+
+function beutelPflegen(dt) {
+  // Im Bild des Todes läuft die Schleife noch zu Ende — ohne diese Sperre
+  // hätte man den Beutel eingesammelt, bevor er den Boden berührt.
+  if (!state.beutel || state.dead) return;
+  if (!beutelObj) beutelZeigen();
+  beutelObj.rotation.y += dt * 0.7;
+  beutelObj.position.y = state.beutel.y + 0.1 + Math.sin(state.time * 900) * 0.06;
+  const d = Math.hypot(player.pos.x - state.beutel.x, player.pos.z - state.beutel.z);
+  if (d < 1.6 && Math.abs(player.pos.y - state.beutel.y) < 3) {
+    const gold = state.beutel.gold;
+    held().gold += gold;
+    audio.gem(3);
+    juice.ring({ x: state.beutel.x, y: state.beutel.y + 0.5, z: state.beutel.z }, 2.4, '#f5c451');
+    meldung(`${gold} Gold zurück`, '#e8a83c', 2.6);
+    beutelAufloesen();
+    updateHUD();
+    writeSave();
+  }
 }
 
 /* ------------------------------ Truhen & Gruften --------------------------- */
@@ -1426,6 +1487,7 @@ function frame() {
     feinde.update(dt, world, player.pos, !state.dead);
     feinde.aufraeumen(player.pos.x, player.pos.z, 130);
     wildnisPflegen(dt);
+    beutelPflegen(dt);
 
     const vorher = state.time;
     state.time = (state.time + dt / DAY) % 1;
@@ -1641,8 +1703,10 @@ el('qualityBtn').addEventListener('click', () => {
 });
 
 /* ------------------------------ Spielstand --------------------------------- */
-function writeSave() {
-  if (!state.running || state.dead) return;
+function writeSave(auchTot = false) {
+  // Beim Sterben muss trotzdem geschrieben werden, sonst wäre der verlorene
+  // Beutel nach einem Neuladen einfach weg.
+  if (!auchTot && (!state.running || state.dead)) return;
   const h = held();
   save.save({
     seed: getSeed(),
@@ -1661,8 +1725,11 @@ function writeSave() {
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8),
               verfolgtNr: state.buch.verfolgtNr },
     geschichte: state.geschichte,
+    beutel: state.beutel,
   });
 }
+
+const writeTod = () => writeSave(true);
 
 function weltLeeren() {
   for (const [k, chunk] of [...world.chunks]) {
@@ -1680,6 +1747,7 @@ function weltLeeren() {
   truhen.length = 0;
   for (const t of tore) scene.remove(t.obj);
   tore.length = 0;
+  if (beutelObj) { scene.remove(beutelObj); beutelObj = null; }
 }
 
 function startplatz() {
@@ -1814,6 +1882,7 @@ function neuesSpiel() {
   state.dead = false;
   state.imDungeon = null;
   state.fallFrom = null;
+  beutelAufloesen();
   juice.reset();
 
   const s = startplatz();
@@ -1847,7 +1916,8 @@ function weiterSpielen(d) {
   state.fallFrom = null;
   juice.reset();
 
-  state.geschichte = Object.assign(story.neueGeschichte(), d.geschichte || {});
+  state.beutel = d.beutel || null;
+    state.geschichte = Object.assign(story.neueGeschichte(), d.geschichte || {});
   welteinrichtung(startplatz().dorf);
   if (d.geschichte) {
     // Die Gruft aus dem Spielstand gewinnt — die Welt kann sich sonst
@@ -1880,10 +1950,10 @@ el('endeWeiter').addEventListener('click', () => {
 
 el('againBtn').addEventListener('click', () => {
   el('dead').classList.add('hidden');
-  // Man wacht im Dorf auf und behält alles bis auf etwas Gold
+  // Man wacht am Morgen im Dorf auf — angeschlagen, und das Gold liegt draußen
   const h = held();
-  h.gold = Math.round(h.gold * 0.8);
-  h.hp = fert.werte.lebenMax(h);
+  h.hp = Math.round(fert.werte.lebenMax(h) * 0.5);
+  state.time = 0.28;
   h.ausdauer = h.ausdauerMax;
   h.magicka = fert.werte.magickaMax(h);
   state.dead = false;

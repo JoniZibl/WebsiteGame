@@ -241,6 +241,17 @@ export function kisteBauen() {
   return flattenGroup(g);
 }
 
+/** Der Beutel, den man am Sterbeort liegen lässt. */
+export function beutelBauen() {
+  const g = new THREE.Group();
+  add(g, box(0.62, 0.5, 0.5), '#8a5230', 0, 0.28, 0);
+  add(g, box(0.5, 0.2, 0.4), '#a8743f', 0, 0.6, 0);
+  add(g, box(0.16, 0.18, 0.16), FARBEN.balkenTief, 0, 0.74, 0);
+  add(g, box(0.22, 0.06, 0.22), FARBEN.gold, 0.2, 0.06, 0.2);
+  add(g, box(0.18, 0.06, 0.18), FARBEN.gold, -0.18, 0.06, -0.14);
+  return flattenGroup(g);
+}
+
 /* ------------------------------ Weitere Gewächse ---------------------------
  * Draußen standen bisher Blockbäume aus Stamm- und Laubwürfeln — das sah aus
  * wie ein anderes Spiel als das Dorf. Hier sind die Sorten, die das Gelände
