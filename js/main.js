@@ -15,6 +15,8 @@ import * as fert from './skills.js';
 import { Auftragsbuch, auftragFuer } from './quest.js';
 import * as dinge from './items.js';
 import * as story from './story.js';
+import { ICONS, symbol } from './icons.js';
+import { peek, anwenden } from './peek.js';
 import { DINGE } from './items.js';
 import { kisteBauen, torBauen } from './props.js';
 import { GameAudio } from './audio.js';
@@ -65,42 +67,8 @@ renderer.clippingPlanes = [cutPlane];
 
 const blockMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 
-/* Guckloch: Was zwischen Kamera und Zwerg steht, faellt weg - sonst
-   verschwindet er unter jedem Blaetterdach. Der Schnitt folgt dem Sehstrahl,
-   nicht der Senkrechten, und franst per Punktmuster aus. */
-const peek = {
-  uPeek: { value: new THREE.Vector3(0, 1e6, 0) },
-  uPeekR: { value: 1.25 },
-};
-blockMat.onBeforeCompile = (shader) => {
-  shader.uniforms.uPeek = peek.uPeek;
-  shader.uniforms.uPeekR = peek.uPeekR;
-  shader.vertexShader = 'varying vec3 vWorld;\n' + shader.vertexShader.replace(
-    '#include <project_vertex>',
-    'vWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <project_vertex>'
-  );
-  shader.fragmentShader = 'varying vec3 vWorld;\nuniform vec3 uPeek;\nuniform float uPeekR;\n'
-    + shader.fragmentShader.replace(
-      '#include <clipping_planes_fragment>',
-      `if (vWorld.y > uPeek.y) {
-       vec3 toP = uPeek - cameraPosition;
-       float pL = length(toP);
-       vec3 pDir = toP / pL;
-       vec3 pV = vWorld - cameraPosition;
-       float pT = dot(pV, pDir);
-       if (pT > 0.0 && pT < pL - 1.2) {
-         float d = length(pV - pDir * pT);
-         if (d < uPeekR) discard;
-         if (d < uPeekR * 1.25) {
-           float f = (d - uPeekR) / (uPeekR * 0.35);
-           vec2 g = floor(mod(gl_FragCoord.xy, 2.0));
-           if (g.x + g.y * 2.0 > f * 4.0) discard;
-         }
-       }
-       }
-       #include <clipping_planes_fragment>`
-    );
-};
+anwenden(blockMat);
+
 const waterMat = new THREE.MeshLambertMaterial({
   vertexColors: true, transparent: true, opacity: 0.72, flatShading: true,
 });
@@ -159,7 +127,11 @@ const feinde = new Feinde(scene, {
   onTod: (f) => feindGefallen(f),
 });
 
-/* ------------------------------- Anzeige ---------------------------------- */
+/* ------------------------------- Anzeige ----------------------------------
+ * Die Symbole kommen aus icons.js und werden einmal hineingesetzt. Emoji
+ * haben hier nichts verloren - sie bringen einen ganz anderen Strich mit als
+ * die Welt darunter.
+ * -------------------------------------------------------------------------- */
 const el = (id) => document.getElementById(id);
 const hpBar = el('hpText').parentElement;
 const ui = {
@@ -170,8 +142,21 @@ const ui = {
   stufe: el('stufeZahl'), xp: el('xpFill'), gold: el('goldZahl'),
   auftrag: el('auftragTafel'), aTitel: el('auftragTitel'), aStand: el('auftragStand'),
   ziel: el('zielleiste'), zielName: el('zielName'), zielHp: el('zielHp'),
+  weg: el('wegweiser'), wegText: el('wegText'),
   rede: el('redeBtn'), wirk: el('wirkBtn'),
 };
+
+/* Die Symbole einmal hineinsetzen. Alles, was sich je nach Lage ändert,
+   bekommt sein Symbol dort, wo es sich ändert. */
+/** Ein Symbol als Markup — für Listen, die per innerHTML gebaut werden. */
+const sym = (name) => `<span class="ic">${ICONS[name] || ''}</span>`;
+
+symbol(el('hauBtn'), 'schwert');
+symbol(el('wirkBtn'), 'funke');
+symbol(el('menuBtn'), 'beutel');
+symbol(el('qualityBtn'), 'glanz');
+symbol(el('redeBtn'), 'rede');
+for (const m of document.querySelectorAll('.ic-muenze')) m.innerHTML = ICONS.muenze;
 
 let hudTimer = 0;
 function waffeZeigen() {
@@ -256,7 +241,7 @@ function feindGefallen(f) {
     const id = f.art.boss ? dinge.beuteZiehen(rand, stufe + 2) : dinge.beuteZiehen(rand, stufe, true);
     dinge.nehmen(h, id);
     juice.popup({ x: f.pos.x, y: f.pos.y + 1.1, z: f.pos.z },
-      `${DINGE[id].icon} ${DINGE[id].name}`, '#7fae5e');
+      DINGE[id].name, '#7fae5e');
   }
   audio.kill();
   juice.shake(0.35);
@@ -351,7 +336,7 @@ function trinken() {
   audio.chomp();
   juice.ring({ x: player.pos.x, y: player.pos.y + 0.5, z: player.pos.z }, 2.2,
     d.heilt ? '#d9533f' : '#5e8aa8');
-  meldung(`${d.icon} ${d.name}`, d.heilt ? '#d9533f' : '#5e8aa8');
+  meldung(d.name, d.heilt ? '#d9533f' : '#5e8aa8');
   updateHUD();
 }
 
@@ -370,7 +355,9 @@ function trinkKnopfPflegen() {
     const anzahl = Object.entries(h.beutel)
       .filter(([id]) => DINGE[id]?.art === 'trank')
       .reduce((n, [, k]) => n + k, 0);
-    b.textContent = `🧪${anzahl > 1 ? anzahl : ''}`;
+    if (!b.dataset.gefuellt) { b.insertAdjacentHTML('afterbegin', ICONS.trank); b.dataset.gefuellt = '1'; }
+    const zahl = document.getElementById('trinkZahl');
+    if (zahl) zahl.textContent = anzahl > 1 ? anzahl : '';
   }
 }
 
@@ -438,7 +425,7 @@ function truheOeffnen(t) {
   meldung(`+${gold} Gold`, '#e8a83c');
   inhalt.stuecke.forEach((id, i) => {
     juice.popup({ x: t.pos.x, y: t.pos.y + 1.4 + i * 0.7, z: t.pos.z },
-      `${DINGE[id].icon} ${DINGE[id].name}`, '#7fae5e');
+      DINGE[id].name, '#7fae5e');
   });
   const fertigeQ = state.buch.melden('truhe', {});
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
@@ -544,6 +531,120 @@ function gruftBetreten(g) {
   audio.gem(0);
   meldung(g.name, '#4a3b30', 3.0);
   updateHUD();
+}
+
+/* --------------------------------- Wegweiser -------------------------------
+ * Ein Auftrag ohne Richtung schickt einen ins Leere. Der Pfeil liegt flach am
+ * Boden neben dem Spieler und dreht sich zum Ziel — von oben gesehen ist das
+ * lesbarer als ein Zeiger am Bildschirmrand.
+ * -------------------------------------------------------------------------- */
+const pfeilGeo = new THREE.BufferGeometry();
+pfeilGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+  0, 0, 1.15,  -0.62, 0, -0.35,  -0.24, 0, -0.12,
+  0, 0, 1.15,  0.24, 0, -0.12,  0.62, 0, -0.35,
+  -0.24, 0, -0.12,  0.24, 0, -0.12,  0, 0, 1.15,
+], 3));
+pfeilGeo.computeVertexNormals();
+const pfeil = new THREE.Mesh(pfeilGeo, new THREE.MeshBasicMaterial({
+  color: '#e8a83c', transparent: true, opacity: 0.95,
+  depthWrite: false, depthTest: false, side: THREE.DoubleSide,
+}));
+pfeil.renderOrder = 20;
+// Ein dunkler Zwilling darunter gibt ihm eine Kante gegen jeden Untergrund
+const pfeilRand = new THREE.Mesh(pfeilGeo, new THREE.MeshBasicMaterial({
+  color: '#7d5227', transparent: true, opacity: 0.85,
+  depthWrite: false, depthTest: false, side: THREE.DoubleSide,
+}));
+pfeilRand.renderOrder = 19;
+pfeilRand.visible = false;
+scene.add(pfeilRand);
+pfeil.visible = false;
+scene.add(pfeil);
+
+/** Wohin der Pfeil zeigt: Ziel des verfolgten Auftrags oder der Geschichte. */
+function zielPunkt() {
+  const st = state.geschichte;
+  const k = st.gestartet ? story.aktuell(st) : null;
+
+  if (k) {
+    if (story.kapitelFertig(st)) return heimatZiel('Chronist');
+    if (k.art === 'glimm') {
+      const g = naechsteGruft();
+      return g ? { x: g.x, z: g.z, name: g.name } : null;
+    }
+    if (k.art === 'truhe') {
+      const g = gruft.grueftUm(player.pos.x, player.pos.z, 2000).find((x) => x.id === st.gruftId);
+      return g ? { x: g.x, z: g.z, name: g.name } : null;
+    }
+    if (k.art === 'doerfer') {
+      const fremd = doerferUm(player.pos.x, player.pos.z, 900)
+        .filter((d) => !state.heimat || d.i !== state.heimat.i || d.j !== state.heimat.j)
+        .filter((d) => !st.doerfer.includes(ortsname(d)))
+        .sort((a, b) => Math.hypot(a.x - player.pos.x, a.z - player.pos.z)
+                      - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
+      return fremd ? { x: fremd.x, z: fremd.z, name: ortsname(fremd) } : null;
+    }
+    if (k.art === 'schlund' || k.art === 'waechter') {
+      return state.schlund ? { x: state.schlund.x, z: state.schlund.z, name: 'Der Schlund' } : null;
+    }
+    return null;
+  }
+
+  const q = state.buch.verfolgt();
+  if (!q) return null;
+  if (q.fertig) {
+    return q.geberOrt ? { x: q.geberOrt.x, z: q.geberOrt.z, name: q.geberName || 'zurück' } : null;
+  }
+  return q.zielOrt ? { x: q.zielOrt.x, z: q.zielOrt.z, name: q.ziel } : null;
+}
+
+function heimatZiel(name) {
+  if (!state.heimat) return null;
+  return { x: state.heimat.x, z: state.heimat.z, name };
+}
+
+function naechsteGruft() {
+  return gruft.grueftUm(player.pos.x, player.pos.z, 700)
+    .sort((a, b) => Math.hypot(a.x - player.pos.x, a.z - player.pos.z)
+                  - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
+}
+
+function pfeilPflegen(dt) {
+  const ziel = zielPunkt();
+  if (!ziel) {
+    pfeil.visible = false; pfeilRand.visible = false;
+    ui.weg.classList.add('hidden');
+    return;
+  }
+
+  const dx = ziel.x - player.pos.x, dz = ziel.z - player.pos.z;
+  const d = Math.hypot(dx, dz);
+
+  // Steht man schon da, hilft kein Pfeil mehr
+  if (d < 12) {
+    pfeil.visible = false; pfeilRand.visible = false;
+    ui.weg.classList.remove('hidden');
+    ui.wegText.textContent = `${ziel.name} — du bist da`;
+    return;
+  }
+
+  pfeil.visible = true;
+  pfeilRand.visible = true;
+  const w = Math.atan2(dx, dz);
+  const puls = 1.5 + Math.sin(state.time * 2400) * 0.12;
+  // Über dem Kopf, damit er auch im Gedränge sichtbar bleibt
+  const px = player.pos.x + Math.sin(w) * 2.2;
+  const pz = player.pos.z + Math.cos(w) * 2.2;
+  const py = player.pos.y + 2.6;
+  pfeil.rotation.y = w;
+  pfeil.position.set(px, py, pz);
+  pfeil.scale.setScalar(puls);
+  pfeilRand.rotation.y = w;
+  pfeilRand.position.set(px, py - 0.04, pz);
+  pfeilRand.scale.setScalar(puls * 1.2);
+
+  ui.weg.classList.remove('hidden');
+  ui.wegText.textContent = `${ziel.name} — ${Math.round(d)} Schritt`;
 }
 
 /* ------------------------------ Die Geschichte ----------------------------- */
@@ -704,6 +805,8 @@ function kontextFuer(n) {
     dungeonPos: naheGruft ? { x: naheGruft.x, z: naheGruft.z } : null,
     nachbarort: nachbar ? ortsname(nachbar) : 'Steinfurt',
     nachbarPos: nachbar ? { x: nachbar.x, z: nachbar.z } : null,
+    geberPos: { x: n.heimX, z: n.heimZ },
+    geberName: n.name,
   };
 }
 
@@ -854,9 +957,9 @@ function ladenZeichnen() {
       const kann = h.gold >= preis;
       const z = document.createElement('button');
       z.className = 'ding-zeile laden-zeile' + (kann ? '' : ' aus');
-      z.innerHTML = `<span class="ic">${d.icon}</span>`
+      z.innerHTML = sym(d.sym)
         + `<span class="txt"><b>${d.name}</b><small>${wirkungText(d)}</small></span>`
-        + `<span class="preis">${preis} 🪙</span>`;
+        + `<span class="preis">${preis}<i class="ic-muenze">${ICONS.muenze}</i></span>`;
       if (kann) {
         z.addEventListener('click', () => {
           h.gold -= preis;
@@ -881,10 +984,10 @@ function ladenZeichnen() {
       const preis = dinge.verkaufswert(id);
       const z = document.createElement('button');
       z.className = 'ding-zeile laden-zeile';
-      z.innerHTML = `<span class="ic">${d.icon}</span>`
+      z.innerHTML = sym(d.sym)
         + `<span class="txt"><b>${d.name}${h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : ''}</b>`
         + `<small>${wirkungText(d)}</small></span>`
-        + `<span class="preis">+${preis} 🪙</span>`;
+        + `<span class="preis">+${preis}<i class="ic-muenze">${ICONS.muenze}</i></span>`;
       z.addEventListener('click', () => {
         if (!dinge.ablegen(h, id)) return;
         h.gold += preis;
@@ -936,10 +1039,11 @@ function beutelZeichnen() {
   for (const art of dinge.TRAGBAR) {
     const id = h.rue[art];
     const platz = document.createElement('button');
-    platz.className = 'rue-platz' + (id ? ' voll' : '');
+    platz.className = 'rue-platz' + (id ? ' voll' : ' leer');
+    const sorte = art === 'waffe' ? 'schwert' : art === 'ruestung' ? 'schild' : 'ring';
     platz.innerHTML = id
-      ? `<span class="ic">${DINGE[id].icon}</span><small>${DINGE[id].name}</small>`
-      : `<span class="ic">·</span><small>${art === 'waffe' ? 'Waffe' : art === 'ruestung' ? 'Rüstung' : 'Schmuck'}</small>`;
+      ? `${sym(DINGE[id].sym)}<small>${DINGE[id].name}</small>`
+      : `${sym(sorte)}<small>${art === 'waffe' ? 'Waffe' : art === 'ruestung' ? 'Rüstung' : 'Schmuck'}</small>`;
     if (id) platz.addEventListener('click', () => { dinge.ausziehen(h, art); audio.step(); beutelZeichnen(); updateHUD(); });
     kopf.append(platz);
   }
@@ -964,7 +1068,7 @@ function beutelZeichnen() {
     const d = DINGE[id];
     const z = document.createElement('div');
     z.className = 'ding-zeile';
-    z.innerHTML = `<span class="ic">${d.icon}</span>`
+    z.innerHTML = sym(d.sym)
       + `<span class="txt"><b>${d.name}${h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : ''}</b>`
       + `<small>${d.text}</small></span>`;
     const tun = document.createElement('button');
@@ -976,7 +1080,7 @@ function beutelZeichnen() {
       tun.textContent = 'trinken';
       tun.addEventListener('click', () => { trinkenGezielt(id); beutelZeichnen(); });
     } else {
-      tun.textContent = `${dinge.verkaufswert(id)} 🪙`;
+      tun.innerHTML = `${dinge.verkaufswert(id)}<i class="ic-muenze">${ICONS.muenze}</i>`;
       tun.classList.add('still');
     }
     z.append(tun);
@@ -1009,7 +1113,7 @@ function fertZeichnen() {
   for (const [id, f] of Object.entries(fert.FERTIGKEITEN)) {
     const z = document.createElement('div');
     z.className = 'fert-zeile';
-    z.innerHTML = `<span class="ic">${f.icon}</span>`
+    z.innerHTML = sym(f.sym)
       + `<span class="txt"><b>${f.name}</b><small>${f.hinweis}</small></span>`
       + `<span class="stufe-zahl">${h.fert[id]}</span>`;
     feld.append(z);
@@ -1065,12 +1169,31 @@ function questsZeichnen() {
     p.textContent = 'Kein Auftrag. Sprich mit den Leuten im Dorf.';
     feld.append(p);
   }
+  const verfolgt = state.buch.verfolgt();
   for (const q of offen) {
+    const dran = q === verfolgt && !(k && st.gestartet);
     const z = document.createElement('div');
-    z.className = 'q-zeile' + (q.fertig ? ' fertig' : '');
-    z.innerHTML = `<b>${q.titel}</b><p>${q.text}</p>`
-      + `<small>${q.fertig ? 'erledigt — zurück zum Auftraggeber' : `${q.stand} / ${q.menge}`}`
-      + ` · ${q.lohn.gold} Gold</small>`;
+    z.className = 'q-zeile' + (q.fertig ? ' fertig' : '') + (dran ? ' verfolgt' : '');
+    z.innerHTML = `<b>${q.titel}</b><p>${q.text}</p>`;
+
+    // Fortschritt und Knopf teilen sich eine Zeile — sonst läuft der Knopf
+    // in den Text hinein.
+    const fuss = document.createElement('div');
+    fuss.className = 'q-fuss';
+    const stand = document.createElement('small');
+    stand.textContent = (q.fertig ? 'erledigt — zurück zum Geber' : `${q.stand} / ${q.menge}`)
+      + ` · ${q.lohn.gold} Gold`;
+    const knopf = document.createElement('button');
+    knopf.className = 'q-verfolgen' + (dran ? ' an' : '');
+    knopf.textContent = dran ? '◆ verfolgt' : '◇ verfolgen';
+    knopf.addEventListener('click', () => {
+      state.buch.verfolgen(dran ? null : q);
+      audio.step();
+      questsZeichnen();
+      updateHUD();
+    });
+    fuss.append(stand, knopf);
+    z.append(fuss);
     feld.append(z);
   }
   for (const q of state.buch.erledigt.slice(-3)) {
@@ -1088,25 +1211,28 @@ function karteZeichnen() {
   box.className = 'karte-feld';
   const R = 420;
   const px = player.pos.x, pz = player.pos.z;
-  const setz = (x, z, zeichen, klasse = '') => {
+  const setz = (x, z, klasse) => {
     const l = (x - px) / (R * 2) + 0.5, t = (z - pz) / (R * 2) + 0.5;
     if (l < 0.02 || l > 0.98 || t < 0.02 || t > 0.98) return;
     const s = document.createElement('span');
     s.className = `punkt ${klasse}`;
     s.style.left = `${l * 100}%`;
     s.style.top = `${t * 100}%`;
-    s.textContent = zeichen;
     box.append(s);
   };
-  for (const d of doerferUm(px, pz, R)) setz(d.x, d.z, '🏠');
-  for (const g of gruft.grueftUm(px, pz, R)) setz(g.x, g.z, '🕳️');
-  const q = state.buch.verfolgt();
-  if (q && q.zielOrt) setz(q.zielOrt.x, q.zielOrt.z, '❗');
-  setz(px, pz, '🔺', 'du');
+  for (const d of doerferUm(px, pz, R)) setz(d.x, d.z, 'dorf');
+  for (const g of gruft.grueftUm(px, pz, R)) setz(g.x, g.z, 'gruft');
+  const ziel = zielPunkt();
+  if (ziel) setz(ziel.x, ziel.z, 'ziel');
+  setz(px, pz, 'du');
   feld.append(box);
   const leg = document.createElement('p');
   leg.className = 'karte-legende';
-  leg.textContent = `🏠 Dorf · 🕳️ Gruft · ❗ Auftrag · 🔺 du — Umkreis ${R * 2} Schritt`;
+  leg.innerHTML = '<span class="punkt dorf"></span> Dorf'
+    + ' <span class="punkt gruft"></span> Gruft'
+    + ' <span class="punkt ziel"></span> Ziel'
+    + ' <span class="punkt du"></span> du'
+    + `<span class="legende-weite">Umkreis ${R * 2} Schritt</span>`;
   feld.append(leg);
 }
 
@@ -1310,10 +1436,13 @@ function frame() {
     // Der Reden-Knopf erscheint nur, wenn es etwas zu tun gibt
     const w = was();
     ui.rede.classList.toggle('hidden', !w);
-    if (w) {
-      ui.rede.textContent = w.art === 'npc' ? '💬' : w.art === 'truhe' ? '🧰'
-        : w.art === 'glimm' ? '💎' : w.art === 'waechter' ? '🕯️' : '🚪';
+    if (w && w.art !== ui.rede.dataset.art) {
+      ui.rede.dataset.art = w.art;
+      symbol(ui.rede, w.art === 'npc' ? 'rede' : w.art === 'truhe' ? 'truhe'
+        : w.art === 'glimm' ? 'kristall' : w.art === 'waechter' ? 'kerze' : 'tor');
     }
+
+    pfeilPflegen(dt);
 
     hudTimer -= dt;
     if (hudTimer <= 0) { hudTimer = 0.22; updateHUD(); }
@@ -1363,12 +1492,12 @@ const soundBtn = el('soundBtn');
 let muted = false;
 try { muted = localStorage.getItem('talkunde-muted') === '1'; } catch (err) { /* egal */ }
 audio.setMuted(muted);
-soundBtn.textContent = muted ? '🔇' : '🔊';
+symbol(soundBtn, muted ? 'tonAus' : 'tonAn');
 soundBtn.addEventListener('click', () => {
   muted = !muted;
   audio.unlock();
   audio.setMuted(muted);
-  soundBtn.textContent = muted ? '🔇' : '🔊';
+  symbol(soundBtn, muted ? 'tonAus' : 'tonAn');
   try { localStorage.setItem('talkunde-muted', muted ? '1' : '0'); } catch (err) { /* egal */ }
 });
 
@@ -1609,6 +1738,7 @@ window.__game = {
   handeln, zuschlagen, zaubern, writeSave, save, ortsname, was,
   dinge, trinken, ladenOeffnen, ladenZeichnen, beutelZeichnen,
   story, chronistOeffnen, waechterAnsprechen, endeZeigen, kapitelGeschafft,
+  pfeil, zielPunkt, questsZeichnen,
 };
 
 resize();

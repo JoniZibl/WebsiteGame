@@ -9,11 +9,11 @@ import { boni } from './items.js';
  * ========================================================================== */
 
 export const FERTIGKEITEN = {
-  klinge:   { name: 'Klinge',   icon: '⚔️', hinweis: 'Schaden im Nahkampf' },
-  zaehe:    { name: 'Zähigkeit', icon: '🛡️', hinweis: 'Leben und Rüstung' },
-  magie:    { name: 'Magie',    icon: '✨', hinweis: 'Zauberkraft und Magicka' },
-  spuren:   { name: 'Spüren',   icon: '🔎', hinweis: 'Beute, Erz und Geheimnisse' },
-  wandern:  { name: 'Wandern',  icon: '🥾', hinweis: 'Tempo und Ausdauer' },
+  klinge:   { name: 'Klinge',   sym: 'schwert', hinweis: 'Schaden im Nahkampf' },
+  zaehe:    { name: 'Zähigkeit', sym: 'schild', hinweis: 'Leben und Rüstung' },
+  magie:    { name: 'Magie',    sym: 'funke', hinweis: 'Zauberkraft und Magicka' },
+  spuren:   { name: 'Spüren',   sym: 'auge', hinweis: 'Beute, Erz und Geheimnisse' },
+  wandern:  { name: 'Wandern',  sym: 'stiefel', hinweis: 'Tempo und Ausdauer' },
 };
 
 export const VORTEILE = [

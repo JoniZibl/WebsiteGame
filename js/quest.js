@@ -62,7 +62,13 @@ export function auftragFuer(geberSaat, kontext) {
     titel: v.titel(o),
     text: v.text(o),
     ziel: o.ziel,
-    zielOrt: v.art === 'gehen' ? kontext.nachbarPos : kontext.dungeonPos,
+    // Wohin man muss — und wohin man danach zurück muss. Aufträge, die überall
+    // draußen spielen, haben absichtlich kein Ziel: ein Pfeil ins Nichts ist
+    // schlechter als gar keiner.
+    zielOrt: v.wo === 'draussen' ? null
+      : v.art === 'gehen' ? kontext.nachbarPos : kontext.dungeonPos,
+    geberOrt: kontext.geberPos || null,
+    geberName: kontext.geberName || null,
     wo: v.wo || (v.art === 'toeten' || v.art === 'truhe' ? 'dungeon' : 'frei'),
     menge,
     stand: 0,
@@ -73,7 +79,7 @@ export function auftragFuer(geberSaat, kontext) {
 }
 
 export class Auftragsbuch {
-  constructor() { this.offen = []; this.erledigt = []; }
+  constructor() { this.offen = []; this.erledigt = []; this.verfolgtNr = null; }
 
   hat(q) { return this.offen.some((x) => x.vorlage === q.vorlage && x.ziel === q.ziel); }
 
@@ -109,7 +115,17 @@ export class Auftragsbuch {
   }
 
   /** Der Auftrag, der gerade im HUD stehen sollte. */
+  /** Welcher Auftrag steht im HUD? Eine eigene Wahl gewinnt immer. */
   verfolgt() {
+    if (this.verfolgtNr != null) {
+      const gewaehlt = this.offen.find((q) => q.nr === this.verfolgtNr);
+      if (gewaehlt) return gewaehlt;
+      this.verfolgtNr = null;
+    }
     return this.offen.find((q) => q.fertig) || this.offen[0] || null;
+  }
+
+  verfolgen(q) {
+    this.verfolgtNr = q && this.offen.includes(q) ? q.nr : null;
   }
 }

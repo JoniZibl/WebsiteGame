@@ -1,11 +1,17 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { anwenden } from './peek.js';
 
 // Figuren baut man am besten aus vielen kleinen Teilen — zeichnen sollte man
 // sie aber als ein Stück. flattenGroup backt die Materialfarben in die
 // Eckpunkte und verschmilzt alles zu einem einzigen Mesh.
 
-const sharedMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+/* Alle Modelle teilen sich ein Material — und damit auch das Guckloch. Ohne
+   das steht der Spieler hinter dem ersten Haus und ist weg. */
+const sharedMat = anwenden(
+  new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+  { radius: 2.1 }
+);
 
 export function flattenGroup(group, { material = sharedMat } = {}) {
   group.updateMatrixWorld(true);

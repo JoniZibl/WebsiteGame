@@ -47,6 +47,15 @@ man anlegt, sieht man auch: Griff und Klinge in der Hand ändern Länge und Farb
 zur Runenklinge. In jedem Dorf führt jemand einen Laden, kauft den Krempel und
 verkauft Tränke, Waffen und Rüstung — das Angebot wechselt mit dem Tag.
 
+## Wegweiser
+
+Im Auftragsreiter lässt sich wählen, welcher Auftrag verfolgt wird. Der
+verfolgte steht auf dem Holzschild oben links, und über dem Kopf schwebt ein
+Pfeil, der zum Ziel zeigt — mit Entfernung in Schritten. Ist der Auftrag
+erledigt, dreht sich der Pfeil zum Auftraggeber zurück. Die Hauptgeschichte
+geht dabei vor; Aufträge, die überall draußen spielen, haben absichtlich kein
+Ziel, weil ein Pfeil ins Nichts schlechter ist als gar keiner.
+
 ## Steuerung
 
 - **Ziehen** (oder **WASD**) — laufen
@@ -73,6 +82,8 @@ nimmt.
   danach nur geklont
 - Nachbearbeitung (`js/postfx.js`): Tilt-Shift wie bei Miniaturen, Bloom,
   Farbgradierung, Vignette, Korn, tiefenbasierte Konturen
+- Oberfläche in denselben Farben wie die Welt: Putz mit Holzrahmen statt
+  Glaskugeln, eigene flache Symbole statt Emoji
 - Ton komplett prozedural über WebAudio, keine Audiodateien
 - Spielstand in `localStorage`: Saatkorn, Änderungen, Held und Aufträge
 
@@ -88,6 +99,8 @@ nimmt.
 | `js/combat.js` | Gegner und Kampf |
 | `js/items.js` | Gegenstände, Beutetabellen, Beutel, Laden |
 | `js/story.js` | die Hauptgeschichte in fünf Kapiteln |
+| `js/icons.js` | die Symbole — flache SVG in der Weltpalette |
+| `js/peek.js` | das Guckloch, das Gelände und Modelle wegschneidet |
 | `js/main.js` | Anzeige, Steuerung, Schleife |
 
 ## Starten
