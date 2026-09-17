@@ -11,6 +11,7 @@ import { Doerfer } from './village.js';
 import { Flora } from './flora.js';
 import { Leute } from './npc.js';
 import { Feinde, ARTEN } from './combat.js';
+import { Geschosse } from './geschoss.js';
 import { wesenWaehlen, gefahrVon, GEFAHRWORT } from './wesen.js';
 import * as gruft from './dungeon.js';
 import * as fert from './skills.js';
@@ -132,7 +133,9 @@ const held = () => state.held;
 const feinde = new Feinde(scene, {
   onTreffer: (f) => spielerNimmtSchaden(f.schaden, f.art.name),
   onTod: (f) => feindGefallen(f),
+  onSchuss: (f, rx, rz) => feindSchiesst(f, rx, rz),
 });
+const geschosse = new Geschosse(scene);
 
 /* ------------------------------- Anzeige ----------------------------------
  * Die Symbole kommen aus icons.js und werden einmal hineingesetzt. Emoji
@@ -168,7 +171,14 @@ let hudTimer = 0;
 let letztesZiel = null;
 function waffeZeigen() {
   const id = held().rue.waffe;
-  player.setWaffe(id ? DINGE[id] : null);
+  const d = id ? DINGE[id] : null;
+  player.setWaffe(d);
+  // Der Knopf zeigt, was er tut: schlagen oder schießen
+  const art = d && d.fern ? 'bogen' : 'schwert';
+  if (el('hauBtn').dataset.waffe !== art) {
+    el('hauBtn').dataset.waffe = art;
+    symbol(el('hauBtn'), art);
+  }
 }
 
 function updateHUD() {
@@ -296,8 +306,58 @@ function feindGefallen(f) {
   updateHUD();
 }
 
+/* --------------------------------- Fernkampf -------------------------------
+ * Derselbe Knopf, anderes Werkzeug: liegt ein Bogen in der Hand, schießt er.
+ * Gezielt wird mit der Laufrichtung — am Handy hat man keine zweite Hand übrig.
+ * Was im Blickkegel steht, zieht den Pfeil ein Stück zu sich; ohne diese Hilfe
+ * trifft man von oben herab so gut wie nie.
+ * -------------------------------------------------------------------------- */
+function zielHilfe(weite = 22, kegel = 0.9) {
+  let best = null, bestWert = Infinity;
+  for (const f of feinde.liste) {
+    if (f.gesinnung === 'friedlich') continue;
+    const dx = f.pos.x - player.pos.x, dz = f.pos.z - player.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d > weite || Math.abs(f.pos.y - player.pos.y) > 6) continue;
+    const winkel = Math.abs(((Math.atan2(dx, dz) - player.facing + Math.PI * 3)
+      % (Math.PI * 2)) - Math.PI);
+    if (winkel > kegel) continue;
+    const wert = d + winkel * 14;
+    if (wert < bestWert) { bestWert = wert; best = { x: dx / d, z: dz / d, d }; }
+  }
+  return best;
+}
+
+function schiessen(waffe) {
+  const h = held();
+  if (state.hieb > 0 || h.ausdauer < 10) return;
+  state.hieb = 0.62;
+  h.ausdauer -= 10;
+  player.swing = 0.3;
+  audio.shoot();
+
+  const ziel = zielHilfe();
+  const rx = ziel ? ziel.x : Math.sin(player.facing);
+  const rz = ziel ? ziel.z : Math.cos(player.facing);
+  const schaden = Math.round(fert.werte.schaden(h) * (0.85 + Math.random() * 0.3));
+  geschosse.schiessen(waffe.fern, player.pos.x + rx * 0.7, player.pos.y + 1.1,
+    player.pos.z + rz * 0.7, rx, rz, schaden, 'spieler', ziel ? ziel.d : 26);
+  fert.uebung(h, 'klinge', 1);
+  juice.shake(0.12);
+  updateHUD();
+}
+
+function feindSchiesst(f, rx, rz) {
+  geschosse.schiessen(f.art.fern, f.pos.x + rx * 0.8, f.pos.y + f.art.hoehe * 0.7,
+    f.pos.z + rz * 0.8, rx, rz, f.schaden, 'feind',
+    Math.hypot(player.pos.x - f.pos.x, player.pos.z - f.pos.z));
+  audio.shoot();
+}
+
 function zuschlagen() {
   const h = held();
+  const waffe = h.rue.waffe ? DINGE[h.rue.waffe] : null;
+  if (waffe && waffe.fern) { schiessen(waffe); return; }
   if (state.hieb > 0 || h.ausdauer < 12) return;
   state.hieb = 0.44;
   h.ausdauer -= 12;
@@ -1485,6 +1545,16 @@ function frame() {
     leute.update(dt, world, doerfer, player.pos);
     gruftenPflegen(player.pos.x, player.pos.z);
     feinde.update(dt, world, player.pos, !state.dead);
+    geschosse.update(dt, world, feinde, player.pos, {
+      trefferFeind: (f, schaden, g) => {
+        juice.popup({ x: f.pos.x, y: f.pos.y + 1.6, z: f.pos.z }, `${schaden}`, '#fdf6e8');
+        juice.ring({ x: g.pos.x, y: g.pos.y, z: g.pos.z }, 1.2, '#f0e7d2', 0.3);
+        audio.hit();
+        feinde.schlagen(f, schaden);
+      },
+      trefferSpieler: (schaden) => spielerNimmtSchaden(schaden, null),
+      aufschlag: (g) => juice.ring({ x: g.pos.x, y: g.pos.y, z: g.pos.z }, 0.9, '#b9aa98', 0.25),
+    });
     feinde.aufraeumen(player.pos.x, player.pos.z, 130);
     wildnisPflegen(dt);
     beutelPflegen(dt);
@@ -1743,6 +1813,7 @@ function weltLeeren() {
   flora.clear();
   leute.clear();
   feinde.clear();
+  geschosse.clear();
   for (const t of truhen) scene.remove(t.obj);
   truhen.length = 0;
   for (const t of tore) scene.remove(t.obj);

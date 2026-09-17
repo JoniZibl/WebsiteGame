@@ -91,6 +91,7 @@ export class Player {
     this.swing = 0;
     this.huepft = 0;
     this.tempo = 1;
+    this.bogen = false;
     this.rennt = false;
     this.schritt = 0;   // Phase der Beinarbeit, läuft mit dem Tempo mit
   }
@@ -203,7 +204,8 @@ export class Player {
     // Die Laterne bleibt ruhig - sie ist das Einzige, was er nicht schwenkt.
     this.armR.rotation.x = walking ? stride * (this.rennt ? 0.3 : 0.12) : 0;
 
-    const swingK = Math.max(0, this.swing / 0.25);
+    // Mit dem Bogen wird gezogen, nicht geschlagen — also kleinerer Ausschlag
+    const swingK = Math.max(0, this.swing / 0.25) * (this.bogen ? 0.45 : 1);
     this.armL.rotation.x = -swingK * 1.5 + (walking ? -stride * 0.4 : 0);
     this.tool.rotation.x = -swingK * 1.5;
     this.tool.position.set(-0.4, 0.92 - swingK * 0.22, 0.22 + swingK * 0.2);
@@ -226,6 +228,16 @@ export class Player {
     }
     this.tool.visible = true;
     this.head2.visible = true;
+    this.bogen = !!d.fern;
+    if (this.bogen) {
+      // Ein Bogen ist hoch und schmal, kein Blatt — und die Sehne ist hell
+      this.head2.scale.set(0.5, 1.9, 1.6);
+      this.tool.scale.set(0.35, 1.6, 0.35);
+      this.klingeMat.color.set(d.klinge || '#a8743f');
+      this.griffMat.color.set(d.griff || '#f0e7d2');
+      return;
+    }
+    this.tool.scale.set(1, 1, 1);
     const laenge = 0.34 + (d.schaden || 0) * 0.026;
     const breite = 0.1 + (d.schaden || 0) * 0.006;
     this.head2.scale.set(breite / 0.13, laenge / 0.5, 1);

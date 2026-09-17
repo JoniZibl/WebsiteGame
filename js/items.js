@@ -27,6 +27,20 @@ export const DINGE = {
                  klinge: '#9fd8e8', griff: '#3f3a52',
                  text: 'Die Zeichen darauf liest niemand mehr.' },
 
+  /* -------------------------------- Bögen --------------------------------
+   * `fern` macht aus dem Schlagknopf einen Schussknopf. Bögen tragen weniger
+   * Schaden als Klingen desselben Rangs — sie bezahlen ihn mit Abstand.
+   * ---------------------------------------------------------------------- */
+  jagdbogen:   { name: 'Jagdbogen',      art: 'waffe', sym: 'schwert', schaden: 5,  wert: 85,  rang: 1,
+                 fern: 'pfeil', klinge: '#a8743f', griff: '#f0e7d2',
+                 text: 'Zieht leicht. Trifft, wenn du ruhig stehst.' },
+  hornbogen:   { name: 'Hornbogen',      art: 'waffe', sym: 'schwert', schaden: 11, wert: 290, rang: 2,
+                 fern: 'pfeil', klinge: '#8a5230', griff: '#f6ead6',
+                 text: 'Aus Horn und Sehne. Knackt beim Spannen.' },
+  langbogen:   { name: 'Langbogen',      art: 'waffe', sym: 'schwert', schaden: 18, wert: 680, rang: 3,
+                 fern: 'pfeil', klinge: '#6a4a30', griff: '#fdf6e8',
+                 text: 'So hoch wie du. Er will beide Arme.' },
+
   /* ------------------------------ Rüstungen ------------------------------ */
   wams:        { name: 'Lederwams',      art: 'ruestung', sym: 'schild', panzer: 0.07, wert: 55,  rang: 1,
                  text: 'Hält den Wind ab und manchmal mehr.' },

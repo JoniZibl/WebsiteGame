@@ -32,6 +32,13 @@ export const ICONS = {
     <rect x="10.7" y="16.4" width="2.6" height="4.2" fill="${F.holzTief}"/>
     <circle cx="12" cy="21" r="1.7" fill="${F.gold}"/>`),
 
+  /* Ein gespannter Bogen mit Pfeil auf der Sehne. */
+  bogen: svg(`
+    <path d="M7 3 C14 7 14 17 7 21" fill="none" stroke="${F.holz}" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M7 3 L7 21" fill="none" stroke="${F.putz}" stroke-width="1.1"/>
+    <rect x="7" y="11.1" width="12.4" height="1.8" rx="0.7" fill="${F.stahl}"/>
+    <path d="M19.4 12 L15.6 9.6 L15.6 14.4 Z" fill="${F.stahlTief}"/>`),
+
   /* Vier Strahlen als Funke — ohne Verlauf, nur zwei Größen. */
   /* Hell gehalten: dieser Funke sitzt auf einem blauen Knopf. */
   funke: svg(`

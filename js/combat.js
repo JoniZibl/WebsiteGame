@@ -85,6 +85,12 @@ export const ARTEN = {
     hp: 42, schaden: 10, tempo: 3.4, reichweite: 1.5, takt: 1.5, xp: 34, gold: 18,
     hoehe: 1.7, gesinnung: 'wild', stufe: 2, sicht: 14,
   },
+  schuetze: {
+    name: 'Wegelagerer', fell: '#8c7a5c', dunkel: '#5f5340', augen: '#f6ead6',
+    hp: 38, schaden: 12, tempo: 3.2, reichweite: 1.4, takt: 1.9, xp: 42, gold: 22,
+    hoehe: 1.7, gesinnung: 'wild', stufe: 2, sicht: 18,
+    fern: 'pfeil', schussweite: 16, abstand: 7,
+  },
   skelett: {
     name: 'Skelett', fell: '#f0e7d2', dunkel: '#c3b79c', augen: '#c9543f',
     hp: 34, schaden: 11, tempo: 2.9, reichweite: 1.5, takt: 1.7, xp: 30, gold: 12,
@@ -101,6 +107,7 @@ export const ARTEN = {
     hp: 34, schaden: 14, tempo: 4.2, reichweite: 1.6, takt: 1.3, xp: 45, gold: 0,
     hoehe: 0.8, bau: 'schwebend', skala: 0.95, schwebt: true, leuchtet: true,
     gesinnung: 'wild', stufe: 3, sicht: 17, beute: 'irrlichtkern',
+    fern: 'funke', schussweite: 13, abstand: 5,
   },
   kriecher: {
     name: 'Dünenkriecher', fell: '#c9a05e', dunkel: '#96703a', augen: '#c9543f',
@@ -123,6 +130,7 @@ export const ARTEN = {
     hp: 180, schaden: 30, tempo: 3.4, reichweite: 2.0, takt: 1.5, xp: 210, gold: 60,
     hoehe: 1.1, bau: 'wyrm', skala: 1.15,
     gesinnung: 'wild', stufe: 5, sicht: 18, beute: 'wyrmschuppe',
+    fern: 'asche', schussweite: 15, abstand: 6,
   },
   firnriese: {
     name: 'Firnriese', fell: '#dfe9f0', dunkel: '#a9bccd', augen: '#9fd8e8',
@@ -342,7 +350,14 @@ export class Feinde {
         zielX = -dx / dist; zielZ = -dz / dist;
         f.obj.rotation.y = Math.atan2(zielX, zielZ);
       } else if (f.wach && spielerLebt) {
-        if (dist > art.reichweite * 0.8) { zielX = dx / dist; zielZ = dz / dist; }
+        if (art.fern && dist < art.abstand && dist > 0.001) {
+          // Schützen suchen den Abstand, aus dem sie treffen und nicht getroffen werden
+          zielX = -dx / dist; zielZ = -dz / dist;
+        } else if (art.fern && dist < art.schussweite) {
+          zielX = 0; zielZ = 0;                 // in Schussweite: stehen und zielen
+        } else if (dist > art.reichweite * 0.8) {
+          zielX = dx / dist; zielZ = dz / dist;
+        }
         f.obj.rotation.y = Math.atan2(dx, dz);
       } else {
         // Ohne Ziel wandert er ein wenig um seinen Platz
@@ -383,10 +398,14 @@ export class Feinde {
       if (f.weh > 0) { f.weh -= dt; f.obj.position.x += Math.sin(f.weh * 70) * 0.05; }
 
       f.takt -= dt;
-      if (f.wach && !scheu && art.schaden > 0
-          && spielerLebt && dist < art.reichweite && dy < 2.2 && f.takt <= 0) {
-        f.takt = art.takt;
-        this.haken.onTreffer(f);
+      if (f.wach && !scheu && art.schaden > 0 && spielerLebt && f.takt <= 0) {
+        if (dist < art.reichweite && dy < 2.2) {
+          f.takt = art.takt;
+          this.haken.onTreffer(f);
+        } else if (art.fern && dist < art.schussweite && dist > 1.5 && dy < 5) {
+          f.takt = art.takt;
+          this.haken.onSchuss?.(f, dx / dist, dz / dist);
+        }
       }
     }
   }
