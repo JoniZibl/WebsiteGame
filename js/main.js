@@ -185,28 +185,46 @@ function updateHUD() {
     ? `Gruft · Stufe ${state.imDungeon.stufe}`
     : biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).name;
 
-  // Die Geschichte steht vor den Nebenaufträgen
-  const st = state.geschichte;
-  const k = st.gestartet ? story.aktuell(st) : null;
-  if (k) {
-    ui.auftrag.classList.remove('hidden');
+  const v = verfolgtes();
+  ui.auftrag.classList.toggle('hidden', !v);
+  if (v && v.art === 'haupt') {
+    const st = state.geschichte;
+    const k = v.kapitel;
+    const fertig = st.gestartet && story.kapitelFertig(st);
     ui.aTitel.textContent = `✦ ${k.titel}`;
-    const fertig = story.kapitelFertig(st);
-    ui.aStand.textContent = fertig
-      ? 'zurück zum Chronisten'
+    ui.aStand.textContent = !st.gestartet
+      ? 'sprich mit dem Chronisten'
+      : fertig ? 'zurück zum Chronisten'
       : `${story.fuellen(k.ziel, st)} · ${st.ziel}/${k.menge}`;
     ui.auftrag.classList.toggle('fertig', fertig);
-  } else {
-    const q = state.buch.verfolgt();
-    ui.auftrag.classList.toggle('hidden', !q);
-    if (q) {
-      ui.aTitel.textContent = q.titel;
-      ui.aStand.textContent = q.fertig
-        ? 'erledigt — bring die Nachricht zurück'
-        : `${q.stand} / ${q.menge}`;
-      ui.auftrag.classList.toggle('fertig', q.fertig);
-    }
+  } else if (v) {
+    const q = v.q;
+    ui.aTitel.textContent = q.titel;
+    ui.aStand.textContent = q.fertig
+      ? 'erledigt — bring die Nachricht zurück'
+      : `${q.stand} / ${q.menge}`;
+    ui.auftrag.classList.toggle('fertig', q.fertig);
   }
+}
+
+/* ------------------------------ Was wird verfolgt? -------------------------
+ * HUD, Pfeil und Auftragsliste müssen sich einig sein. Also entscheidet das
+ * eine Funktion, und die anderen fragen sie.
+ * -------------------------------------------------------------------------- */
+function verfolgtes() {
+  const st = state.geschichte;
+  const kapitel = st.fertig ? null : story.aktuell(st);
+  const q = state.buch.verfolgt();
+
+  // Eigene Wahl zuerst
+  if (state.buch.verfolgtHaupt() && kapitel) return { art: 'haupt', kapitel };
+  if (state.buch.verfolgtNr != null && q) return { art: 'quest', q };
+
+  // Ohne Wahl: die Geschichte, sobald sie läuft
+  if (st.gestartet && kapitel) return { art: 'haupt', kapitel };
+  if (q) return { art: 'quest', q };
+  if (kapitel) return { art: 'haupt', kapitel };
+  return null;
 }
 
 function meldung(text, farbe = '#4a3b30', hoch = 2.4) {
@@ -561,41 +579,43 @@ scene.add(pfeilRand);
 pfeil.visible = false;
 scene.add(pfeil);
 
-/** Wohin der Pfeil zeigt: Ziel des verfolgten Auftrags oder der Geschichte. */
+/** Wohin der Pfeil zeigt: Ziel dessen, was gerade verfolgt wird. */
 function zielPunkt() {
+  const v = verfolgtes();
+  if (!v) return null;
+  if (v.art === 'quest') {
+    const q = v.q;
+    if (q.fertig) {
+      return q.geberOrt ? { x: q.geberOrt.x, z: q.geberOrt.z, name: q.geberName || 'zurück' } : null;
+    }
+    return q.zielOrt ? { x: q.zielOrt.x, z: q.zielOrt.z, name: q.ziel } : null;
+  }
+
   const st = state.geschichte;
-  const k = st.gestartet ? story.aktuell(st) : null;
+  const k = v.kapitel;
+  // Noch nicht angefangen oder Kapitel voll: zurück zum Chronisten
+  if (!st.gestartet || story.kapitelFertig(st)) return heimatZiel('Chronist');
 
-  if (k) {
-    if (story.kapitelFertig(st)) return heimatZiel('Chronist');
-    if (k.art === 'glimm') {
-      const g = naechsteGruft();
-      return g ? { x: g.x, z: g.z, name: g.name } : null;
-    }
-    if (k.art === 'truhe') {
-      const g = gruft.grueftUm(player.pos.x, player.pos.z, 2000).find((x) => x.id === st.gruftId);
-      return g ? { x: g.x, z: g.z, name: g.name } : null;
-    }
-    if (k.art === 'doerfer') {
-      const fremd = doerferUm(player.pos.x, player.pos.z, 900)
-        .filter((d) => !state.heimat || d.i !== state.heimat.i || d.j !== state.heimat.j)
-        .filter((d) => !st.doerfer.includes(ortsname(d)))
-        .sort((a, b) => Math.hypot(a.x - player.pos.x, a.z - player.pos.z)
-                      - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
-      return fremd ? { x: fremd.x, z: fremd.z, name: ortsname(fremd) } : null;
-    }
-    if (k.art === 'schlund' || k.art === 'waechter') {
-      return state.schlund ? { x: state.schlund.x, z: state.schlund.z, name: 'Der Schlund' } : null;
-    }
-    return null;
+  if (k.art === 'glimm') {
+    const g = naechsteGruft();
+    return g ? { x: g.x, z: g.z, name: g.name } : null;
   }
-
-  const q = state.buch.verfolgt();
-  if (!q) return null;
-  if (q.fertig) {
-    return q.geberOrt ? { x: q.geberOrt.x, z: q.geberOrt.z, name: q.geberName || 'zurück' } : null;
+  if (k.art === 'truhe') {
+    const g = gruft.grueftUm(player.pos.x, player.pos.z, 2000).find((x) => x.id === st.gruftId);
+    return g ? { x: g.x, z: g.z, name: g.name } : null;
   }
-  return q.zielOrt ? { x: q.zielOrt.x, z: q.zielOrt.z, name: q.ziel } : null;
+  if (k.art === 'doerfer') {
+    const fremd = doerferUm(player.pos.x, player.pos.z, 900)
+      .filter((d) => !state.heimat || d.i !== state.heimat.i || d.j !== state.heimat.j)
+      .filter((d) => !st.doerfer.includes(ortsname(d)))
+      .sort((a, b) => Math.hypot(a.x - player.pos.x, a.z - player.pos.z)
+                    - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
+    return fremd ? { x: fremd.x, z: fremd.z, name: ortsname(fremd) } : null;
+  }
+  if (k.art === 'schlund' || k.art === 'waechter') {
+    return state.schlund ? { x: state.schlund.x, z: state.schlund.z, name: 'Der Schlund' } : null;
+  }
+  return null;
 }
 
 function heimatZiel(name) {
@@ -614,6 +634,7 @@ function pfeilPflegen(dt) {
   if (!ziel) {
     pfeil.visible = false; pfeilRand.visible = false;
     ui.weg.classList.add('hidden');
+    ui.wegText.textContent = '';    // kein alter Text unter dem Vorhang
     return;
   }
 
@@ -1141,26 +1162,40 @@ function questsZeichnen() {
 
   const st = state.geschichte;
   const k = story.aktuell(st);
-  if (k && st.gestartet) {
+  const v = verfolgtes();
+
+  if (k) {
+    const fertig = st.gestartet && story.kapitelFertig(st);
+    const dran = v && v.art === 'haupt';
     const z = document.createElement('div');
-    z.className = 'q-zeile haupt' + (story.kapitelFertig(st) ? ' fertig' : '');
-    z.innerHTML = `<b>✦ ${k.titel}</b>`
-      + `<p>${story.fuellen(k.rede, st, schlundRichtung()).split('\n')[0]}</p>`
-      + `<small>${story.kapitelFertig(st) ? 'zurück zum Chronisten'
-          : `${story.fuellen(k.ziel, st)} · ${st.ziel}/${k.menge}`}</small>`;
-    feld.append(z);
-  } else if (!st.fertig) {
-    const z = document.createElement('div');
-    z.className = 'q-zeile haupt';
-    z.innerHTML = '<b>✦ Der Chronist</b><p>Im Heimatdorf wohnt jemand, der aufschreibt, '
-      + 'was aufhört. Sprich mit ihm.</p>';
+    z.className = 'q-zeile haupt' + (fertig ? ' fertig' : '') + (dran ? ' verfolgt' : '');
+    z.innerHTML = st.gestartet
+      ? `<b>✦ ${k.titel}</b>`
+        + `<p>${story.fuellen(k.rede, st, schlundRichtung()).split('\n')[0]}</p>`
+      : '<b>✦ Der Chronist</b><p>Im Heimatdorf wohnt jemand, der aufschreibt, '
+        + 'was aufhört. Sprich mit ihm.</p>';
+
+    const fuss = document.createElement('div');
+    fuss.className = 'q-fuss';
+    const stand = document.createElement('small');
+    stand.textContent = !st.gestartet ? 'noch nicht begonnen'
+      : fertig ? 'zurück zum Chronisten'
+      : `${story.fuellen(k.ziel, st)} · ${st.ziel}/${k.menge}`;
+    const knopf = document.createElement('button');
+    knopf.className = 'q-verfolgen' + (dran ? ' an' : '');
+    knopf.textContent = dran ? '◆ verfolgt' : '◇ verfolgen';
+    // Ein Klick wählt aus, immer. Ein Klick, der abwählt, sieht aus wie ein
+    // Klick ohne Wirkung, sobald dieselbe Zeile ohnehin die Vorgabe war.
+    knopf.addEventListener('click', () => {
+      state.buch.verfolgen('haupt');
+      audio.step();
+      questsZeichnen();
+      updateHUD();
+    });
+    fuss.append(stand, knopf);
+    z.append(fuss);
     feld.append(z);
   }
-
-  const hilfen = document.createElement('p');
-  hilfen.className = 'punkte-hinweis';
-  hilfen.textContent = `${held().hilfen || 0} Menschen geholfen`;
-  feld.append(hilfen);
 
   const offen = state.buch.offen;
   if (!offen.length) {
@@ -1169,9 +1204,8 @@ function questsZeichnen() {
     p.textContent = 'Kein Auftrag. Sprich mit den Leuten im Dorf.';
     feld.append(p);
   }
-  const verfolgt = state.buch.verfolgt();
   for (const q of offen) {
-    const dran = q === verfolgt && !(k && st.gestartet);
+    const dran = !!v && v.art === 'quest' && v.q === q;
     const z = document.createElement('div');
     z.className = 'q-zeile' + (q.fertig ? ' fertig' : '') + (dran ? ' verfolgt' : '');
     z.innerHTML = `<b>${q.titel}</b><p>${q.text}</p>`;
@@ -1187,7 +1221,7 @@ function questsZeichnen() {
     knopf.className = 'q-verfolgen' + (dran ? ' an' : '');
     knopf.textContent = dran ? '◆ verfolgt' : '◇ verfolgen';
     knopf.addEventListener('click', () => {
-      state.buch.verfolgen(dran ? null : q);
+      state.buch.verfolgen(q);
       audio.step();
       questsZeichnen();
       updateHUD();
@@ -1202,6 +1236,12 @@ function questsZeichnen() {
     z.innerHTML = `<b style="opacity:.5">✓ ${q.titel}</b>`;
     feld.append(z);
   }
+
+  // Zählt am Ende der Geschichte, also steht sie auch hier am Ende
+  const hilfen = document.createElement('p');
+  hilfen.className = 'punkte-hinweis';
+  hilfen.textContent = `${held().hilfen || 0} Menschen geholfen`;
+  feld.append(hilfen);
 }
 
 function karteZeichnen() {
@@ -1555,7 +1595,8 @@ function writeSave() {
       dungeons: [...h.dungeons],
       beutel: h.beutel, rue: h.rue,
     },
-    quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8) },
+    quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8),
+              verfolgtNr: state.buch.verfolgtNr },
     geschichte: state.geschichte,
   });
 }
@@ -1662,6 +1703,7 @@ function weiterSpielen(d) {
   state.buch = new Auftragsbuch();
   state.buch.offen = (d.quests?.offen || []);
   state.buch.erledigt = (d.quests?.erledigt || []);
+  state.buch.verfolgtNr = d.quests?.verfolgtNr ?? null;
   state.time = d.time ?? 0.3;
   state.tag = d.tag ?? 0;
   state.dead = false;

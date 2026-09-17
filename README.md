@@ -49,12 +49,16 @@ verkauft Tränke, Waffen und Rüstung — das Angebot wechselt mit dem Tag.
 
 ## Wegweiser
 
-Im Auftragsreiter lässt sich wählen, welcher Auftrag verfolgt wird. Der
-verfolgte steht auf dem Holzschild oben links, und über dem Kopf schwebt ein
-Pfeil, der zum Ziel zeigt — mit Entfernung in Schritten. Ist der Auftrag
-erledigt, dreht sich der Pfeil zum Auftraggeber zurück. Die Hauptgeschichte
-geht dabei vor; Aufträge, die überall draußen spielen, haben absichtlich kein
-Ziel, weil ein Pfeil ins Nichts schlechter ist als gar keiner.
+Im Auftragsreiter lässt sich wählen, was verfolgt wird — jeder Nebenauftrag
+**und** die Hauptgeschichte. Das Verfolgte steht auf dem Holzschild oben links,
+und über dem Kopf schwebt ein Pfeil zum Ziel, mit Entfernung in Schritten. Ist
+es erledigt, dreht sich der Pfeil zum Auftraggeber zurück.
+
+Ohne eigene Wahl entscheidet das Spiel: die Geschichte, sobald sie läuft, sonst
+der erste offene Auftrag. Ein Klick wählt immer aus und hebt nie auf — ein Klick,
+der abwählt, sieht aus wie einer ohne Wirkung. Aufträge, die überall draußen
+spielen, haben absichtlich kein Ziel, weil ein Pfeil ins Nichts schlechter ist
+als gar keiner.
 
 ## Steuerung
 

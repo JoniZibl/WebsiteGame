@@ -115,17 +115,25 @@ export class Auftragsbuch {
   }
 
   /** Der Auftrag, der gerade im HUD stehen sollte. */
-  /** Welcher Auftrag steht im HUD? Eine eigene Wahl gewinnt immer. */
+  /* Verfolgt wird genau eines: die Hauptgeschichte ('haupt') oder ein
+     Nebenauftrag (dessen Nummer). Ohne eigene Wahl bleibt es bei null, und
+     das Spiel entscheidet — Geschichte zuerst, sonst der erste Auftrag. */
+  verfolgtHaupt() { return this.verfolgtNr === 'haupt'; }
+
+  /** Der Nebenauftrag im HUD — oder nichts, wenn die Geschichte dran ist. */
   verfolgt() {
+    if (this.verfolgtNr === 'haupt') return null;
     if (this.verfolgtNr != null) {
       const gewaehlt = this.offen.find((q) => q.nr === this.verfolgtNr);
       if (gewaehlt) return gewaehlt;
-      this.verfolgtNr = null;
+      this.verfolgtNr = null;          // der Auftrag ist weg, also von vorn
     }
     return this.offen.find((q) => q.fertig) || this.offen[0] || null;
   }
 
+  /** q: ein Auftrag, 'haupt' für die Geschichte, null für „selbst entscheiden". */
   verfolgen(q) {
+    if (q === 'haupt') { this.verfolgtNr = 'haupt'; return; }
     this.verfolgtNr = q && this.offen.includes(q) ? q.nr : null;
   }
 }
