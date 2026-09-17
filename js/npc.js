@@ -69,7 +69,7 @@ export class Leute {
   }
 
   /** Stellt die Leute der Dörfer in Reichweite auf und räumt ferne ab. */
-  update(dt, world, doerfer, spielerPos) {
+  update(dt, world, doerfer, spielerPos, nacht = false) {
     const gewollt = new Map();
     for (const l of doerfer.alleLeute()) {
       gewollt.set(`${l.dorf.i},${l.dorf.j},${l.heimX},${l.heimZ}`, l);
@@ -104,22 +104,19 @@ export class Leute {
         key, name, gewerbe, saat: l.saat, dorf: l.dorf,
         obj, pos: new THREE.Vector3(l.x, y, l.z), handel: !!l.handel, chronist: !!l.chronist,
         heimX: l.x, heimZ: l.z,
+        hausX: l.heimX, hausZ: l.heimZ, drinnen: false, stufe: 'draussen',
         takt: rand() * 6, ziel: null, auftrag: null,
       });
     }
 
-    // Umherlaufen
+    // Umherlaufen — tagsüber ums Haus, nachts hinein
     for (const n of this.liste) {
-      if (n.chronist) { n.ziel = null; }
-      n.takt -= dt;
-      if (!n.chronist && n.takt <= 0) {
-        n.takt = 3 + Math.random() * 5;
-        n.ziel = Math.random() < 0.4 ? null : {
-          x: n.heimX + (Math.random() - 0.5) * 9,
-          z: n.heimZ + (Math.random() - 0.5) * 9,
-        };
-      }
+      if (nacht) this.heimgehen(n, dt);
+      else this.tagslauf(n, dt);
       const nah = Math.hypot(n.pos.x - spielerPos.x, n.pos.z - spielerPos.z) < 3.2;
+      if (n.drinnen) { n.obj.position.copy(n.pos); if (nah) {
+        n.obj.rotation.y = Math.atan2(spielerPos.x - n.pos.x, spielerPos.z - n.pos.z);
+      } continue; }
       if (nah) {
         // Wer angesprochen wird, dreht sich zu und bleibt stehen
         n.obj.rotation.y = Math.atan2(spielerPos.x - n.pos.x, spielerPos.z - n.pos.z);
@@ -145,6 +142,56 @@ export class Leute {
       }
       n.obj.position.copy(n.pos);
     }
+  }
+
+  /* Tagsüber schlendert jeder um sein Haus. */
+  tagslauf(n, dt) {
+    if (n.stufe !== 'draussen') {
+      // Morgens wieder vor die Tür
+      n.stufe = 'draussen';
+      n.drinnen = false;
+      n.obj.visible = true;
+      const t = this.tuerVon(n);
+      n.pos.x = t.x; n.pos.z = t.z;
+    }
+    if (n.chronist) { n.ziel = null; return; }
+    n.takt -= dt;
+    if (n.takt <= 0) {
+      n.takt = 3 + Math.random() * 5;
+      n.ziel = Math.random() < 0.4 ? null : {
+        x: n.heimX + (Math.random() - 0.5) * 9,
+        z: n.heimZ + (Math.random() - 0.5) * 9,
+      };
+    }
+  }
+
+  /* Nachts geht jeder heim: erst an die Tür, dann hinein. Wer drin ist,
+     bleibt stehen — ansprechen kann man ihn trotzdem, man muss nur
+     hineingehen. */
+  heimgehen(n, dt) {
+    if (n.stufe === 'drin') { n.ziel = null; return; }
+    const tuer = this.tuerVon(n);
+    if (n.stufe === 'draussen') {
+      n.ziel = tuer;
+      if (Math.hypot(n.pos.x - tuer.x, n.pos.z - tuer.z) < 1.4) n.stufe = 'tuer';
+      return;
+    }
+    // In der Tür: einen Schritt hinein, dann ist Feierabend. Nicht ganz in die
+    // Mitte — die Bettstelle gehört dem Gast.
+    const dx = n.heimX - n.hausX, dz = n.heimZ - n.hausZ;
+    const d = Math.hypot(dx, dz) || 1;
+    n.pos.x = n.hausX + 0.5 + (dx / d) * 0.9;
+    n.pos.z = n.hausZ + 0.5 + (dz / d) * 0.9;
+    n.ziel = null;
+    n.stufe = 'drin';
+    n.drinnen = true;
+  }
+
+  /* Der Platz vor der Haustür — genau der, auf dem er tagsüber steht. Wo
+     die Tür liegt, weiß der Bauplan; hier nachrechnen wäre nur eine zweite,
+     schlechtere Wahrheit. */
+  tuerVon(n) {
+    return { x: n.heimX, z: n.heimZ };
   }
 
   /** Wen kann der Spieler gerade ansprechen? */

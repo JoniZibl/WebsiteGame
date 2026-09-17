@@ -7,7 +7,7 @@ import { Player } from './player.js';
 import { Input } from './input.js';
 import { TiltShift } from './postfx.js';
 import * as save from './save.js';
-import { Doerfer } from './village.js';
+import { Doerfer, dorfArt, bauplan } from './village.js';
 import { Flora } from './flora.js';
 import { Leute } from './npc.js';
 import { Feinde, ARTEN } from './combat.js';
@@ -119,6 +119,7 @@ const state = {
   rennt: false,       // Sprint: zieht am Atem
   gegend: null,       // in welcher Gegend wir zuletzt standen
   beutel: null,       // was am Sterbeort liegen geblieben ist
+  imHaus: null,       // in wessen vier Wänden wir gerade stehen
   erschoepft: false,  // nach leerer Puste erst bei halbem Balken wieder rennen
   gelesen: new Set(), // schon geöffnete Truhen
   geschichte: story.neueGeschichte(),
@@ -622,7 +623,7 @@ function glimmBrechen(ort) {
   audio.gem(2);
   juice.shake(0.25);
   juice.ring({ x: ort.x + 0.5, y: ort.y + 0.5, z: ort.z + 0.5 }, 2.0, '#f5c451');
-  juice.popup({ x: ort.x + 0.5, y: ort.y + 1.2, z: ort.z + 0.5 }, '💎 Glimmstein', '#e8a83c');
+  juice.popup({ x: ort.x + 0.5, y: ort.y + 1.2, z: ort.z + 0.5 }, 'Glimmstein', '#e8a83c');
   const fertigeQ = state.buch.melden('sammeln', {});
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
   if (story.melden(state.geschichte, 'glimm', {})) kapitelGeschafft();
@@ -634,6 +635,10 @@ function was() {
   const p = player.pos;
   const w = waechterInReichweite();
   if (w) return { art: 'waechter', ziel: w };
+  // Wer direkt auf der Bettstelle steht, will schlafen — auch wenn der
+  // Hausherr danebensteht. Einen Schritt zurück redet man wieder mit ihm.
+  const bett = bettInReichweite(1.4);
+  if (bett) return { art: 'bett', ziel: bett };
   const n = leute.naechster(p, 3.4);
   if (n) return { art: 'npc', ziel: n };
   for (const t of truhen) {
@@ -646,7 +651,40 @@ function was() {
   }
   const ader = glimmInReichweite();
   if (ader) return { art: 'glimm', ziel: ader };
+  const weiter = bettInReichweite(2.2);
+  if (weiter) return { art: 'bett', ziel: weiter };
   return null;
+}
+
+/** Steht man in einem Haus dicht genug an der Bettstelle? */
+function bettInReichweite(weite = 2.2) {
+  const drin = state.imHaus;
+  if (!drin) return null;
+  const b = doerfer.bettVon(drin.t);
+  return Math.hypot(player.pos.x - b.x, player.pos.z - b.z) < weite ? b : null;
+}
+
+/* Schlafen ist der Ausweg aus der Nacht: wer es vor Einbruch der Dunkelheit
+   in ein Dorf schafft, kann sie überspringen. Tagsüber ist es nur eine Rast. */
+function schlafen() {
+  const h = held();
+  const nachts = istNacht();
+  h.hp = fert.werte.lebenMax(h);
+  h.ausdauer = h.ausdauerMax;
+  h.magicka = fert.werte.magickaMax(h);
+  if (nachts) {
+    state.time = 0.3;
+    state.tag++;
+    for (const f of [...feinde.liste]) if (f.art.nurNachts) feinde.entfernen(f);
+    meldung('Ausgeschlafen — es ist Morgen', '#e8a83c', 3.0);
+  } else {
+    meldung('Ausgeruht', '#7fae5e', 2.6);
+  }
+  audio.gem(1);
+  juice.ring({ x: player.pos.x, y: player.pos.y + 0.4, z: player.pos.z }, 2.6, '#f5c451');
+  applyDaytime();
+  updateHUD();
+  writeSave();
 }
 
 function handeln() {
@@ -655,6 +693,7 @@ function handeln() {
   if (w.art === 'truhe') { truheOeffnen(w.ziel); return; }
   if (w.art === 'glimm') { glimmBrechen(w.ziel); return; }
   if (w.art === 'tor') { gruftBetreten(w.ziel.gruft); return; }
+  if (w.art === 'bett') { schlafen(); return; }
   if (w.art === 'npc') {
     if (w.ziel.chronist) chronistOeffnen(w.ziel);
     else redeOeffnen(w.ziel);
@@ -1542,7 +1581,9 @@ function frame() {
     world.update(player.pos.x, player.pos.z, 1);
     doerfer.update(player.pos.x, player.pos.z);
     flora.update(player.pos.x, player.pos.z);
-    leute.update(dt, world, doerfer, player.pos);
+    leute.update(dt, world, doerfer, player.pos, istNacht());
+    // Wer in ein Haus tritt, dem wird das Dach abgenommen
+    state.imHaus = doerfer.daecherPflegen(player.pos.x, player.pos.z);
     gruftenPflegen(player.pos.x, player.pos.z);
     feinde.update(dt, world, player.pos, !state.dead);
     geschosse.update(dt, world, feinde, player.pos, {
@@ -1672,7 +1713,8 @@ function frame() {
     if (w && w.art !== ui.rede.dataset.art) {
       ui.rede.dataset.art = w.art;
       symbol(ui.rede, w.art === 'npc' ? 'rede' : w.art === 'truhe' ? 'truhe'
-        : w.art === 'glimm' ? 'kristall' : w.art === 'waechter' ? 'kerze' : 'tor');
+        : w.art === 'glimm' ? 'kristall' : w.art === 'waechter' ? 'kerze'
+        : w.art === 'bett' ? 'kerze' : 'tor');
     }
 
     pfeilPflegen(dt);
@@ -1863,7 +1905,8 @@ function aufstellen(x, z) {
   doerfer.update(x, z);
   flora.update(x, z, true);
   player.spawn(world, x, z);
-  leute.update(0.016, world, doerfer, player.pos);
+  leute.update(0.016, world, doerfer, player.pos, istNacht());
+  state.imHaus = doerfer.daecherPflegen(x, z);
   gruftenPflegen(x, z);
   state.cut = HEIGHT + 4;
   cutPlane.constant = state.cut;
@@ -2060,7 +2103,7 @@ window.__game = {
   story, chronistOeffnen, waechterAnsprechen, endeZeigen, kapitelGeschafft,
   pfeil, zielPunkt, questsZeichnen,
   heimkehr, karteZeichnen, menuZeichnen,
-  ARTEN, wesenWaehlen, gefahrVon,
+  ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
 };
 
 resize();
