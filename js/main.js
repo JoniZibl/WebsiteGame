@@ -65,7 +65,10 @@ scene.fog = new THREE.Fog('#ede2cd', 60, 135);
 
 const camera = new THREE.PerspectiveCamera(40, 1, 0.3, 400);
 const CAM_DIR = new THREE.Vector3(0, 24, 19).normalize();
-let camDist = 56;
+/* Näher dran als früher: alles wird größer und damit lesbarer — man sieht
+   endlich, dass ein Bär kein Wolf ist. Die Nebelweiten hängen daran und
+   ziehen von selbst mit. */
+let camDist = 47;
 
 const hemi = new THREE.HemisphereLight('#fff6e4', '#c39a72', 0.95);
 scene.add(hemi);
@@ -143,6 +146,14 @@ const feinde = new Feinde(scene, {
   onTreffer: (f) => spielerNimmtSchaden(f.schaden, f.art.name),
   onTod: (f) => feindGefallen(f),
   onSchuss: (f, rx, rz) => feindSchiesst(f, rx, rz),
+  // Der Ring wächst genau so lange, wie das Ausholen dauert — wenn er voll
+  // ist, schlägt es zu. Von oben ist das die einzige lesbare Warnung.
+  onAusholen: (f, zeit) => {
+    juice.ring({ x: f.pos.x, y: f.pos.y + 0.06, z: f.pos.z },
+      (f.art.fern && !f.fernSchlag ? 3 : f.art.reichweite + 0.8) * 1.5,
+      f.gezeichnet ? '#e8a83c' : '#c9543f', zeit);
+    if (f.gezeichnet) audio.step();
+  },
 });
 const geschosse = new Geschosse(scene);
 const wetter = new Wetter(scene);
@@ -2655,7 +2666,7 @@ window.__game = {
   heimkehr, karteZeichnen, menuZeichnen,
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
   orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel, wetter,
-  ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden,
+  ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden, geschosse,
 };
 
 resize();

@@ -95,6 +95,8 @@ export const DINGE = {
                  text: 'Leuchtet noch an den Fingern.' },
   giftstachel: { name: 'Giftstachel',    art: 'beute', sym: 'knochen', wert: 42, rang: 2, wild: true,
                  text: 'Vorsichtig einpacken.' },
+  dickfell:    { name: 'Dickfell',       art: 'beute', sym: 'fell', wert: 58, rang: 2, wild: true,
+                 text: 'Schwer, warm, und niemand fragt, woher.' },
   frostbalg:   { name: 'Firnbalg',       art: 'beute', sym: 'fell', wert: 48, rang: 2, wild: true,
                  text: 'Bleibt kalt, egal wie warm es ist.' },
   irrlichtkern:{ name: 'Irrlichtkern',   art: 'beute', sym: 'kerze', wert: 55, rang: 2, wild: true,

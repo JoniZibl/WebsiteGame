@@ -74,7 +74,7 @@ export const ARTEN = {
   steinruecken: {
     name: 'Steinrücken', fell: '#9a9384', dunkel: '#6d6659', augen: '#f5c451',
     hp: 150, schaden: 22, tempo: 1.9, reichweite: 1.6, takt: 2.1, xp: 110, gold: 0,
-    hoehe: 1.1, bau: 'vierbeiner', skala: 1.2, panzer: true,
+    hoehe: 1.2, bau: 'vierbeiner', skala: 1.45, panzer: true, wuchtig: true,
     gesinnung: 'wehrhaft', stufe: 4, sicht: 11, beute: 'felsschuppe',
   },
 
@@ -123,7 +123,7 @@ export const ARTEN = {
   moorschrat: {
     name: 'Moorschrat', fell: '#6f7f55', dunkel: '#4a5a38', augen: '#c9f07a',
     hp: 105, schaden: 24, tempo: 2.7, reichweite: 1.8, takt: 1.8, xp: 105, gold: 25,
-    hoehe: 2.0, gesinnung: 'wild', stufe: 4, sicht: 15, beute: 'moosherz',
+    hoehe: 2.2, skala: 1.12, gesinnung: 'wild', stufe: 4, sicht: 15, beute: 'moosherz',
   },
   nachtmahr: {
     name: 'Nachtmahr', fell: '#4b4560', dunkel: '#2f2b3f', augen: '#c9543f',
@@ -133,21 +133,78 @@ export const ARTEN = {
   aschwyrm: {
     name: 'Aschwyrm', fell: '#b5503a', dunkel: '#7c3223', augen: '#f5c451',
     hp: 180, schaden: 30, tempo: 3.4, reichweite: 2.0, takt: 1.5, xp: 210, gold: 60,
-    hoehe: 1.1, bau: 'wyrm', skala: 1.15,
+    hoehe: 1.3, bau: 'wyrm', skala: 1.45, wuchtig: true,
     gesinnung: 'wild', stufe: 5, sicht: 18, beute: 'wyrmschuppe',
     fern: 'asche', schussweite: 15, abstand: 6,
   },
   firnriese: {
     name: 'Firnriese', fell: '#dfe9f0', dunkel: '#a9bccd', augen: '#9fd8e8',
     hp: 230, schaden: 34, tempo: 2.8, reichweite: 2.2, takt: 1.7, xp: 260, gold: 90,
-    hoehe: 2.6, gesinnung: 'wild', nurNachts: true, stufe: 5, sicht: 18, beute: 'riesenzahn',
+    hoehe: 3.2, skala: 1.15, wuchtig: true,
+    gesinnung: 'wild', nurNachts: true, stufe: 5, sicht: 18, beute: 'riesenzahn',
+  },
+
+  /* ------------------------- Was noch draussen lebt ----------------------- */
+  dachs: {
+    name: 'Dachs', fell: '#cfc6b4', dunkel: '#3f3a34', augen: '#3a2c22',
+    hp: 30, schaden: 9, tempo: 3.6, reichweite: 1.2, takt: 1.3, xp: 20, gold: 0,
+    hoehe: 0.7, bau: 'vierbeiner', skala: 0.66, streifen: true,
+    gesinnung: 'wehrhaft', stufe: 1, sicht: 11, beute: 'balg',
+  },
+  luchs: {
+    name: 'Luchs', fell: '#c9a87e', dunkel: '#8a6a44', augen: '#c9f07a',
+    hp: 44, schaden: 13, tempo: 5.4, reichweite: 1.3, takt: 1.0, xp: 40, gold: 0,
+    hoehe: 0.9, bau: 'vierbeiner', skala: 0.9, ohren: true, hoch: true,
+    gesinnung: 'wild', stufe: 2, sicht: 18, beute: 'balg',
+  },
+  spinne: {
+    name: 'Moorspinne', fell: '#4a4450', dunkel: '#2f2b38', augen: '#c9543f',
+    hp: 40, schaden: 14, tempo: 4.4, reichweite: 1.3, takt: 1.1, xp: 44, gold: 0,
+    hoehe: 0.8, bau: 'spinne', skala: 1.0,
+    gesinnung: 'wild', stufe: 2, sicht: 15, beute: 'giftstachel',
+  },
+  geier: {
+    name: 'Aasgeier', fell: '#6b6255', dunkel: '#433d35', augen: '#e8a83c',
+    hp: 34, schaden: 12, tempo: 4.8, reichweite: 1.4, takt: 1.2, xp: 38, gold: 0,
+    hoehe: 1.0, bau: 'vogel', skala: 1.0, schwebt: true,
+    gesinnung: 'wild', stufe: 2, sicht: 20, beute: 'knochen',
+  },
+  unke: {
+    name: 'Sumpfunke', fell: '#6f9a58', dunkel: '#46683a', augen: '#f5c451',
+    hp: 52, schaden: 15, tempo: 2.6, reichweite: 1.4, takt: 1.6, xp: 46, gold: 0,
+    hoehe: 0.9, bau: 'unke', skala: 1.1,
+    gesinnung: 'wehrhaft', stufe: 2, sicht: 13, beute: 'giftstachel',
+    fern: 'funke', schussweite: 12, abstand: 4,
+  },
+  ghul: {
+    name: 'Gruftghul', fell: '#b7ae94', dunkel: '#7d745e', augen: '#c9f07a',
+    hp: 70, schaden: 18, tempo: 3.8, reichweite: 1.5, takt: 1.3, xp: 62, gold: 14,
+    hoehe: 1.8, skala: 1.05, gesinnung: 'wild', stufe: 3, sicht: 17, beute: 'knochen',
+  },
+  baer: {
+    name: 'Waldbär', fell: '#7a5334', dunkel: '#4e3520', augen: '#f5c451',
+    hp: 165, schaden: 26, tempo: 4.0, reichweite: 1.9, takt: 1.7, xp: 130, gold: 0,
+    hoehe: 1.5, bau: 'vierbeiner', skala: 1.6, wuchtig: true,
+    gesinnung: 'wehrhaft', stufe: 4, sicht: 15, beute: 'dickfell',
+  },
+  waldschrat: {
+    name: 'Waldschrat', fell: '#5f7548', dunkel: '#3d4f30', augen: '#e8a83c',
+    hp: 115, schaden: 25, tempo: 3.0, reichweite: 2.0, takt: 1.8, xp: 112, gold: 20,
+    hoehe: 2.4, skala: 1.15, nurNachts: true,
+    gesinnung: 'wild', stufe: 4, sicht: 16, beute: 'moosherz',
+  },
+  troll: {
+    name: 'Steintroll', fell: '#8d8878', dunkel: '#5f5b50', augen: '#e8a83c',
+    hp: 260, schaden: 36, tempo: 2.6, reichweite: 2.4, takt: 2.0, xp: 280, gold: 110,
+    hoehe: 3.0, skala: 1.3, wuchtig: true,
+    gesinnung: 'wild', stufe: 5, sicht: 17, beute: 'felsschuppe',
   },
 
   /* --------------------------------- Bosse ------------------------------- */
   waechter: {
     name: 'Der Wächter', fell: '#e8c46a', dunkel: '#b08a2f', augen: '#fff6e4',
     hp: 260, schaden: 22, tempo: 3.0, reichweite: 2.0, takt: 1.5, xp: 450, gold: 400,
-    hoehe: 2.3, boss: true, gesinnung: 'wild', stufe: 5, sicht: 20,
+    hoehe: 2.6, skala: 1.2, wuchtig: true, boss: true, gesinnung: 'wild', stufe: 5, sicht: 20,
   },
   hauptmann: {
     name: 'Hauptmann', fell: '#e0654b', dunkel: '#a8402f', augen: '#f5c451',
@@ -159,6 +216,9 @@ export const ARTEN = {
 /* ------------------------------- Die Modelle ------------------------------- */
 function mat(color) { return new THREE.MeshLambertMaterial({ color, flatShading: true }); }
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+
+const FARBE_HELL = mat('#f0e7d2');
+const FARBE_GELB = mat('#e8a83c');
 
 function bauen(art) {
   const g = new THREE.Group();
@@ -210,6 +270,59 @@ function bauen(art) {
     }
     teil(box(0.14, 0.14, 0.5), fell, 0, 0.8 + hoch, -0.78);
 
+    if (art.streifen) {                         // Dachs: heller Streifen über den Rücken
+      teil(box(0.16, 0.1, 1.2), FARBE_HELL, 0, 0.94 + hoch, 0);
+      teil(box(0.12, 0.1, 0.44), FARBE_HELL, 0, 1.02 + hoch, 0.72);
+    }
+    if (art.wuchtig) {                          // Schultern, die man von oben sieht
+      teil(box(0.86, 0.4, 0.6), fell, 0, 0.94 + hoch, 0.18);
+      teil(box(0.3, 0.3, 0.3), dunkel, -0.3, 1.02 + hoch, 0.34);
+      teil(box(0.3, 0.3, 0.3), dunkel, 0.3, 1.02 + hoch, 0.34);
+    }
+
+  } else if (bau === 'spinne') {
+    // Flacher Leib, dicker Hinterleib, acht Beine im Knick
+    teil(box(0.62, 0.36, 0.6), fell, 0, 0.5, 0.2);
+    teil(new THREE.IcosahedronGeometry(0.46, 0), fell, 0, 0.6, -0.5);
+    for (const sx of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const z = 0.34 - i * 0.28;
+        teil(box(0.5, 0.1, 0.1), dunkel, sx * 0.52, 0.58, z, [0, 0, sx * 0.5]);
+        teil(box(0.1, 0.44, 0.1), dunkel, sx * 0.76, 0.3, z);
+      }
+      teil(box(0.1, 0.1, 0.05), auge, sx * 0.14, 0.6, 0.5);
+      teil(box(0.07, 0.07, 0.05), auge, sx * 0.26, 0.56, 0.44);
+    }
+
+  } else if (bau === 'vogel') {
+    // Aasgeier: gebeugter Hals, breite Schwingen
+    teil(box(0.5, 0.46, 0.8), fell, 0, 1.0, 0);
+    teil(box(0.22, 0.4, 0.22), dunkel, 0, 1.36, 0.28);
+    teil(box(0.3, 0.26, 0.34), dunkel, 0, 1.56, 0.34);
+    teil(box(0.14, 0.12, 0.3), FARBE_GELB, 0, 1.52, 0.56);
+    teil(box(0.08, 0.08, 0.05), auge, -0.1, 1.6, 0.48);
+    teil(box(0.08, 0.08, 0.05), auge, 0.1, 1.6, 0.48);
+    for (const sx of [-1, 1]) {
+      teil(box(1.1, 0.12, 0.62), fell, sx * 0.76, 1.06, -0.04, [0, 0, -sx * 0.18]);
+      teil(box(0.5, 0.1, 0.4), dunkel, sx * 1.3, 1.16, -0.1, [0, 0, -sx * 0.3]);
+      teil(box(0.1, 0.3, 0.1), FARBE_GELB, sx * 0.16, 0.72, 0.06);
+    }
+    teil(box(0.34, 0.12, 0.5), dunkel, 0, 1.0, -0.6);
+
+  } else if (bau === 'unke') {
+    // Breit und geduckt, mit Kehlsack
+    teil(box(1.0, 0.44, 0.9), fell, 0, 0.52, 0);
+    teil(box(0.7, 0.36, 0.44), fell, 0, 0.62, 0.56);
+    teil(box(0.52, 0.28, 0.3), dunkel, 0, 0.44, 0.62);
+    teil(box(0.14, 0.14, 0.1), auge, -0.2, 0.8, 0.5);
+    teil(box(0.14, 0.14, 0.1), auge, 0.2, 0.8, 0.5);
+    for (const sx of [-1, 1]) {
+      teil(box(0.2, 0.2, 0.6), dunkel, sx * 0.5, 0.3, 0.3);
+      teil(box(0.24, 0.5, 0.24), dunkel, sx * 0.54, 0.4, -0.3);
+      teil(box(0.3, 0.16, 0.34), dunkel, sx * 0.54, 0.16, -0.5);
+    }
+    teil(box(0.5, 0.16, 0.5), FARBE_HELL, 0, 0.78, -0.1);
+
   } else if (bau === 'schwebend') {
     // Ein Licht mit Körper: Kern, Hülle, drei Funken hinterher
     teil(new THREE.IcosahedronGeometry(0.34, 0), fell, 0, 1.1, 0);
@@ -247,7 +360,7 @@ function bauen(art) {
     }
 
   } else {
-    const gross = art.hoehe > 2.2 ? 1.2 : 1;    // der Riese ist schlicht mehr Riese
+    const gross = art.wuchtig ? 1.35 : art.hoehe > 2.2 ? 1.2 : 1;
     teil(box(0.58 * gross, 0.76, 0.36 * gross), fell, 0, art.hoehe * 0.55, 0);
     teil(box(0.46 * gross, 0.44, 0.42 * gross), art.boss ? fell : dunkel, 0, art.hoehe * 0.98, 0);
     teil(box(0.1, 0.1, 0.05), auge, -0.11 * gross, art.hoehe * 0.99, 0.22 * gross);
@@ -258,6 +371,14 @@ function bauen(art) {
     teil(box(0.2, 0.5, 0.22), dunkel, 0.14 * gross, art.hoehe * 0.2, 0);
     // Klinge
     teil(box(0.1, 0.72, 0.1), mat('#b9aa98'), 0.44 * gross, art.hoehe * 0.62, 0.2);
+    if (art.wuchtig) {
+      // Schultern und Fäuste, damit ein Riese auch von oben ein Riese ist
+      teil(box(0.9 * gross, 0.34, 0.5 * gross), fell, 0, art.hoehe * 0.86, 0);
+      for (const sx of [-1, 1]) {
+        teil(box(0.34, 0.34, 0.34), fell, sx * 0.5 * gross, art.hoehe * 0.82, 0);
+        teil(box(0.3, 0.3, 0.3), dunkel, sx * 0.44 * gross, art.hoehe * 0.3, 0.06);
+      }
+    }
     if (art.boss) {
       teil(box(0.7, 0.14, 0.7), mat('#f5c451'), 0, art.hoehe * 1.24, 0);
       teil(box(0.16, 0.26, 0.16), mat('#f5c451'), 0, art.hoehe * 1.38, 0);
@@ -271,6 +392,7 @@ export class Feinde {
     this.scene = scene;
     this.haken = haken;               // onTreffer, onTod
     this.liste = [];
+    this.sterbende = [];       // Leiber, die gerade umkippen
     this.muster = {};
     for (const [id, art] of Object.entries(ARTEN)) this.muster[id] = bauen(art);
   }
@@ -303,6 +425,10 @@ export class Feinde {
       gezeichnet,
       name: gezeichnet ? `${BEINAMEN[(Math.random() * BEINAMEN.length) | 0]} ${art.name}` : art.name,
       stossX: 0, stossZ: 0,           // Rückstoß nach einem Treffer
+      holt: 0, holtVoll: 0, schlagBereit: false, fernSchlag: false, stoss: 0,
+      // Die Gruppe dreht sich um Y, der Leib darin neigt sich — sonst kippte
+      // ein Wesen je nach Blickrichtung zur Seite statt nach vorn.
+      leib: obj.children[0],
     };
     this.liste.push(f);
     return f;
@@ -310,13 +436,26 @@ export class Feinde {
 
   clear() {
     for (const f of this.liste) this.scene.remove(f.obj);
+    for (const t of this.sterbende) this.scene.remove(t.obj);
     this.liste.length = 0;
+    this.sterbende.length = 0;
   }
 
   entfernen(f) {
     this.scene.remove(f.obj);
     const i = this.liste.indexOf(f);
     if (i >= 0) this.liste.splice(i, 1);
+  }
+
+  /** Aus der Liste heraus, aber noch einen Moment im Bild — es fällt um. */
+  kippen(f) {
+    const i = this.liste.indexOf(f);
+    if (i >= 0) this.liste.splice(i, 1);
+    this.sterbende.push({
+      obj: f.obj, leib: f.leib, zeit: 0.55, dauer: 0.55, y: f.pos.y,
+      skala: (f.art.skala || 1) * (f.gezeichnet ? 1.3 : 1),
+      kipp: Math.random() < 0.5 ? 1 : -1,
+    });
   }
 
   /** Alles, was weiter weg ist als die Sichtgrenze, wird abgeräumt. */
@@ -411,23 +550,118 @@ export class Feinde {
       }
       if (f.pos.y < 1) { this.entfernen(f); continue; }
 
-      f.obj.position.copy(f.pos);
-      f.wank += dt * (art.vierbeiner ? 9 : 6);
-      if (Math.abs(zielX) + Math.abs(zielZ) > 0.05) {
-        f.obj.position.y += Math.abs(Math.sin(f.wank)) * 0.07;
-      }
-      if (f.weh > 0) { f.weh -= dt; f.obj.position.x += Math.sin(f.weh * 70) * 0.05; }
-
+      /* Angriffe kommen nicht mehr aus dem Nichts: erst wird ausgeholt, dann
+         geschlagen. Wer in dem Moment wegrollt, bei dem es zuschnappt, ist
+         weg — erst dadurch wird die Rolle ein Werkzeug statt einer Zierde. */
       f.takt -= dt;
-      if (f.wach && !scheu && art.schaden > 0 && spielerLebt && f.takt <= 0) {
-        if (dist < art.reichweite && dy < 2.2) {
+      if (f.holt > 0) {
+        f.holt -= dt;
+        if (f.holt <= 0 && f.schlagBereit) {
+          f.schlagBereit = false;
+          f.stoss = 0.18;
+          if (f.fernSchlag) {
+            if (spielerLebt) this.haken.onSchuss?.(f, dx / (dist || 1), dz / (dist || 1));
+          } else if (spielerLebt && dist < art.reichweite + 0.5 && dy < 2.4) {
+            this.haken.onTreffer(f);
+          }
+        }
+      } else if (f.wach && !scheu && art.schaden > 0 && spielerLebt && f.takt <= 0) {
+        const nah = dist < art.reichweite && dy < 2.2;
+        const weit = art.fern && dist < art.schussweite && dist > 1.5 && dy < 5;
+        if (nah || weit) {
           f.takt = art.takt;
-          this.haken.onTreffer(f);
-        } else if (art.fern && dist < art.schussweite && dist > 1.5 && dy < 5) {
-          f.takt = art.takt;
-          this.haken.onSchuss?.(f, dx / dist, dz / dist);
+          f.holt = art.vorlauf || (weit && !nah ? 0.5 : 0.36);
+          f.holtVoll = f.holt;
+          f.schlagBereit = true;
+          f.fernSchlag = weit && !nah;
+          this.haken.onAusholen?.(f, f.holt);
         }
       }
+      if (f.stoss > 0) f.stoss -= dt;
+
+      this.beleben(f, dt, Math.abs(zielX) + Math.abs(zielZ) > 0.05, dx, dz, dist);
+    }
+
+    // Was gefallen ist, kippt um und sinkt weg, statt einfach zu verschwinden
+    for (let i = this.sterbende.length - 1; i >= 0; i--) {
+      const t = this.sterbende[i];
+      t.zeit -= dt;
+      const k = Math.max(0, t.zeit / t.dauer);
+      if (t.leib) t.leib.rotation.z = t.kipp * (1 - k) * 1.5;
+      t.obj.position.y = t.y - (1 - k) * 0.35;
+      t.obj.scale.setScalar(t.skala * (0.4 + k * 0.6));
+      if (t.zeit <= 0) { this.scene.remove(t.obj); this.sterbende.splice(i, 1); }
+    }
+  }
+
+  /* Bewegung, Ausholen, Treffer und Wucht — alles am ganzen Körper, weil die
+     Modelle aus einem Stück sind. Vierbeiner galoppieren, Menschen wiegen sich,
+     Spinnen trippeln, und was wuchtig ist, stapft schwer. */
+  beleben(f, dt, bewegt, dx, dz, dist) {
+    const art = f.art;
+    const bau = art.bau || (art.vierbeiner ? 'vierbeiner' : 'mensch');
+    const skala = (art.skala || 1) * (f.gezeichnet ? 1.3 : 1);
+    const schwer = art.wuchtig ? 0.55 : 1;
+
+    f.wank += dt * (bewegt ? (bau === 'spinne' || bau === 'kriecher' ? 16
+      : bau === 'vierbeiner' ? 11 * schwer : 7 * schwer) : 1.6);
+
+    const o = f.obj;
+    o.position.copy(f.pos);
+    let hoch = 0, neig = 0, roll = 0, breit = 1, lang = 1;
+
+    if (bewegt) {
+      const s = Math.sin(f.wank), c = Math.cos(f.wank * 0.5);
+      if (bau === 'vierbeiner') {
+        hoch = Math.abs(s) * 0.09 * (art.wuchtig ? 1.6 : 1);
+        neig = -s * 0.07;
+        lang = 1 + Math.abs(s) * 0.05;
+      } else if (bau === 'spinne' || bau === 'kriecher') {
+        hoch = Math.abs(s) * 0.05;
+        roll = c * 0.1;
+      } else if (bau === 'vogel' || art.schwebt) {
+        hoch = Math.sin(f.wank * 0.8) * 0.16;
+        roll = Math.sin(f.wank * 0.5) * 0.14;
+      } else {
+        hoch = Math.abs(s) * 0.07 * (art.wuchtig ? 1.5 : 1);
+        roll = s * 0.06;
+        breit = 1 + Math.abs(s) * 0.03;
+      }
+    } else if (art.schwebt || bau === 'vogel') {
+      hoch = Math.sin(f.wank) * 0.12;
+    } else {
+      // Atem im Stand: kaum sichtbar, aber ohne wirkt alles wie eingefroren
+      lang = 1 + Math.sin(f.wank) * 0.012;
+    }
+
+    // Ausholen: zurücklehnen und größer werden, dann nach vorn schnellen
+    if (f.holt > 0) {
+      const k = 1 - f.holt / (f.holtVoll || 1);
+      neig -= 0.34 * Math.sin(k * Math.PI * 0.8);
+      breit *= 1 + k * 0.12;
+      lang *= 1 + k * 0.1;
+    } else if (f.stoss > 0 && dist > 0.01) {
+      const k = f.stoss / 0.18;
+      o.position.x += (dx / dist) * k * 0.45;
+      o.position.z += (dz / dist) * k * 0.45;
+      neig += 0.3 * k;
+    }
+
+    if (f.weh > 0) {
+      f.weh -= dt;
+      o.position.x += Math.sin(f.weh * 70) * 0.05;
+      const q = f.weh / 0.22;
+      breit *= 1 + q * 0.18;
+      lang *= 1 - q * 0.16;
+    }
+
+    o.position.y += hoch;
+    o.scale.setScalar(skala);
+    const leib = f.leib;
+    if (leib) {
+      leib.rotation.x = neig;
+      leib.rotation.z = roll;
+      leib.scale.set(breit, lang, breit);
     }
   }
 
@@ -485,7 +719,7 @@ export class Feinde {
     if (f.gesinnung === 'friedlich') f.flucht = 7;
     else f.wach = true;
     if (f.hp <= 0) {
-      this.entfernen(f);
+      this.kippen(f);
       this.haken.onTod(f);
       return true;
     }
