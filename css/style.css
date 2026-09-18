@@ -83,6 +83,7 @@ html, body {
 .gefahr.g4 { color: #d4703a; }
 .gefahr.g5 { color: #c9543f; }
 #zielleiste .gefahr { text-shadow: 0 1px 0 rgba(253, 246, 232, .9); }
+.wetter-wort { font-weight: 800; opacity: .85; }
 
 .oben-rechts {
   position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px);
@@ -311,13 +312,30 @@ html, body {
 
 /* ----------------------------- Heldenblatt --------------------------------- */
 .menu-karte { text-align: left; }
-.menu-reiter { display: flex; gap: 5px; margin-bottom: 13px; }
+.menu-reiter { display: flex; gap: 4px; margin-bottom: 13px; }
 .reiter, .lreiter {
-  flex: 1; padding: 9px 3px; border: 0; border-radius: 8px 8px 3px 3px;
+  flex: 1; min-width: 0; padding: 9px 2px; border: 0; border-radius: 8px 8px 3px 3px;
   background: var(--putz-tief); color: var(--tinte-hell);
-  font: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+  font: inherit; font-size: 11.5px; font-weight: 800; cursor: pointer;
   box-shadow: 0 0 0 2px var(--holz);
 }
+.lreiter { font-size: 12.5px; padding: 9px 3px; }
+
+/* ------------------------------ Bestiarium --------------------------------- */
+.wesen-zeile {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 9px 11px; margin-bottom: 6px; border-radius: 8px;
+  background: var(--putz-tief); box-shadow: inset 3px 0 0 var(--holz);
+}
+.wesen-zeile.fremd { opacity: .5; }
+.wesen-fleck {
+  flex: none; width: 26px; height: 26px; border-radius: 7px; margin-top: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 900; color: var(--tinte-hell);
+}
+.wesen-text { display: block; }
+.wesen-text b { display: block; font-size: 13.5px; }
+.wesen-text small { display: block; font-size: 11px; font-weight: 800; opacity: .7; line-height: 1.5; }
 .reiter.an, .lreiter.an {
   background: var(--holz); color: var(--putz);
   box-shadow: 0 0 0 2px var(--holz-tief);

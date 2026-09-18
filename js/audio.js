@@ -4,6 +4,17 @@
 const SCALE = [0, 2, 4, 7, 9, 12, 14];      // Pentatonik: klingt nie falsch
 const BASE = 196;                            // G3
 
+/* Die Gegenden klingen verschieden: das Grasland hell und offen, der Bruch
+   tief und schwebend, das Firnfeld dünn und hoch, die Düne karg. */
+const STIMMUNGEN = {
+  warm:   { grund: 1,    leiter: [0, 2, 4, 7, 9, 12], klang: 'triangle', pause: 9 },
+  wald:   { grund: 0.75, leiter: [0, 3, 5, 7, 10],    klang: 'triangle', pause: 11 },
+  kalt:   { grund: 1.5,  leiter: [0, 2, 7, 9, 14],    klang: 'sine',     pause: 13 },
+  karg:   { grund: 0.67, leiter: [0, 1, 5, 7, 8],     klang: 'sawtooth', pause: 15 },
+  dunkel: { grund: 0.5,  leiter: [0, 3, 6, 7, 10],    klang: 'sine',     pause: 12 },
+  fels:   { grund: 0.84, leiter: [0, 5, 7, 12],       klang: 'triangle', pause: 14 },
+};
+
 export class GameAudio {
   constructor() {
     this.ctx = null;
@@ -41,6 +52,7 @@ export class GameAudio {
 
     this._startWind();
     this._startFire();
+    this._startWetter();
     this.ready = true;
   }
 
@@ -74,6 +86,34 @@ export class GameAudio {
     src.connect(filter).connect(gain).connect(this.master);
     src.start();
     lfo.start();
+  }
+
+  /* Wetter: ein zweites Rauschen, dessen Filter entscheidet, ob es nach
+     Regen (hell und dicht), Schnee (fast nichts) oder Sandwind (dumpf und
+     böig) klingt. Eine Quelle für alles — nur Frequenz und Pegel wandern. */
+  _startWetter() {
+    const src = this._noiseSource(true);
+    this.wetterFilter = this.ctx.createBiquadFilter();
+    this.wetterFilter.type = 'bandpass';
+    this.wetterFilter.frequency.value = 1400;
+    this.wetterFilter.Q.value = 0.4;
+    this.wetterGain = this.ctx.createGain();
+    this.wetterGain.gain.value = 0;
+    src.connect(this.wetterFilter).connect(this.wetterGain).connect(this.master);
+    src.start();
+  }
+
+  /** Was gerade vom Himmel kommt, und wie stark. */
+  setWetter(art, staerke) {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    const [freq, pegel] = art === 'regen' ? [2200, 0.13]
+      : art === 'sand' ? [700, 0.11]
+      : art === 'schnee' ? [900, 0.02]
+      : art === 'nebel' ? [400, 0.02]
+      : [1200, 0];
+    this.wetterFilter.frequency.setTargetAtTime(freq, t, 0.6);
+    this.wetterGain.gain.setTargetAtTime(pegel * staerke, t, 0.8);
   }
 
   /** Lagerfeuer: dauerhaft vorhanden, aber nur in der Nähe hörbar. */
@@ -183,16 +223,21 @@ export class GameAudio {
     });
   }
 
-  /** Ab und zu ein ruhiger Akkordton als Untermalung. */
-  ambient(dt) {
+  /* Ab und zu ein ruhiger Akkordton als Untermalung — aber nicht überall
+     derselbe. Jede Gegend bekommt ihre eigene Tonart und ihr eigenes Tempo,
+     und nachts rückt alles eine Oktave tiefer und wird seltener. Das ist
+     keine Musik, aber es klingt an jedem Ort anders. */
+  ambient(dt, stimmung = 'warm', nacht = false) {
     if (!this.ready || this.muted) return;
+    const s = STIMMUNGEN[stimmung] || STIMMUNGEN.warm;
     this.padTimer -= dt;
     if (this.padTimer > 0) return;
-    this.padTimer = 9 + Math.random() * 7;
+    this.padTimer = (s.pause + Math.random() * s.pause * 0.8) * (nacht ? 1.5 : 1);
 
     const t = this.ctx.currentTime;
-    const semi = SCALE[(Math.random() * SCALE.length) | 0];
-    const freq = BASE * Math.pow(2, semi / 12);
+    const leiter = s.leiter;
+    const semi = leiter[(Math.random() * leiter.length) | 0];
+    const freq = BASE * s.grund * Math.pow(2, semi / 12) * (nacht ? 0.5 : 1);
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(0.05, t + 1.6);
@@ -201,7 +246,7 @@ export class GameAudio {
 
     for (const detune of [-4, 4]) {
       const osc = this.ctx.createOscillator();
-      osc.type = 'triangle';
+      osc.type = s.klang;
       osc.frequency.value = freq;
       osc.detune.value = detune;
       osc.connect(gain);

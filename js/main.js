@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   VoxelWorld, B, BLOCKS, AIR, isSolid, setSeed, getSeed, biomeAt, surfaceAt, stratumAt,
+  BIOMES,
   kartenBild,
   doerferUm, dorfBei, HEIGHT, SEA, CHUNK,
 } from './voxel.js';
@@ -13,7 +14,7 @@ import { Flora } from './flora.js';
 import { Leute } from './npc.js';
 import { Feinde, ARTEN } from './combat.js';
 import { Geschosse } from './geschoss.js';
-import { wesenWaehlen, gefahrVon, GEFAHRWORT } from './wesen.js';
+import { wesenWaehlen, gefahrVon, GEFAHRWORT, BEWOHNER } from './wesen.js';
 import * as gruft from './dungeon.js';
 import * as orte from './orte.js';
 import * as fert from './skills.js';
@@ -29,6 +30,7 @@ import {
 } from './props.js';
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
+import { Wetter } from './wetter.js';
 
 /* ==========================================================================
  *  Talkunde — ein Rollenspiel von oben.
@@ -142,6 +144,7 @@ const feinde = new Feinde(scene, {
   onSchuss: (f, rx, rz) => feindSchiesst(f, rx, rz),
 });
 const geschosse = new Geschosse(scene);
+const wetter = new Wetter(scene);
 
 /* ------------------------------- Anzeige ----------------------------------
  * Die Symbole kommen aus icons.js und werden einmal hineingesetzt. Emoji
@@ -210,7 +213,9 @@ function updateHUD() {
   } else {
     const gegend = biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
     const g = gefahrVon(gegend.id);
-    ui.ortInfo.innerHTML = `${gegend.name} <span class="gefahr g${g}">${'◆'.repeat(g)}</span>`;
+    const wie = wetter.anzeige();
+    ui.ortInfo.innerHTML = `${gegend.name} <span class="gefahr g${g}">${'◆'.repeat(g)}</span>`
+      + (wie ? ` <span class="wetter-wort">· ${wie}</span>` : '');
     gegendWechsel(gegend, g);
   }
 }
@@ -274,6 +279,10 @@ function spielerNimmtSchaden(menge, von) {
 function feindGefallen(f) {
   const h = held();
   h.getoetet++;
+  h.erlegt = h.erlegt || {};
+  h.erlegt[f.id] = (h.erlegt[f.id] || 0) + 1;
+  h.gesehen = h.gesehen || new Set();
+  h.gesehen.add(f.id);
   h.gold += f.art.gold;
 
   // Was ein Gegner hinterlässt: meist Krempel, selten etwas Brauchbares
@@ -623,6 +632,17 @@ function orteSchieben(x, z, rand = 0.34) {
     }
   }
   return null;
+}
+
+/** Wie weit ist das nächste Lagerfeuer? Für das Knistern. */
+function feuerNaehe() {
+  let best = null;
+  for (const e of orteAktiv.values()) {
+    if (e.ort.art !== 'lager') continue;
+    const d = Math.hypot(player.pos.x - e.ort.x, player.pos.z - e.ort.z);
+    if (best === null || d < best) best = d;
+  }
+  return best;
 }
 
 /** Steht man vor einem Schrein? */
@@ -1336,13 +1356,15 @@ function menuZeichnen(tab = 'fert') {
     b.classList.toggle('an', b.dataset.tab === tab);
   }
   for (const [id, name] of [['tabFert', 'fert'], ['tabBeutel', 'beutel'],
-                            ['tabQuests', 'quests'], ['tabWelt', 'welt']]) {
+                            ['tabQuests', 'quests'], ['tabWelt', 'welt'],
+                            ['tabWesen', 'wesen']]) {
     el(id).classList.toggle('hidden', tab !== name);
   }
   if (tab === 'fert') fertZeichnen();
   if (tab === 'beutel') beutelZeichnen();
   if (tab === 'quests') questsZeichnen();
   if (tab === 'welt') karteZeichnen();
+  if (tab === 'wesen') bestiariumZeichnen();
 }
 
 /* --------------------------------- Beutel ---------------------------------- */
@@ -1588,6 +1610,88 @@ function karteZeichnen() {
   feld.append(neuanfangKnopf());
 }
 
+/* ------------------------------ Bestiarium ---------------------------------
+ * Zwanzig Wesen, und nirgends stand, welche man schon gesehen hat. Diese
+ * Seite füllt sich beim Wandern: was einem einmal vor die Augen gekommen ist,
+ * steht darin — mit seiner Gefahr, seiner Haltung, seiner Gegend und dem, was
+ * es hinterlässt. Was man noch nie gesehen hat, bleibt ein Fragezeichen.
+ * -------------------------------------------------------------------------- */
+const HALTUNG = {
+  friedlich: 'friedlich — läuft weg',
+  wehrhaft: 'wehrhaft — nur wenn du anfängst',
+  wild: 'wild — kommt von allein',
+};
+
+/** In welchen Gegenden ein Wesen vorkommt. */
+function heimatVon(id) {
+  const orte = [];
+  for (const [biom, b] of Object.entries(BEWOHNER)) {
+    const drin = [...b.tag, ...b.nacht].some(([w]) => w === id);
+    if (drin && BIOMES[biom]) orte.push(BIOMES[biom].name);
+  }
+  return orte;
+}
+
+function wesenGesehen() {
+  const h = held();
+  h.gesehen = h.gesehen || new Set();
+  for (const f of feinde.liste) {
+    if (h.gesehen.has(f.id)) continue;
+    if (Math.hypot(f.pos.x - player.pos.x, f.pos.z - player.pos.z) > 24) continue;
+    h.gesehen.add(f.id);
+  }
+}
+
+function bestiariumZeichnen() {
+  const h = held();
+  h.gesehen = h.gesehen || new Set();
+  const feld = el('tabWesen');
+  feld.replaceChildren();
+
+  const kopf = document.createElement('p');
+  kopf.className = 'punkte-hinweis';
+  const alle = Object.keys(ARTEN);
+  kopf.textContent = `${h.gesehen.size} von ${alle.length} Wesen gesehen`;
+  feld.append(kopf);
+
+  const sortiert = alle.slice().sort((a, b) =>
+    (ARTEN[a].stufe || 1) - (ARTEN[b].stufe || 1) || ARTEN[a].name.localeCompare(ARTEN[b].name));
+
+  for (const id of sortiert) {
+    const art = ARTEN[id];
+    const kennt = h.gesehen.has(id);
+    const z = document.createElement('div');
+    z.className = 'wesen-zeile' + (kennt ? '' : ' fremd');
+
+    const bild = document.createElement('span');
+    bild.className = 'wesen-fleck';
+    bild.style.background = kennt ? art.fell : 'var(--putz-tief)';
+    bild.style.boxShadow = `0 0 0 2px ${kennt ? art.dunkel : 'var(--holz)'}`;
+    bild.textContent = kennt ? '' : '?';
+    z.append(bild);
+
+    const txt = document.createElement('span');
+    txt.className = 'wesen-text';
+    if (!kennt) {
+      txt.innerHTML = '<b>Unbekannt</b><small>noch nie gesehen</small>';
+    } else {
+      const st = art.stufe || 1;
+      const erlegt = (h.erlegt && h.erlegt[id]) || 0;
+      const wo = heimatVon(id);
+      const beute = art.beute && DINGE[art.beute] ? DINGE[art.beute].name : null;
+      txt.innerHTML = `<b>${art.name} <span class="gefahr g${st}">${'◆'.repeat(st)}</span></b>`
+        + `<small>${HALTUNG[art.gesinnung] || 'wild'}`
+        + (art.fern ? ' · schießt' : '')
+        + (art.nurNachts ? ' · nur nachts' : '') + '</small>'
+        + `<small>${wo.length ? wo.join(', ') : 'in den Gruften'}</small>`
+        + `<small>${beute ? `lässt ${beute} zurück` : 'lässt nichts zurück'}`
+        + (erlegt ? ` · ${erlegt} erlegt` : '') + '</small>';
+    }
+    z.append(txt);
+    feld.append(z);
+  }
+}
+
 /* ---------------------------- Das Kartenblatt ------------------------------
  * Punkte allein sagen nichts darüber, wo man ist. Hier wird die Gegend selbst
  * gemalt: Wald grün, Düne sandfarben, Wasser blau, dazu eine Schummerung für
@@ -1647,6 +1751,7 @@ const sunDay = new THREE.Color('#fff6e4');
 const sunDusk = new THREE.Color('#ffb27a');
 const sunNight = new THREE.Color('#c3cfe6');
 const tmpSky = new THREE.Color();
+const wetterFarbe = new THREE.Color();
 const tmpSun = new THREE.Color();
 
 function applyDaytime() {
@@ -1659,13 +1764,21 @@ function applyDaytime() {
 
   tmpSky.copy(a).lerp(bSky, k);
   tmpSun.copy(aSun).lerp(bSun, k);
+  const himmelTon = wetter.kind.himmel || wetter.kind.farbe;
+  if (state.under < 0.5 && wetter.wirkung > 0.01 && himmelTon) {
+    wetterFarbe.set(himmelTon);
+    tmpSky.lerp(wetterFarbe, wetter.wirkung * 0.5);
+    tmpSun.lerp(wetterFarbe, wetter.wirkung * 0.35);
+  }
   tmpSky.lerp(underColor, state.under);
 
   // Die Nebelweiten zählen ab Kamera, nicht ab Spieler
   // Untertage darf der Dunst nicht früher einsetzen als über Tage, sonst
   // löst sich die Gruft in helles Nichts auf.
-  scene.fog.near = camDist + 14 + state.under * 10;
-  scene.fog.far = camDist + 62 + state.under * 26;
+  // Regen und Nebel ziehen die Sicht zu; unter Tage gilt weiter der Berg
+  const nf = state.under > 0.5 ? 1 : wetter.nebelFaktor();
+  scene.fog.near = (camDist + 14 + state.under * 10) * (0.35 + nf * 0.65);
+  scene.fog.far = (camDist + 62 + state.under * 26) * nf;
   scene.background.copy(tmpSky);
   scene.fog.color.copy(tmpSky);
   renderer.setClearColor(tmpSky);
@@ -1673,7 +1786,8 @@ function applyDaytime() {
 
   const night = t > 0.78 && t < 0.97;
   const under = state.under;
-  sun.intensity = (night ? 0.55 : 1.15) * (1 - under * 0.4);
+  const trueb = state.under > 0.5 ? 0 : wetter.dunkelheit();
+  sun.intensity = (night ? 0.55 : 1.15) * (1 - under * 0.4) * (1 - trueb * 2.2);
   hemi.intensity = (night ? 0.55 : 0.95) * (1 - under * 0.3) + under * 0.3;
 
   const ang = (t - 0.25) * Math.PI * 2;
@@ -1688,6 +1802,15 @@ function applyDaytime() {
 
 /* ------------------------------- Draußen leben ----------------------------- */
 let wildTimer = 4;
+/* Jede Gegend klingt anders — welcher Grundton wo liegt, steht hier. */
+const STIMMUNG = {
+  wiese: 'warm', bluete: 'warm', heide: 'warm', steppe: 'warm',
+  wald: 'wald', birken: 'wald',
+  taiga: 'kalt', schnee: 'kalt',
+  wueste: 'karg', mesa: 'karg',
+  sumpf: 'dunkel', berg: 'fels',
+};
+
 const istNacht = () => state.time > 0.76 || state.time < 0.12;
 
 function wildnisPflegen(dt) {
@@ -1788,6 +1911,16 @@ function frame() {
     feinde.aufraeumen(player.pos.x, player.pos.z, 130);
     wildnisPflegen(dt);
     beutelPflegen(dt);
+    wesenGesehen();
+    // Das Wetter richtet sich nach der Gegend, in der man gerade steht
+    wetter.update(dt, biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).id,
+      player.pos, !!state.imHaus || state.under > 0.5);
+    audio.setWetter(wetter.art, wetter.wirkung);
+    // Der Grundton der Gegend, und wie nah das nächste Feuer ist
+    audio.ambient(dt, state.imDungeon ? 'dunkel'
+      : STIMMUNG[biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).id] || 'warm',
+      istNacht());
+    audio.setFireDistance(feuerNaehe());
 
     const vorher = state.time;
     state.time = (state.time + dt / DAY) % 1;
@@ -2021,6 +2154,7 @@ function writeSave(auchTot = false) {
       magicka: h.magicka, magickaMax: h.magickaMax, fert: h.fert, fertXp: h.fertXp || {},
       vorteile: [...h.vorteile], getoetet: h.getoetet, hilfen: h.hilfen || 0,
       dungeons: [...h.dungeons], orte: [...(h.orte || [])],
+      gesehen: [...(h.gesehen || [])], erlegt: h.erlegt || {},
       beutel: h.beutel, rue: h.rue,
     },
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8),
@@ -2210,6 +2344,8 @@ function weiterSpielen(d) {
   h.vorteile = new Set(d.held.vorteile || []);
   h.dungeons = new Set(d.held.dungeons || []);
   h.orte = new Set(d.held.orte || []);
+  h.gesehen = new Set(d.held.gesehen || []);
+  h.erlegt = d.held.erlegt || {};
   state.held = h;
 
   state.buch = new Auftragsbuch();
@@ -2299,7 +2435,7 @@ window.__game = {
   pfeil, zielPunkt, questsZeichnen,
   heimkehr, karteZeichnen, menuZeichnen,
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
-  orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel,
+  orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel, wetter,
 };
 
 resize();
