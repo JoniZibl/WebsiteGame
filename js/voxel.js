@@ -569,6 +569,60 @@ export class VoxelWorld {
   }
 }
 
+/* ------------------------------- Die Karte ---------------------------------
+ * Für das Kartenblatt im Heldenblatt: ein kleines Bild der Gegend von oben.
+ * Gerechnet wird mit dem rohen Gelände — Dörfer und Wege interessieren auf
+ * dieser Entfernung nicht, und ohne sie geht es doppelt so schnell.
+ * -------------------------------------------------------------------------- */
+const KARTENFARBE = {};
+function kartenFarbeVon(biom) {
+  if (!KARTENFARBE[biom.id]) {
+    const b = BLOCKS[biom.top];
+    const c = b && b.color != null ? b.color : 0x93bd6d;
+    KARTENFARBE[biom.id] = [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+  }
+  return KARTENFARBE[biom.id];
+}
+const WASSER = [0x6c, 0xb8, 0xb4];
+const UFER = [0xef, 0xdc, 0xb2];
+
+/**
+ * Malt ein Bild der Gegend: `n` mal `n` Punkte im Abstand `schritt`,
+ * zentriert auf (mx, mz). Zurück kommen RGBA-Bytes für putImageData.
+ */
+export function kartenBild(mx, mz, schritt, n) {
+  const hoehen = new Int16Array((n + 1) * (n + 1));
+  const x0 = mx - (n / 2) * schritt, z0 = mz - (n / 2) * schritt;
+  for (let j = 0; j <= n; j++) {
+    for (let i = 0; i <= n; i++) {
+      hoehen[j * (n + 1) + i] = rohSurface(Math.round(x0 + i * schritt),
+                                           Math.round(z0 + j * schritt));
+    }
+  }
+
+  const bild = new Uint8ClampedArray(n * n * 4);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const x = Math.round(x0 + i * schritt), z = Math.round(z0 + j * schritt);
+      const h = hoehen[j * (n + 1) + i];
+      let farbe;
+      if (h <= SEA) farbe = WASSER;
+      else if (h <= SEA + 1) farbe = UFER;
+      else farbe = kartenFarbeVon(rohBiome(x, z));
+
+      // Schummerung: was nach Nordwesten abfällt, liegt im Licht
+      const dh = (h - hoehen[j * (n + 1) + i + 1]) + (h - hoehen[(j + 1) * (n + 1) + i]);
+      const licht = Math.max(-0.34, Math.min(0.34, dh * 0.07));
+      const k = (j * n + i) * 4;
+      for (let c = 0; c < 3; c++) {
+        bild[k + c] = farbe[c] * (1 + licht);
+      }
+      bild[k + 3] = 255;
+    }
+  }
+  return bild;
+}
+
 /* Die Gruften bekommen Gelände und Saatkorn erst hier - vorher gibt es
    rohSurface noch nicht. */
 gruft.verbinden(rohSurface, () => SEED);

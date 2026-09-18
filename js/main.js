@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   VoxelWorld, B, BLOCKS, AIR, isSolid, setSeed, getSeed, biomeAt, surfaceAt, stratumAt,
+  kartenBild,
   doerferUm, dorfBei, HEIGHT, SEA, CHUNK,
 } from './voxel.js';
 import { Player } from './player.js';
@@ -1547,6 +1548,7 @@ function karteZeichnen() {
   box.className = 'karte-feld';
   const R = 420;
   const px = player.pos.x, pz = player.pos.z;
+  box.append(kartenBlatt(px, pz, R));
   const setz = (x, z, klasse) => {
     const l = (x - px) / (R * 2) + 0.5, t = (z - pz) / (R * 2) + 0.5;
     if (l < 0.02 || l > 0.98 || t < 0.02 || t > 0.98) return;
@@ -1582,6 +1584,58 @@ function karteZeichnen() {
   wort.className = 'punkte-hinweis';
   wort.textContent = 'Steckst du in einer Höhle fest, bringt dich die Heimkehr heraus.';
   feld.append(wort);
+
+  feld.append(neuanfangKnopf());
+}
+
+/* ---------------------------- Das Kartenblatt ------------------------------
+ * Punkte allein sagen nichts darüber, wo man ist. Hier wird die Gegend selbst
+ * gemalt: Wald grün, Düne sandfarben, Wasser blau, dazu eine Schummerung für
+ * die Hänge. Das Bild kostet ein paar tausend Rauschabfragen, also wird es
+ * gemerkt, solange man sich nicht weit bewegt hat.
+ * -------------------------------------------------------------------------- */
+const KARTE_N = 112;
+let kartenCache = { key: null, canvas: null };
+
+function kartenBlatt(px, pz, R) {
+  const schritt = (R * 2) / KARTE_N;
+  // Grob gerastert merken, sonst wird bei jedem Schritt neu gemalt
+  const key = `${Math.round(px / 24)},${Math.round(pz / 24)},${getSeed()}`;
+  if (kartenCache.key === key && kartenCache.canvas) return kartenCache.canvas;
+
+  const c = document.createElement('canvas');
+  c.width = KARTE_N;
+  c.height = KARTE_N;
+  c.className = 'karte-bild';
+  const ctx = c.getContext('2d');
+  const bild = new ImageData(kartenBild(px, pz, schritt, KARTE_N), KARTE_N, KARTE_N);
+  ctx.putImageData(bild, 0, 0);
+  kartenCache = { key, canvas: c };
+  return c;
+}
+
+/* Ein neues Spiel wirft alles weg — das fragt man besser zweimal. */
+function neuanfangKnopf() {
+  const knopf = document.createElement('button');
+  knopf.className = 'karten-knopf gefahr-knopf';
+  let sicher = false;
+  const beschriften = () => {
+    knopf.innerHTML = sicher
+      ? '<span>Wirklich? Alles geht verloren — noch einmal tippen</span>'
+      : `${sym('funke')}<span>Neu anfangen — neue Welt, neuer Held</span>`;
+  };
+  beschriften();
+  knopf.addEventListener('click', () => {
+    if (!sicher) {
+      sicher = true;
+      beschriften();
+      setTimeout(() => { sicher = false; beschriften(); }, 4000);
+      return;
+    }
+    el('menu').classList.add('hidden');
+    neuesSpiel();
+  });
+  return knopf;
 }
 
 /* ------------------------------ Tag und Nacht ------------------------------ */
@@ -2228,7 +2282,9 @@ if (gespeichert && gespeichert.held) {
   });
 }
 
-window.addEventListener('pagehide', writeSave);
+// Ohne die Klammern bekäme writeSave das Event als ersten Parameter — und
+// das hieße „auch wenn tot“, also auch, wenn noch gar nicht gespielt wurde.
+window.addEventListener('pagehide', () => writeSave());
 document.addEventListener('visibilitychange', () => { if (document.hidden) writeSave(); });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
@@ -2243,7 +2299,7 @@ window.__game = {
   pfeil, zielPunkt, questsZeichnen,
   heimkehr, karteZeichnen, menuZeichnen,
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
-  orte, orteAktiv, truhen, was, handeln,
+  orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel,
 };
 
 resize();

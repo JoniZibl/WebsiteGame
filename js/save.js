@@ -6,7 +6,11 @@
  *  langen Grabung nur ein paar Kilobyte.
  * ========================================================================== */
 
-const KEY = 'grabwelt.v1';
+/* Die Nummer im Schlüssel ist die Version der Welt. Seit v2 stehen Dörfer
+   anders, es gibt Landmarken und begehbare Häuser — ein alter Spielstand
+   passüe dazu nicht mehr und fände sich in einer Hauswand wieder. Wer die
+   Nummer erhöht, fängt also bewusst alle neu an. */
+const KEY = 'grabwelt.v2';
 
 export function save(data) {
   try {
