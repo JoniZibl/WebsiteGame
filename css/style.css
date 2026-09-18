@@ -128,10 +128,42 @@ html, body {
   display: block; font-size: 12px; font-weight: 900; margin-bottom: 3px;
   text-shadow: 0 2px 0 rgba(253, 246, 232, .85);
 }
+#zielleiste.gezeichnet b { color: var(--terra-tief); }
+#zielleiste.gezeichnet i { background: var(--gold); box-shadow: 0 0 0 2px var(--terra-tief); }
 #zielleiste i {
   display: block; height: 9px; border-radius: 4px; background: var(--terra);
   box-shadow: 0 0 0 2px var(--holz-tief); transition: width .12s;
 }
+
+/* --------------------------- Ereignisse ------------------------------------
+ * Das Band fährt einmal ein, wenn etwas losgeht, und geht wieder. Die kleine
+ * Tafel rechts bleibt, solange noch etwas steht.
+ * -------------------------------------------------------------------------- */
+.banner {
+  position: fixed; z-index: 8; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 112px);
+  transform: translate(-50%, -14px); opacity: 0;
+  width: min(300px, 84vw); text-align: center; pointer-events: none;
+  padding: 10px 14px 12px; border-radius: 12px;
+  background: var(--putz);
+  box-shadow: 0 0 0 3px var(--ton, var(--terra)), 0 6px 0 rgba(74, 59, 48, .22);
+  transition: opacity .3s, transform .3s;
+}
+.banner.an { opacity: 1; transform: translate(-50%, 0); }
+.banner.hidden { display: none; }
+.banner b { display: block; font-size: 15px; font-weight: 900; color: var(--ton, var(--terra)); }
+.banner small { display: block; font-size: 11.5px; font-weight: 800; opacity: .72; margin-top: 3px; }
+
+.ereignis {
+  position: fixed; z-index: 6; right: calc(env(safe-area-inset-right, 0px) + 14px);
+  top: calc(env(safe-area-inset-top, 0px) + 198px);
+  text-align: right; pointer-events: none;
+  padding: 6px 10px; border-radius: 9px;
+  background: var(--putz);
+  box-shadow: 0 0 0 2px var(--ton, var(--terra)), 0 3px 0 rgba(74, 59, 48, .2);
+}
+.ereignis.hidden { display: none; }
+.ereignis b { display: block; font-size: 11.5px; font-weight: 900; color: var(--ton, var(--terra)); }
+.ereignis small { display: block; font-size: 10.5px; font-weight: 800; opacity: .7; }
 
 /* Der Rueckweg aus einer Hoehle: nur sichtbar, wenn man wirklich feststeckt */
 .fest-hinweis {
@@ -207,6 +239,15 @@ html, body {
 .knopf.klein:active { box-shadow: 0 0 0 3px var(--holz), 0 1px 0 var(--holz-tief); }
 
 #menuBtn { right: calc(env(safe-area-inset-right, 0px) + 26px); bottom: calc(env(safe-area-inset-bottom, 0px) + 122px); }
+#rollBtn {
+  /* Über dem Reden-Knopf, links neben dem Zauber — dort ist als Einziges
+     noch Platz für einen Daumen. */
+  right: calc(env(safe-area-inset-right, 0px) + 156px); bottom: calc(env(safe-area-inset-bottom, 0px) + 112px);
+  background: var(--salbei);
+  box-shadow: 0 0 0 3px var(--holz-tief), 0 5px 0 var(--salbei-tief), var(--schatten);
+}
+#rollBtn:active { box-shadow: 0 0 0 3px var(--holz-tief), 0 1px 0 var(--salbei-tief); }
+#rollBtn.leer { opacity: .45; }
 #wirkBtn {
   right: calc(env(safe-area-inset-right, 0px) + 92px); bottom: calc(env(safe-area-inset-bottom, 0px) + 110px);
   background: var(--blau);

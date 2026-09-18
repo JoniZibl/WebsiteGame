@@ -31,6 +31,7 @@ import {
 import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 import { Wetter } from './wetter.js';
+import { Ereignisse } from './ereignis.js';
 
 /* ==========================================================================
  *  Talkunde — ein Rollenspiel von oben.
@@ -146,6 +147,14 @@ const feinde = new Feinde(scene, {
 const geschosse = new Geschosse(scene);
 const wetter = new Wetter(scene);
 
+/* Was einem zustößt. Das Ereignis entscheidet wann und was — hier steht,
+   wo genau die Gestalten herkommen und was es am Ende gibt. */
+const ereignisse = new Ereignisse({
+  spawn: (id, lage) => ereignisVolk(id, lage),
+  banner: (titel, text, farbe) => bannerZeigen(titel, text, farbe),
+  geschafft: (id, zahl) => ereignisGeschafft(id, zahl),
+});
+
 /* ------------------------------- Anzeige ----------------------------------
  * Die Symbole kommen aus icons.js und werden einmal hineingesetzt. Emoji
  * haben hier nichts verloren - sie bringen einen ganz anderen Strich mit als
@@ -174,6 +183,7 @@ symbol(el('wirkBtn'), 'funke');
 symbol(el('menuBtn'), 'beutel');
 symbol(el('qualityBtn'), 'glanz');
 symbol(el('redeBtn'), 'rede');
+symbol(el('rollBtn'), 'rolle');
 for (const m of document.querySelectorAll('.ic-muenze')) m.innerHTML = ICONS.muenze;
 
 let hudTimer = 0;
@@ -205,6 +215,7 @@ function updateHUD() {
   ui.xp.style.width = `${Math.min(100, h.xp / h.xpZiel * 100)}%`;
   ui.gold.textContent = h.gold;
   ui.wirk.classList.toggle('leer', h.magicka < 18);
+  el('rollBtn').classList.toggle('leer', h.ausdauer < 16);
   trinkKnopfPflegen();
 
   ui.ortName.textContent = state.ort;
@@ -263,6 +274,12 @@ function meldung(text, farbe = '#4a3b30', hoch = 2.4) {
 /* --------------------------------- Kampf ---------------------------------- */
 function spielerNimmtSchaden(menge, von) {
   if (state.dead || !state.running) return;
+  // Mitten in der Rolle geht nichts durch — das ist ihr ganzer Sinn
+  if (player.unverwundbar > 0) {
+    juice.popup({ x: player.pos.x, y: player.pos.y + 2.2, z: player.pos.z },
+      'ausgewichen', '#7fae5e');
+    return;
+  }
   const h = held();
   const abgewehrt = menge * Math.min(0.6, fert.werte.ruestung(h));
   const echt = Math.max(1, Math.round(menge - abgewehrt));
@@ -290,7 +307,13 @@ function feindGefallen(f) {
   const rand = Math.random;
   // Was ein Wesen an sich trägt, fällt nur bei ihm — daran sieht man später,
   // wo man überall gewesen ist.
-  if (f.art.beute && rand() < 0.55) {
+  if (f.gezeichnet) {
+    // Wer einen Gezeichneten legt, soll es auch im Beutel merken
+    h.gold += 20 + stufe * 12;
+    dinge.nehmen(h, dinge.beuteZiehen(rand, Math.min(4, (f.art.stufe || 1) + 1)));
+    juice.ring({ x: f.pos.x, y: f.pos.y + 0.8, z: f.pos.z }, 4.2, '#e8a83c', 0.7);
+  }
+  if ((f.art.beute && rand() < 0.55) || (f.gezeichnet && f.art.beute)) {
     dinge.nehmen(h, f.art.beute);
     juice.popup({ x: f.pos.x, y: f.pos.y + 1.4, z: f.pos.z },
       DINGE[f.art.beute].name, '#7fae5e');
@@ -306,8 +329,9 @@ function feindGefallen(f) {
   audio.kill();
   juice.shake(0.35);
   juice.ring({ x: f.pos.x, y: f.pos.y + 0.6, z: f.pos.z }, 2.4, '#e8a83c');
-  const auf = fert.xpGeben(h, f.art.xp);
-  juice.popup({ x: f.pos.x, y: f.pos.y + 1.8, z: f.pos.z }, `+${f.art.xp} EP`, '#e8a83c');
+  const xp = Math.round(f.art.xp * (f.gezeichnet ? 2.2 : 1));
+  const auf = fert.xpGeben(h, xp);
+  juice.popup({ x: f.pos.x, y: f.pos.y + 1.8, z: f.pos.z }, `+${xp} EP`, '#e8a83c');
   if (auf) {
     audio.gem(3);
     meldung(`Stufe ${h.stufe}!`, '#e8a83c', 3.2);
@@ -369,6 +393,24 @@ function feindSchiesst(f, rx, rz) {
   audio.shoot();
 }
 
+/** Die Richtung vom Spieler zu einem Ziel — für den Rückstoß. */
+function richtungZu(f) {
+  const dx = f.pos.x - player.pos.x, dz = f.pos.z - player.pos.z;
+  const d = Math.hypot(dx, dz) || 1;
+  return { x: dx / d, z: dz / d };
+}
+
+/* Ausweichen kostet Ausdauer — sonst rollte man einfach durch jeden Kampf. */
+function ausweichen() {
+  const h = held();
+  if (!state.running || state.dead || h.ausdauer < 16) return;
+  if (!player.rollen(input.read())) return;
+  h.ausdauer -= 16;
+  audio.step();
+  juice.ring({ x: player.pos.x, y: player.pos.y + 0.3, z: player.pos.z }, 1.8, '#fdf6e8', 0.3);
+  updateHUD();
+}
+
 function zuschlagen() {
   const h = held();
   const waffe = h.rue.waffe ? DINGE[h.rue.waffe] : null;
@@ -383,7 +425,7 @@ function zuschlagen() {
   if (!ziel) { juice.shake(0.1); return; }
 
   const schaden = Math.round(fert.werte.schaden(h) * (0.85 + Math.random() * 0.3));
-  feinde.schlagen(ziel, schaden);
+  feinde.schlagen(ziel, schaden, richtungZu(ziel));
   fert.uebung(h, 'klinge', 1);
   juice.shake(0.28);
   juice.freeze(0.03);
@@ -391,7 +433,9 @@ function zuschlagen() {
 
   if (h.vorteile.has('klinge4')) {
     const zweit = feinde.ziel(player.pos, player.facing + 0.9, 2.7);
-    if (zweit && zweit !== ziel) feinde.schlagen(zweit, Math.round(schaden * 0.7));
+    if (zweit && zweit !== ziel) {
+      feinde.schlagen(zweit, Math.round(schaden * 0.7), richtungZu(zweit));
+    }
   }
   updateHUD();
 }
@@ -1829,7 +1873,7 @@ function wildnisPflegen(dt) {
   }
 
   if (state.imDungeon) return;
-  if (feinde.anzahl >= 13) return;
+  if (feinde.anzahl >= 18) return;
 
   // Nicht im Dorf: dort soll man verschnaufen können
   if (dorfBei(Math.floor(player.pos.x), Math.floor(player.pos.z))) return;
@@ -1845,13 +1889,176 @@ function wildnisPflegen(dt) {
 
   // Jede Gegend hat ihr eigenes Getier, und nachts ein anderes als am Tag
   const gegend = biomeAt(x, z);
-  const art = wesenWaehlen(gegend.id, nacht);
-  // Die Gegend selbst bestimmt die Stärke, nicht die Entfernung vom Anfang:
-  // ein Firnfeld ist von der ersten Minute an ein Firnfeld.
   const gefahr = gefahrVon(gegend.id);
+
+  /* Auf der Wiese stehen tagsüber vor allem Hasen und Schafe — schön, aber
+     davon allein lebt kein Spiel. Steht schon genug Friedliches herum oder
+     fehlt es an Gegnern, wird so lange neu gezogen, bis etwas kommt, das
+     einen auch angeht. */
+  const friedlich = feinde.liste.filter((f) => f.gesinnung === 'friedlich').length;
+  const feindlich = feinde.anzahl - friedlich;
+  const willKampf = friedlich >= 4 || feindlich < 2;
+  let art = wesenWaehlen(gegend.id, nacht);
+  for (let i = 0; willKampf && i < 4 && ARTEN[art]?.gesinnung === 'friedlich'; i++) {
+    art = wesenWaehlen(gegend.id, nacht);
+  }
+  rudelSetzen(art, x, z, gegend, gefahr, nacht);
+}
+
+/* Ein einzelner Wolf ist kein Kampf, sondern eine Unterbrechung. Was von
+   allein kommt, kommt im Rudel — wie viele, hängt an der Art, an der Gegend
+   und daran, ob es Nacht ist. Und manchmal führt ein Gezeichneter das Rudel.
+   Die Stärke bestimmt die Gegend, nicht die Entfernung vom Anfang: ein
+   Firnfeld ist von der ersten Minute an ein Firnfeld. */
+function rudelSetzen(art, x, z, gegend, gefahr, nacht, zwang = 0) {
+  const w = ARTEN[art];
+  if (!w) return [];
   const stufe = Math.min(5, Math.max(1,
     Math.round(gefahr * 0.7) + (nacht ? 1 : 0) + Math.min(2, Math.floor(Math.hypot(x, z) / 900))));
-  feinde.spawn(art, x + 0.5, y + 1, z + 0.5, stufe);
+
+  // Friedliches Getier zieht in kleinen Gruppen, Wildes jährt im Rudel
+  let zahl = zwang;
+  if (!zahl) {
+    const grund = w.gesinnung === 'friedlich' ? 2 : w.gesinnung === 'wehrhaft' ? 1 : 3;
+    zahl = grund + (Math.random() < (nacht ? 0.8 : 0.5) ? 1 : 0)
+      + (gefahr >= 3 && Math.random() < 0.6 ? 1 : 0)
+      + (gefahr >= 5 ? 1 : 0);
+    if (w.stufe >= 4) zahl = Math.max(1, zahl - 2);     // von den Großen reicht einer
+    if (w.boss) zahl = 1;
+  }
+  zahl = Math.min(zahl, 18 - feinde.anzahl);
+  if (zahl <= 0) return [];
+
+  // Einer führt — aber nur, wenn es sich lohnt und der Zufall es will
+  const fuehrer = w.gesinnung === 'wild' && !w.boss
+    && Math.random() < 0.12 + gefahr * 0.03 + (nacht ? 0.06 : 0);
+
+  const raus = [];
+  for (let i = 0; i < zahl; i++) {
+    const wx = Math.round(x + (Math.random() - 0.5) * 7);
+    const wz = Math.round(z + (Math.random() - 0.5) * 7);
+    const wy = surfaceAt(wx, wz);
+    if (wy <= SEA) continue;
+    const f = feinde.spawn(art, wx + 0.5, wy + 1, wz + 0.5, stufe, null, fuehrer && i === 0);
+    if (f) raus.push(f);
+  }
+  return raus;
+}
+
+/* ------------------------------- Ereignisse --------------------------------
+ * Wer die Gestalten setzt und was es dafür gibt. Alles, was hier entsteht,
+ * gehört zum laufenden Ereignis und wird mitgezählt.
+ * -------------------------------------------------------------------------- */
+function ereignisVolk(id, lage) {
+  const px = player.pos.x, pz = player.pos.z;
+  const gegend = biomeAt(Math.floor(px), Math.floor(pz));
+  const gefahr = gefahrVon(gegend.id);
+  const nacht = istNacht();
+
+  if (id === 'hinterhalt') {
+    // Sie stehen im Kreis um einen herum, nicht alle auf einem Haufen
+    const raus = [];
+    const zahl = 3 + (gefahr >= 3 ? 1 : 0) + (nacht ? 1 : 0);
+    const art = gefahr >= 4 ? 'schuetze' : (Math.random() < 0.5 ? 'raeuber' : 'schuetze');
+    for (let i = 0; i < zahl; i++) {
+      const w = (i / zahl) * Math.PI * 2 + Math.random() * 0.5;
+      const r = 13 + Math.random() * 5;
+      const x = Math.round(px + Math.cos(w) * r), z = Math.round(pz + Math.sin(w) * r);
+      const y = surfaceAt(x, z);
+      if (y <= SEA) continue;
+      const f = feinde.spawn(i === 0 ? 'raeuber' : art, x + 0.5, y + 1, z + 0.5,
+        Math.min(5, 1 + gefahr), null, i === 0);
+      if (f) { f.wach = true; raus.push(f); }
+    }
+    audio.bossWake();
+    return raus;
+  }
+
+  if (id === 'jagd') {
+    // Ein Rudel kommt aus einer Richtung und ist sofort wach
+    const art = wesenWaehlen(gegend.id, true);
+    const w = Math.random() * Math.PI * 2;
+    const x = Math.round(px + Math.cos(w) * 30), z = Math.round(pz + Math.sin(w) * 30);
+    const raus = rudelSetzen(art, x, z, gegend, gefahr, true, 3 + (gefahr >= 3 ? 2 : 1));
+    for (const f of raus) f.wach = true;
+    audio.bossWake();
+    return raus;
+  }
+
+  if (id === 'ueberfall' && lage.dorf) {
+    // Sie kommen von einer Seite auf das Dorf zu
+    const d = lage.dorf;
+    const w = Math.random() * Math.PI * 2;
+    const x = Math.round(d.x + Math.cos(w) * (d.r + 12));
+    const z = Math.round(d.z + Math.sin(w) * (d.r + 12));
+    const art = Math.random() < 0.5 ? 'raeuber' : wesenWaehlen(gegend.id, true);
+    const raus = rudelSetzen(art, x, z, gegend, Math.max(2, gefahr), true, 4);
+    for (const f of raus) { f.wach = true; f.heimX = d.x; f.heimZ = d.z; }
+    audio.bossWake();
+    return raus;
+  }
+
+  if (id === 'wanderer') {
+    // Kein Kampf: ein paar Leute ziehen vorbei. Es soll nicht immer blutig sein.
+    const w = Math.random() * Math.PI * 2;
+    const x = Math.round(px + Math.cos(w) * 16), z = Math.round(pz + Math.sin(w) * 16);
+    const y = surfaceAt(x, z);
+    if (y <= SEA) return [];
+    const art = wesenWaehlen(gegend.id, false);
+    const w2 = ARTEN[art];
+    if (!w2 || w2.gesinnung !== 'friedlich') return [];
+    return rudelSetzen(art, x, z, gegend, gefahr, false, 4);
+  }
+  return [];
+}
+
+function ereignisGeschafft(id, zahl) {
+  const h = held();
+  const lohn = 25 + zahl * 18;
+  h.gold += lohn;
+  fert.xpGeben(h, 30 + zahl * 15);
+  audio.gem(3);
+  juice.ring({ x: player.pos.x, y: player.pos.y + 0.6, z: player.pos.z }, 4.5, '#7fae5e', 0.8);
+  bannerZeigen('Überstanden', `+${lohn} Gold`, '#7fae5e');
+  if (id === 'ueberfall') {
+    h.hilfen = (h.hilfen || 0) + 1;
+    meldung('Das Dorf steht noch', '#7fae5e', 3.2);
+  }
+  updateHUD();
+  writeSave();
+}
+
+/* Das Band oben: nur für das, was gerade über einen hereinbricht. */
+let bannerZeit = 0;
+function bannerZeigen(titel, text, farbe) {
+  const b = el('banner');
+  el('bannerTitel').textContent = titel;
+  el('bannerText').textContent = text;
+  b.style.setProperty('--ton', farbe);
+  b.classList.remove('hidden');
+  b.classList.add('an');
+  bannerZeit = 4.5;
+  audio.gem(1);
+}
+
+function bannerPflegen(dt) {
+  if (bannerZeit <= 0) return;
+  bannerZeit -= dt;
+  if (bannerZeit <= 0) {
+    el('banner').classList.remove('an');
+    setTimeout(() => el('banner').classList.add('hidden'), 400);
+  }
+}
+
+/* Solange etwas läuft, steht rechts oben, wie viele noch stehen. */
+function ereignisAnzeige() {
+  const a = ereignisse.anzeige();
+  const z = el('ereignis');
+  if (!a || a.uebrig <= 0) { z.classList.add('hidden'); return; }
+  z.classList.remove('hidden');
+  z.style.setProperty('--ton', a.farbe);
+  el('ereignisName').textContent = a.name;
+  el('ereignisZahl').textContent = `noch ${a.uebrig}`;
 }
 
 /* -------------------------------- Schleife --------------------------------- */
@@ -1903,7 +2110,7 @@ function frame() {
         juice.popup({ x: f.pos.x, y: f.pos.y + 1.6, z: f.pos.z }, `${schaden}`, '#fdf6e8');
         juice.ring({ x: g.pos.x, y: g.pos.y, z: g.pos.z }, 1.2, '#f0e7d2', 0.3);
         audio.hit();
-        feinde.schlagen(f, schaden);
+        feinde.schlagen(f, schaden, { x: g.vx, z: g.vz });
       },
       trefferSpieler: (schaden) => spielerNimmtSchaden(schaden, null),
       aufschlag: (g) => juice.ring({ x: g.pos.x, y: g.pos.y, z: g.pos.z }, 0.9, '#b9aa98', 0.25),
@@ -1912,6 +2119,15 @@ function frame() {
     wildnisPflegen(dt);
     beutelPflegen(dt);
     wesenGesehen();
+    bannerPflegen(dt);
+    ereignisse.update(dt, {
+      nacht: istNacht(),
+      imDorf: !!doerfer.dorfUnter(player.pos.x, player.pos.z),
+      dorf: doerfer.dorfUnter(player.pos.x, player.pos.z),
+      imDungeon: !!state.imDungeon,
+      gefahr: gefahrVon(biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).id),
+    });
+    ereignisAnzeige();
     // Das Wetter richtet sich nach der Gegend, in der man gerade steht
     wetter.update(dt, biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).id,
       player.pos, !!state.imHaus || state.under > 0.5);
@@ -2024,8 +2240,9 @@ function frame() {
       if (z !== letztesZiel) {
         letztesZiel = z;
         const st = z.art.stufe || 1;
-        ui.zielName.innerHTML = `${z.art.name} `
+        ui.zielName.innerHTML = `${z.name || z.art.name} `
           + `<span class="gefahr g${st}">${'◆'.repeat(st)}</span>`;
+        ui.ziel.classList.toggle('gezeichnet', !!z.gezeichnet);
       }
       ui.zielHp.style.width = `${Math.max(0, z.hp / z.hpMax * 100)}%`;
     } else letztesZiel = null;
@@ -2059,6 +2276,7 @@ el('hauBtn').addEventListener('click', zuschlagen);
 el('wirkBtn').addEventListener('click', zaubern);
 el('redeBtn').addEventListener('click', handeln);
 el('trinkBtn').addEventListener('click', trinken);
+el('rollBtn').addEventListener('click', ausweichen);
 el('ladenZu').addEventListener('click', ladenSchliessen);
 for (const b of document.querySelectorAll('.lreiter')) {
   b.addEventListener('click', () => { ladenSeite = b.dataset.seite; ladenZeichnen(); });
@@ -2082,6 +2300,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'k') zaubern();
   if (k === 'e') handeln();
   if (k === 'h') trinken();
+  if (k === 'f') ausweichen();
   if (k === 'i') { menuZeichnen('fert'); el('menu').classList.toggle('hidden'); }
   if (k === 'r') heimkehr();
   if (k === 'escape') { redeSchliessen(); ladenSchliessen(); el('menu').classList.add('hidden'); }
@@ -2436,6 +2655,7 @@ window.__game = {
   heimkehr, karteZeichnen, menuZeichnen,
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
   orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel, wetter,
+  ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden,
 };
 
 resize();

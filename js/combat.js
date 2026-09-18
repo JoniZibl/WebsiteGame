@@ -11,6 +11,11 @@ import { flattenGroup } from './meshkit.js';
  *  vier Skelette in einer engen Kammer sind etwas anderes als vier auf der Wiese.
  * ========================================================================== */
 
+/* Beinamen für die Gezeichneten. Ein Wolf ist ein Wolf; der Narbige Wolf
+   ist eine Geschichte, die man weitererzählt. */
+const BEINAMEN = ['Der Narbige', 'Alt', 'Grimm', 'Einohr', 'Schwarz', 'Bleich',
+  'Hinkend', 'Der Große', 'Rot', 'Stumm'];
+
 const GRAVITY = 24;
 const RADIUS = 0.34;
 
@@ -272,14 +277,18 @@ export class Feinde {
 
   get anzahl() { return this.liste.length; }
 
-  spawn(id, x, y, z, stufe = 1, herkunft = null) {
+  /* `gezeichnet` macht aus einem gewöhnlichen Wesen einen Anführer: mehr
+     Leben, mehr Schlagkraft, größer — und einen Namen, der einem im Gedächtnis
+     bleibt. Sie sind selten genug, dass man sie ernst nimmt. */
+  spawn(id, x, y, z, stufe = 1, herkunft = null, gezeichnet = false) {
     const art = ARTEN[id];
     if (!art) return null;
+    if (art.boss) gezeichnet = false;
     const obj = this.muster[id].clone();
     obj.position.set(x, y, z);
-    if (art.skala) obj.scale.setScalar(art.skala);
+    obj.scale.setScalar((art.skala || 1) * (gezeichnet ? 1.3 : 1));
     this.scene.add(obj);
-    const skalierung = 1 + (stufe - 1) * 0.22;
+    const skalierung = (1 + (stufe - 1) * 0.22) * (gezeichnet ? 1.75 : 1);
     const f = {
       id, art, obj, herkunft,
       pos: new THREE.Vector3(x, y, z),
@@ -291,6 +300,9 @@ export class Feinde {
       gesinnung: art.gesinnung || 'wild',
       flucht: 0,                      // wie lange es noch wegläuft
       schweb: Math.random() * 6,
+      gezeichnet,
+      name: gezeichnet ? `${BEINAMEN[(Math.random() * BEINAMEN.length) | 0]} ${art.name}` : art.name,
+      stossX: 0, stossZ: 0,           // Rückstoß nach einem Treffer
     };
     this.liste.push(f);
     return f;
@@ -369,8 +381,17 @@ export class Feinde {
         if (zielX || zielZ) f.obj.rotation.y = Math.atan2(zielX, zielZ);
       }
 
-      const schritt = art.tempo * (f.flucht > 0 ? 1.25 : 1) * dt;
+      const schritt = art.tempo * (f.flucht > 0 ? 1.25 : 1)
+        * (f.gezeichnet ? 1.1 : 1) * dt;
       this.schieben(world, f, zielX * schritt, zielZ * schritt);
+
+      // Ein Treffer wirft zurück — daran merkt man, dass er gesessen hat
+      if (f.stossX || f.stossZ) {
+        this.schieben(world, f, f.stossX * dt, f.stossZ * dt);
+        const weg = Math.max(0, 1 - dt * 7);
+        f.stossX *= weg; f.stossZ *= weg;
+        if (Math.abs(f.stossX) + Math.abs(f.stossZ) < 0.05) { f.stossX = 0; f.stossZ = 0; }
+      }
 
       if (art.schwebt) {
         // Irrlichter fallen nicht, sie suchen sich ihre Höhe über dem Boden
@@ -451,9 +472,15 @@ export class Feinde {
     return best;
   }
 
-  schlagen(f, schaden) {
+  /** Zuschlagen mit Wucht: `stoss` ist die Richtung, aus der es kam. */
+  schlagen(f, schaden, stoss = null) {
     f.hp -= schaden;
     f.weh = 0.22;
+    if (stoss) {
+      const wucht = (f.gezeichnet ? 3.5 : 7) / (1 + (f.art.hoehe || 1) * 0.3);
+      f.stossX = stoss.x * wucht;
+      f.stossZ = stoss.z * wucht;
+    }
     // Wehrhaftes wird jetzt erst wütend, Friedliches rennt um sein Leben
     if (f.gesinnung === 'friedlich') f.flucht = 7;
     else f.wach = true;

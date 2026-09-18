@@ -32,6 +32,12 @@ export const ICONS = {
     <rect x="10.7" y="16.4" width="2.6" height="4.2" fill="${F.holzTief}"/>
     <circle cx="12" cy="21" r="1.7" fill="${F.gold}"/>`),
 
+  /* Zwei Bogenspuren und ein Abdruck: ein Satz zur Seite. */
+  rolle: svg(`
+    <path d="M4 15 C7 9 12 7 18 8" fill="none" stroke="${F.putz}" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M6 20 C9 14 14 12 20 13" fill="none" stroke="${F.putz}" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+    <circle cx="18" cy="8" r="3.2" fill="${F.putz}"/>`),
+
   /* Ein gespannter Bogen mit Pfeil auf der Sehne. */
   bogen: svg(`
     <path d="M7 3 C14 7 14 17 7 21" fill="none" stroke="${F.holz}" stroke-width="2.4" stroke-linecap="round"/>
