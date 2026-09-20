@@ -2685,6 +2685,11 @@ function neuanfangKnopf() {
 }
 
 /* ------------------------------ Tag und Nacht ------------------------------ */
+/* Die Maschenweite des Schattengitters: die Schattenkamera deckt 120 Einheiten
+   auf 2048 Texeln ab, ein Texel ist also knapp 0,06 breit. Vier davon sind
+   fein genug, dass niemand den Sprung sieht, und grob genug, dass zwischen
+   den Sprüngen wirklich Ruhe herrscht. */
+const SCHATTENRASTER = 0.235;
 const underColor = new THREE.Color('#6e5440');
 const skyDay = new THREE.Color('#ede2cd');
 const skyDusk = new THREE.Color('#f2cba4');
@@ -2731,13 +2736,21 @@ function applyDaytime() {
   sun.intensity = (1.15 - night * 0.6) * (1 - under * 0.4) * (1 - trueb * 2.2);
   hemi.intensity = (0.95 - night * 0.4) * (1 - under * 0.3) + under * 0.3;
 
+  /* Sonne und Schattenkamera rasten auf ein grobes Gitter ein. Liefen sie
+     stetig mit — und das taten sie, weil der Tag weiterzieht und der Held
+     sich bewegt —, verschob sich die Schattenkarte in jedem Bild um einen
+     Bruchteil eines Texels. Jede Schattenkante rechnete sich dann sechzigmal
+     in der Sekunde neu aus und flimmerte. Mit dem Gitter steht der Schatten
+     mehrere Bilder lang still und springt dafür um ganze Texel weiter, was
+     man nicht sieht. */
   const ang = (t - 0.25) * Math.PI * 2;
+  const rast = (v) => Math.round(v / SCHATTENRASTER) * SCHATTENRASTER;
   sun.position.set(
-    player.pos.x + Math.cos(ang) * 50,
-    player.pos.y + 26 + Math.max(8, Math.sin(ang) * 50),
-    player.pos.z + 28
+    rast(player.pos.x + Math.cos(ang) * 50),
+    rast(player.pos.y + 26 + Math.max(8, Math.sin(ang) * 50)),
+    rast(player.pos.z + 28)
   );
-  sun.target.position.copy(player.pos);
+  sun.target.position.set(rast(player.pos.x), rast(player.pos.y), rast(player.pos.z));
   sun.target.updateMatrixWorld();
 }
 

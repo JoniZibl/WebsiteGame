@@ -187,7 +187,7 @@ export class TiltShift {
         uLift: { value: new THREE.Vector3(0.012, 0.014, 0.02) },
         uGain: { value: new THREE.Vector3(1.02, 1.0, 0.955) },
         uVignette: { value: 0.22 },
-        uGrain: { value: 0.016 },
+        uGrain: { value: 0.013 },
         uTime: { value: 0 },
         tDepth: { value: null },
         uTexel: { value: new THREE.Vector2() },
@@ -252,7 +252,10 @@ export class TiltShift {
       this._blit(this.blurMat, this.b);
     }
 
-    this.compositeMat.uniforms.uTime.value = (performance.now() % 10000) * 0.001;
+    /* uTime bleibt stehen. Als es jedes Bild neu gesetzt wurde, würfelte das
+       Korn in jedem Pixel sechzigmal in der Sekunde neu — das sah nicht nach
+       Papier aus, sondern nach einem Bild, das die ganze Zeit zittert. Ein
+       stehendes Korn liegt auf dem Schirm wie Faserstruktur und ist ruhig. */
     this.compositeMat.uniforms.tDepth.value = this.scene.depthTexture;
     this.compositeMat.uniforms.uNear.value = camera.near;
     this.compositeMat.uniforms.uFar.value = camera.far;
