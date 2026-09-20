@@ -1811,14 +1811,13 @@ const tmpSun = new THREE.Color();
 
 function applyDaytime() {
   const t = state.time;
-  let k, a, bSky, aSun, bSun;
-  if (t < 0.55) { k = Math.min(1, t / 0.2); a = skyDusk; bSky = skyDay; aSun = sunDusk; bSun = sunDay; }
-  else if (t < 0.75) { k = (t - 0.55) / 0.2; a = skyDay; bSky = skyDusk; aSun = sunDay; bSun = sunDusk; }
-  else if (t < 0.95) { k = (t - 0.75) / 0.2; a = skyDusk; bSky = skyNight; aSun = sunDusk; bSun = sunNight; }
-  else { k = (t - 0.95) / 0.05; a = skyNight; bSky = skyDusk; aSun = sunNight; bSun = sunDusk; }
-
-  tmpSky.copy(a).lerp(bSky, k);
-  tmpSun.copy(aSun).lerp(bSun, k);
+  /* Der Himmel geht über drei Farben: Tag, Abendrot, Nacht. Das Abendrot
+     sitzt in der Mitte der Dämmerung und verschwindet zu beiden Seiten — so
+     wird es abends erst warm und dann dunkel, morgens umgekehrt. */
+  const nacht = nachtGrad(t);
+  const rot = Math.sin(Math.min(1, nacht) * Math.PI);   // 0 → 1 → 0
+  tmpSky.copy(skyDay).lerp(skyNight, nacht).lerp(skyDusk, rot * 0.8);
+  tmpSun.copy(sunDay).lerp(sunNight, nacht).lerp(sunDusk, rot * 0.85);
   const himmelTon = wetter.kind.himmel || wetter.kind.farbe;
   if (state.under < 0.5 && wetter.wirkung > 0.01 && himmelTon) {
     wetterFarbe.set(himmelTon);
@@ -1839,11 +1838,11 @@ function applyDaytime() {
   renderer.setClearColor(tmpSky);
   sun.color.copy(tmpSun);
 
-  const night = t > 0.78 && t < 0.97;
+  const night = nachtGrad(t);
   const under = state.under;
   const trueb = state.under > 0.5 ? 0 : wetter.dunkelheit();
-  sun.intensity = (night ? 0.55 : 1.15) * (1 - under * 0.4) * (1 - trueb * 2.2);
-  hemi.intensity = (night ? 0.55 : 0.95) * (1 - under * 0.3) + under * 0.3;
+  sun.intensity = (1.15 - night * 0.6) * (1 - under * 0.4) * (1 - trueb * 2.2);
+  hemi.intensity = (0.95 - night * 0.4) * (1 - under * 0.3) + under * 0.3;
 
   const ang = (t - 0.25) * Math.PI * 2;
   sun.position.set(
@@ -1866,7 +1865,22 @@ const STIMMUNG = {
   sumpf: 'dunkel', berg: 'fels',
 };
 
-const istNacht = () => state.time > 0.76 || state.time < 0.12;
+/* Wie tief die Nacht ist: 0 am hellen Tag, 1 in der tiefsten Nacht, und
+   dazwischen weich über je eine gute Minute. Vorher war das ein Schalter,
+   und um 0.78 wurde es von einem Bild aufs nächste dunkel. */
+function nachtGrad(t = state.time) {
+  const weich = (x) => x * x * (3 - 2 * x);
+  // Die Dämmerung dauert bei 420 Sekunden Tageslänge gut anderthalb Minuten —
+  // kurz genug, dass man sie erlebt, lang genug, dass sie nicht umspringt.
+  if (t >= 0.88 || t < 0.05) return 1;               // tiefe Nacht
+  if (t >= 0.66) return weich((t - 0.66) / 0.22);    // Abend: es dämmert
+  if (t < 0.24) return 1 - weich((t - 0.05) / 0.19); // Morgen: es wird hell
+  return 0;
+}
+
+/* Fürs Spiel zählt die Nacht, sobald es spürbar dunkel ist — was draußen
+   aufsteht, richtet sich danach. */
+const istNacht = () => nachtGrad() > 0.55;
 
 function wildnisPflegen(dt) {
   wildTimer -= dt;
@@ -2141,7 +2155,7 @@ function frame() {
     ereignisAnzeige();
     // Das Wetter richtet sich nach der Gegend, in der man gerade steht
     wetter.update(dt, biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z)).id,
-      player.pos, !!state.imHaus || state.under > 0.5);
+      player.pos, !!state.imHaus || state.under > 0.5, nachtGrad());
     audio.setWetter(wetter.art, wetter.wirkung);
     // Der Grundton der Gegend, und wie nah das nächste Feuer ist
     audio.ambient(dt, state.imDungeon ? 'dunkel'
@@ -2233,7 +2247,7 @@ function frame() {
 
     state.under = Math.max(0, Math.min(1, tief / 4));
     applyDaytime();
-    const night = state.time > 0.78 && state.time < 0.97 ? 1 : 0;
+    const night = nachtGrad();
     peek.uPeek.value.set(player.pos.x, player.pos.y + 2.9, player.pos.z);
     fussring.position.set(player.pos.x, player.pos.y + 0.06, player.pos.z);
     lamp.position.set(player.pos.x, player.pos.y + 1.7, player.pos.z);
@@ -2667,6 +2681,7 @@ window.__game = {
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
   orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel, wetter,
   ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden, geschosse,
+  applyDaytime, sun, hemi, nachtGrad,
 };
 
 resize();

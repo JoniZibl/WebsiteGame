@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { surfaceAt } from './voxel.js';
 
 /* ==========================================================================
  *  Wetter.
@@ -13,8 +14,12 @@ import * as THREE from 'three';
  *  hinüber, wechselt es weich.
  * ========================================================================== */
 
-const ZAHL = 520;              // so viele Teilchen fallen gleichzeitig
-const KASTEN = { x: 46, y: 26, z: 46 };   // in diesem Kasten um den Spieler
+const ZAHL = 1000;             // so viele Teilchen fallen gleichzeitig
+const SPRITZER = 140;          // und so viele Einschläge liegen höchstens am Boden
+/* Der Kasten muss deutlich größer sein als das Bild, sonst sieht man, dass
+   die Teilchen am Rand umgesetzt werden — und genau das ließ den Regen wie
+   eine Scheibe vor der Kamera wirken statt wie Regen über dem Land. */
+const KASTEN = { x: 88, y: 34, z: 88 };
 
 export const WETTER = {
   klar:   { name: 'klar',       nebel: 1.0,  dunkel: 0.0,  teilchen: 0,    ton: 0 },
@@ -68,6 +73,26 @@ export class Wetter {
     this.mesh.visible = false;
     scene.add(this.mesh);
 
+    /* Die Einschläge: flache Ringe, die auf dem Boden liegen bleiben und
+       aufgehen. Sie sind der Grund, warum Regen im Raum steht — ein Tropfen,
+       der irgendwo endet, ist Teil der Landschaft; einer, der einfach
+       weiterfällt, ist ein Vorhang vor der Linse. */
+    const ring = new THREE.RingGeometry(0.4, 0.62, 10);
+    ring.rotateX(-Math.PI / 2);
+    this.spritzMat = new THREE.MeshBasicMaterial({
+      color: '#cfe4ee', transparent: true, opacity: 0.5, depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.spritzer = new THREE.InstancedMesh(ring, this.spritzMat, SPRITZER);
+    this.spritzer.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.spritzer.frustumCulled = false;
+    this.spritzer.renderOrder = 11;
+    this.spritzer.visible = false;
+    scene.add(this.spritzer);
+    this.spritzListe = [];
+    this.spritzZeiger = 0;
+    for (let i = 0; i < SPRITZER; i++) this.spritzListe.push({ zeit: 0, x: 0, y: 0, z: 0 });
+
     // Startpunkte im Kasten, jedes Teilchen mit eigenem Tempo
     this.punkte = [];
     for (let i = 0; i < ZAHL; i++) {
@@ -76,7 +101,9 @@ export class Wetter {
         y: Math.random() * KASTEN.y,
         z: (Math.random() - 0.5) * KASTEN.z,
         eigen: 0.7 + Math.random() * 0.6,
+        gross: 0.75 + Math.random() * 0.6,
         dreh: Math.random() * Math.PI,
+        boden: -999,          // Welthöhe, an der dieses Teilchen aufschlägt
       });
     }
     this.dummy = new THREE.Object3D();
@@ -108,7 +135,7 @@ export class Wetter {
     return 'klar';
   }
 
-  update(dt, biomId, pos, drinnen = false) {
+  update(dt, biomId, pos, drinnen = false, nacht = 0) {
     this.zeit += dt;
 
     // Die Laune wandert langsam auf ein neues Ziel zu
@@ -132,33 +159,85 @@ export class Wetter {
     const k = this.kind;
     const sichtbar = !drinnen && k.teilchen > 0 && this.staerke > 0.04;
     this.mesh.visible = sichtbar;
+    this.spritzer.visible = sichtbar && this.art === 'regen';
     if (!sichtbar) return;
 
     this.mat.color.set(k.farbe);
-    this.mat.opacity = (this.art === 'nebel' ? 0.16 : 0.62) * this.staerke;
+    // Nachts leuchtet kein Regen — sonst liegt er wieder wie Farbe auf dem Bild
+    const hell = 1 - nacht * 0.45;
+    this.mat.opacity = (this.art === 'nebel' ? 0.16 : 0.62) * this.staerke * hell;
 
     const zahl = Math.round(ZAHL * k.teilchen);
     const wind = k.wind * (0.6 + Math.sin(this.zeit * 0.3) * 0.4);
+    // Der Strich liegt in der Fallrichtung: senkrecht bei Windstille, schräg
+    // im Wind. Ohne das sah Regen aus wie aufgeklebte Striche.
+    const neigung = Math.atan2(wind, k.fall);
+
     for (let i = 0; i < ZAHL; i++) {
       const t = this.punkte[i];
-      if (i >= zahl) { this.dummy.scale.setScalar(0); }
-      else {
-        t.y -= k.fall * t.eigen * dt;
-        t.x += wind * dt;
-        t.z += Math.sin(this.zeit * 0.7 + i) * k.wind * 0.25 * dt;
-        // Oben wieder hineinschieben, wenn es unten hinausfällt
-        if (t.y < -KASTEN.y * 0.3) { t.y = KASTEN.y * 0.7; t.x = (Math.random() - 0.5) * KASTEN.x; }
-        if (t.x > KASTEN.x / 2) t.x -= KASTEN.x;
-        if (t.x < -KASTEN.x / 2) t.x += KASTEN.x;
-        if (t.z > KASTEN.z / 2) t.z -= KASTEN.z;
-        if (t.z < -KASTEN.z / 2) t.z += KASTEN.z;
-        this.dummy.scale.set(k.breit, k.lang || k.breit, k.breit);
+      if (i >= zahl) {
+        this.dummy.scale.setScalar(0);
+        this.dummy.position.set(pos.x, pos.y, pos.z);
+        this.dummy.rotation.set(0, 0, 0);
+        this.dummy.updateMatrix();
+        this.mesh.setMatrixAt(i, this.dummy.matrix);
+        continue;
       }
+
+      t.y -= k.fall * t.eigen * dt;
+      t.x += wind * dt;
+      t.z += Math.sin(this.zeit * 0.7 + i) * k.wind * 0.25 * dt;
+
+      const wx = pos.x + t.x, wz = pos.z + t.z;
+      // Der Boden wird einmal je Umlauf gesucht, nicht jedes Bild
+      if (t.boden < -900) t.boden = surfaceAt(Math.round(wx), Math.round(wz)) + 1;
+
+      const liegt = pos.y + t.y <= t.boden + 0.1;
+      const raus = t.y < -KASTEN.y * 0.45
+        || Math.abs(t.x) > KASTEN.x / 2 || Math.abs(t.z) > KASTEN.z / 2;
+      if (liegt || raus) {
+        if (liegt && this.art === 'regen') this.spritzen(wx, t.boden + 0.06, wz);
+        // Oben neu ansetzen, irgendwo im Kasten
+        t.x = (Math.random() - 0.5) * KASTEN.x;
+        t.z = (Math.random() - 0.5) * KASTEN.z;
+        t.y = KASTEN.y * (0.45 + Math.random() * 0.3);
+        t.boden = -999;
+      }
+
+      const g = t.gross;
+      this.dummy.scale.set(k.breit * g, (k.lang || k.breit) * g, k.breit * g);
       this.dummy.position.set(pos.x + t.x, pos.y + t.y, pos.z + t.z);
-      this.dummy.rotation.set(0, t.dreh, this.art === 'regen' ? -0.12 : 0);
+      this.dummy.rotation.set(0, t.dreh, this.art === 'regen' ? neigung : 0);
       this.dummy.updateMatrix();
       this.mesh.setMatrixAt(i, this.dummy.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+
+    // Die Einschläge gehen auf und verblassen
+    let etwas = false;
+    for (let i = 0; i < SPRITZER; i++) {
+      const sp = this.spritzListe[i];
+      if (sp.zeit > 0) { sp.zeit -= dt; etwas = true; }
+      const k2 = Math.max(0, sp.zeit / 0.38);
+      const gr = sp.zeit > 0 ? (1 - k2) * 0.9 + 0.15 : 0;
+      this.dummy.position.set(sp.x, sp.y, sp.z);
+      this.dummy.rotation.set(0, 0, 0);
+      this.dummy.scale.set(gr, gr, gr);
+      this.dummy.updateMatrix();
+      this.spritzer.setMatrixAt(i, this.dummy.matrix);
+    }
+    this.spritzMat.opacity = 0.5 * this.staerke * hell;
+    this.spritzer.instanceMatrix.needsUpdate = true;
+    this.spritzer.visible = this.spritzer.visible && etwas;
+  }
+
+  /** Setzt einen Einschlag an den nächsten Platz im Ring. */
+  spritzen(x, y, z) {
+    const sp = this.spritzListe[this.spritzZeiger];
+    this.spritzZeiger = (this.spritzZeiger + 1) % SPRITZER;
+    sp.zeit = 0.38;
+    sp.x = x;
+    sp.y = y;
+    sp.z = z;
   }
 }
