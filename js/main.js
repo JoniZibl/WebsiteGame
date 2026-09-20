@@ -3129,27 +3129,72 @@ function frame() {
   post.render(scene, camera);
 }
 
-/* --------------------------------- Knöpfe ---------------------------------- */
-el('hauBtn').addEventListener('click', zuschlagen);
-/* Kurz tippen wirkt, lang drücken blättert zum nächsten Spruch. Auf dem
-   Handy ist das der kürzeste Weg — das Menü kann man sich sparen. */
+/* --------------------------------- Knöpfe ----------------------------------
+ * Die Kampfknöpfe hören auf `pointerdown`, nicht auf `click`. Das ist kein
+ * Geschmack, sondern der Grund, warum man jetzt laufen und gleichzeitig
+ * zuschlagen kann: `click` entsteht erst beim Loslassen, und solange schon
+ * ein Daumen auf dem Stick liegt, lässt ein Browser den zweiten Finger
+ * gern ganz unter den Tisch fallen. `pointerdown` kommt immer — für jeden
+ * Finger einzeln, auch wenn drei gleichzeitig unterwegs sind.
+ * -------------------------------------------------------------------------- */
+function tippen(knopf, tun, halten = false) {
+  let zuletzt = -1e9;
+  let takt = 0;
+  const los = () => { clearInterval(takt); takt = 0; };
+  knopf.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;               // rechte Maustaste zählt nicht
+    zuletzt = performance.now();
+    tun();
+    // Gehaltene Knöpfe schlagen weiter, sobald sie wieder dürfen. Der Knopf
+    // fragt nur nach; ob es geht, entscheidet die Tat selbst.
+    if (halten) { los(); takt = setInterval(tun, 80); }
+    e.preventDefault();
+  });
+  for (const art of ['pointerup', 'pointercancel', 'pointerleave']) {
+    knopf.addEventListener(art, los);
+  }
+  window.addEventListener('blur', los);
+  // Maus und Tastatur landen hier; ein Zeiger hat es dann schon erledigt
+  knopf.addEventListener('click', () => {
+    if (performance.now() - zuletzt < 800) return;
+    tun();
+  });
+}
+
+// Auf dem Hieb darf der Daumen liegen bleiben — er schlägt dann weiter
+tippen(el('hauBtn'), zuschlagen, true);
+tippen(el('redeBtn'), handeln);
+tippen(el('trinkBtn'), trinken);
+tippen(el('rollBtn'), ausweichen);
+
+/* Der Zauberknopf hat zwei Bedeutungen: kurz tippen wirkt, lang drücken
+   blättert zum nächsten Spruch. Gewirkt wird deshalb beim Loslassen — aber
+   nur, wenn das Blättern nicht schon zugeschlagen hat. */
 (() => {
   const b = el('wirkBtn');
-  let halt = 0, geblaettert = false;
-  const los = () => {
+  let halt = 0, geblaettert = false, unten = false, zuletzt = -1e9;
+  b.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    unten = true;
     geblaettert = false;
+    clearTimeout(halt);
     halt = setTimeout(() => { geblaettert = true; zauberBlaettern(); }, 420);
+    e.preventDefault();
+  });
+  const auf = (wirken) => () => {
+    clearTimeout(halt);
+    if (!unten) return;
+    unten = false;
+    if (wirken && !geblaettert) { zuletzt = performance.now(); zaubern(); }
   };
-  const auf = () => { clearTimeout(halt); };
-  b.addEventListener('pointerdown', los);
-  b.addEventListener('pointerup', auf);
-  b.addEventListener('pointercancel', auf);
-  b.addEventListener('pointerleave', auf);
-  b.addEventListener('click', () => { if (!geblaettert) zaubern(); geblaettert = false; });
+  b.addEventListener('pointerup', auf(true));
+  b.addEventListener('pointercancel', auf(false));
+  b.addEventListener('pointerleave', auf(false));
+  b.addEventListener('click', () => {
+    if (geblaettert || performance.now() - zuletzt < 800) return;
+    zaubern();
+  });
 })();
-el('redeBtn').addEventListener('click', handeln);
-el('trinkBtn').addEventListener('click', trinken);
-el('rollBtn').addEventListener('click', ausweichen);
 el('ladenZu').addEventListener('click', ladenSchliessen);
 el('esseZu').addEventListener('click', esseSchliessen);
 el('esse').addEventListener('click', (e) => { if (e.target === el('esse')) esseSchliessen(); });
@@ -3158,7 +3203,7 @@ for (const b of document.querySelectorAll('.lreiter')) {
 }
 el('laden').addEventListener('click', (e) => { if (e.target === el('laden')) ladenSchliessen(); });
 
-el('menuBtn').addEventListener('click', () => {
+tippen(el('menuBtn'), () => {
   menuZeichnen('fert');
   el('menu').classList.remove('hidden');
 });
@@ -3188,7 +3233,7 @@ let muted = false;
 try { muted = localStorage.getItem('talkunde-muted') === '1'; } catch (err) { /* egal */ }
 audio.setMuted(muted);
 symbol(soundBtn, muted ? 'tonAus' : 'tonAn');
-soundBtn.addEventListener('click', () => {
+tippen(soundBtn, () => {
   muted = !muted;
   audio.unlock();
   audio.setMuted(muted);
@@ -3227,7 +3272,7 @@ function applyQuality() {
   el('qualityBtn').classList.toggle('off', !high);
   resize();
 }
-el('qualityBtn').addEventListener('click', () => {
+tippen(el('qualityBtn'), () => {
   quality = quality === 'high' ? 'low' : 'high';
   applyQuality();
 });

@@ -25,8 +25,12 @@ export const WETTER = {
   klar:   { name: 'klar',       nebel: 1.0,  dunkel: 0.0,  teilchen: 0,    ton: 0 },
   wolkig: { name: 'bedeckt',    nebel: 0.94, dunkel: 0.06, teilchen: 0,    ton: 0.1,
             himmel: '#cfc9b8' },
-  nebel:  { name: 'Nebel',      nebel: 0.66, dunkel: 0.1,  teilchen: 0.3,  ton: 0.15,
-            farbe: '#e8e4d8', himmel: '#d8d4c6', fall: 0.5, breit: 0.5, wind: 0.2 },
+  /* Nebel trägt keine Teilchen. Er hatte welche — langsam fallende helle
+     Würfel —, und die sahen aus wie Schneeflocken mit Kantenproblem statt
+     wie Nebel. Nebel ist ohnehin kein Ding, das fällt, sondern Sicht, die
+     fehlt: also macht ihn allein die Nebelweite und die Farbe des Himmels. */
+  nebel:  { name: 'Nebel',      nebel: 0.62, dunkel: 0.12, teilchen: 0,    ton: 0.15,
+            farbe: '#e8e4d8', himmel: '#d8d4c6' },
   regen:  { name: 'Regen',      nebel: 0.8,  dunkel: 0.16, teilchen: 1.0,  ton: 0.6,
             farbe: '#bcd2de', himmel: '#9fb6c4', fall: 26, breit: 0.035, lang: 0.85, wind: 0.5 },
   schnee: { name: 'Schneefall', nebel: 0.74, dunkel: 0.06, teilchen: 0.8,  ton: 0.18,
@@ -165,7 +169,7 @@ export class Wetter {
     this.mat.color.set(k.farbe);
     // Nachts leuchtet kein Regen — sonst liegt er wieder wie Farbe auf dem Bild
     const hell = 1 - nacht * 0.45;
-    this.mat.opacity = (this.art === 'nebel' ? 0.16 : 0.62) * this.staerke * hell;
+    this.mat.opacity = 0.62 * this.staerke * hell;
 
     const zahl = Math.round(ZAHL * k.teilchen);
     const wind = k.wind * (0.6 + Math.sin(this.zeit * 0.3) * 0.4);
