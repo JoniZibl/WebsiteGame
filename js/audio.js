@@ -190,7 +190,18 @@ export class GameAudio {
   kill()     { this._thump(700, { dur: 0.18, peak: 0.22 }); this._blip('sine', 330, { dur: 0.22, peak: 0.1, glide: 180, delay: 0.03 }); }
   hurt()     { this._thump(260, { dur: 0.26, peak: 0.3 }); this._blip('sawtooth', 150, { dur: 0.2, peak: 0.08, glide: -60 }); }
   spit()     { this._thump(600, { dur: 0.22, peak: 0.12, type: 'bandpass' }); }
-  step()     { this._thump(180, { dur: 0.07, peak: 0.05 }); }
+  /* Ein Schritt klingt nach dem, worauf man tritt: Gras dumpf, Stein hart,
+     Wasser platschend. Die Höhe schwankt leicht, sonst klingt Laufen wie
+     eine Maschine. */
+  step(stark = 1, grund = 'gras') {
+    const t = { gras: [150, 'lowpass'], stein: [340, 'bandpass'], sand: [110, 'lowpass'],
+                holz: [260, 'lowpass'], wasser: [520, 'bandpass'] }[grund] || [180, 'lowpass'];
+    const streu = 0.88 + Math.random() * 0.24;
+    this._thump(t[0] * streu, { dur: 0.07, peak: 0.035 + stark * 0.045, type: t[1] });
+    if (grund === 'wasser') {
+      this._blip('sine', 900 * streu, { dur: 0.09, peak: 0.05 * stark, glide: -300 });
+    }
+  }
 
   /** Edelstein: steigt bei schnellem Sammeln in der Tonhöhe. */
   gem(streak = 0) {

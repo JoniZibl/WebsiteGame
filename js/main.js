@@ -65,10 +65,24 @@ scene.fog = new THREE.Fog('#ede2cd', 60, 135);
 
 const camera = new THREE.PerspectiveCamera(40, 1, 0.3, 400);
 const CAM_DIR = new THREE.Vector3(0, 24, 19).normalize();
-/* Näher dran als früher: alles wird größer und damit lesbarer — man sieht
-   endlich, dass ein Bär kein Wolf ist. Die Nebelweiten hängen daran und
-   ziehen von selbst mit. */
-let camDist = 47;
+const camRoh = new THREE.Vector3(0, 24, 19);   // vor dem Normieren, zum Wandern
+/* Die Kamera steht nicht starr. Draußen sieht man weit, im Dorf rückt sie
+   heran, in einer Stube steht sie fast senkrecht über dem Raum, beim Rennen
+   fällt sie zurück und im Kampf kommt sie näher. Alles wandert weich — ein
+   Schnitt würde die Welt zerreißen.
+
+   `hoehe` gegen `weite` ist der Winkel: viel Höhe = von oben, viel Weite =
+   flacher über die Schulter. */
+const SICHTEN = {
+  land:   { dist: 47, hoehe: 24, weite: 19 },
+  dorf:   { dist: 40, hoehe: 23, weite: 17 },
+  stube:  { dist: 27, hoehe: 26, weite: 11 },
+  rennen: { dist: 54, hoehe: 25, weite: 21 },
+  kampf:  { dist: 42, hoehe: 22, weite: 18 },
+  gruft:  { dist: 34, hoehe: 26, weite: 13 },
+};
+let camDist = SICHTEN.land.dist;
+let camZiel = { ...SICHTEN.land };
 
 const hemi = new THREE.HemisphereLight('#fff6e4', '#c39a72', 0.95);
 scene.add(hemi);
@@ -402,6 +416,41 @@ function feindSchiesst(f, rx, rz) {
     f.pos.z + rz * 0.8, rx, rz, f.schaden, 'feind',
     Math.hypot(player.pos.x - f.pos.x, player.pos.z - f.pos.z));
   audio.shoot();
+}
+
+/* --------------------------- Schritte und Staub ----------------------------
+ * Die Figur lief lautlos über die Welt. Jetzt hört man jeden Fuß, und wo er
+ * aufkommt, staubt es — auf Sand mehr, im Gras fast nichts, im Wasser
+ * spritzt es. Das ist der halbe Unterschied zwischen Gleiten und Gehen.
+ * -------------------------------------------------------------------------- */
+const GRUND_ZU_TON = {
+  [B.gras]: 'gras', [B.moor]: 'gras', [B.taiga]: 'gras', [B.heide]: 'gras',
+  [B.sand]: 'sand', [B.trocken]: 'sand', [B.schnee]: 'sand',
+  [B.stein]: 'stein', [B.kies]: 'stein', [B.rotfels]: 'stein', [B.grundstein]: 'stein',
+  [B.planke]: 'holz', [B.weg]: 'sand',
+};
+const STAUB_FARBE = {
+  gras: '#9fbf7a', sand: '#e6d9bd', stein: '#bdb6a6', holz: '#c9a06a', wasser: '#9fd0cf',
+};
+
+function grundUnter() {
+  if (player.inWater) return 'wasser';
+  const b = world.get(Math.floor(player.pos.x), Math.floor(player.pos.y - 0.4),
+    Math.floor(player.pos.z));
+  return GRUND_ZU_TON[b] || 'gras';
+}
+
+function schritteHoeren() {
+  const f = player.fussAuf;
+  if (!f) return;
+  const grund = grundUnter();
+  audio.step(f.stark, grund);
+  // Im Gras staubt es kaum, auf Düne und Weg dafür ordentlich
+  const menge = grund === 'gras' ? 0.35 : grund === 'wasser' ? 0.8 : 1;
+  if (f.landung || Math.random() < menge) {
+    juice.staub({ x: player.pos.x, y: player.pos.y, z: player.pos.z },
+      f.stark * menge * (f.landung ? 1.6 : 1), STAUB_FARBE[grund]);
+  }
 }
 
 /** Die Richtung vom Spieler zu einem Ziel — für den Rückstoß. */
@@ -1275,6 +1324,14 @@ function wahlenFuer(n) {
     });
   }
 
+  if (n.gewerbe.name === 'Schmiedin') {
+    wahlen.push({
+      label: 'Schärft mir das Eisen.',
+      unten: 'Beute wird zu besserer Ausrüstung',
+      tun: () => { redeSchliessen(); esseOeffnen(); },
+    });
+  }
+
   if (n.handel || n.gewerbe.name === 'Händlerin') {
     wahlen.push({
       label: 'Zeigt mir Eure Waren.',
@@ -1403,6 +1460,75 @@ function wirkungText(d) {
   if (d.heilt) teile.push(`heilt ${d.heilt}`);
   if (d.magie) teile.push(`+${d.magie} Magicka`);
   return teile.length ? teile.join(' · ') : d.text;
+}
+
+/* --------------------------------- Die Esse --------------------------------
+ * Bei der Schmiedin wird aus Getierbeute eine bessere Klinge. Angezeigt wird
+ * immer, was fehlt — und weil jede Stufe Stoff aus einer anderen Gegend
+ * verlangt, ist die Liste zugleich eine Landkarte.
+ * -------------------------------------------------------------------------- */
+function esseOeffnen() {
+  esseZeichnen();
+  el('esse').classList.remove('hidden');
+}
+
+function esseSchliessen() { el('esse').classList.add('hidden'); }
+
+function esseZeichnen() {
+  const h = held();
+  el('esseGold').textContent = h.gold;
+  const feld = el('esseListe');
+  feld.replaceChildren();
+
+  const stuecke = ['waffe', 'ruestung'].map((art) => h.rue[art]).filter(Boolean);
+  if (!stuecke.length) {
+    const p = document.createElement('p');
+    p.className = 'punkte-hinweis';
+    p.textContent = 'Du trägst nichts, woran sich Arbeit lohnte.';
+    feld.append(p);
+    return;
+  }
+
+  for (const id of stuecke) {
+    const d = DINGE[id];
+    const pr = dinge.schliffPruefen(h, id);
+    const stufe = (h.schliff && h.schliff[id]) || 0;
+    const knopf = document.createElement('button');
+    const geht = !pr.fertig && !pr.fehlt.length && pr.gold;
+    knopf.className = 'esse-zeile' + (geht ? '' : ' aus');
+
+    const zeichen = `<span class="esse-stufen">${'✦'.repeat(stufe)}`
+      + `${'✧'.repeat(dinge.SCHLIFF_MAX - stufe)}</span>`;
+    if (pr.fertig) {
+      knopf.innerHTML = `<b>${d.name} ${zeichen}</b><small>Besser wird das nicht.</small>`;
+    } else {
+      const wirkung = dinge.schliffWirkung(id, stufe + 1);
+      const gewinn = d.art === 'waffe'
+        ? `+${wirkung.schaden} Schaden`
+        : `+${Math.round(wirkung.panzer * 100)}% Rüstung`;
+      const stoff = Object.entries(pr.rezept.stoff).map(([sid, n]) => {
+        const da = h.beutel[sid] || 0;
+        return `<span class="${da >= n ? 'hat' : 'fehlt'}">${DINGE[sid].name} ${da}/${n}</span>`;
+      }).join(' · ');
+      knopf.innerHTML = `<b>${d.name} ${zeichen}</b>`
+        + `<small>Stufe ${stufe + 1}: ${gewinn}</small>`
+        + `<small><span class="${pr.gold ? 'hat' : 'fehlt'}">${pr.rezept.gold} Gold</span>`
+        + ` · ${stoff}</small>`;
+    }
+    if (geht) {
+      knopf.addEventListener('click', () => {
+        if (!dinge.schleifen(h, id)) return;
+        audio.gem(3);
+        juice.shake(0.3);
+        el('esseWort').textContent = dinge.SCHLIFF[(h.schliff[id] || 1) - 1].wort;
+        waffeZeigen();
+        esseZeichnen();
+        updateHUD();
+        writeSave();
+      });
+    }
+    feld.append(knopf);
+  }
 }
 
 /* ------------------------------ Heldenblatt -------------------------------- */
@@ -2086,6 +2212,35 @@ function ereignisAnzeige() {
   el('ereignisZahl').textContent = `noch ${a.uebrig}`;
 }
 
+/* Welche Sicht gerade gilt. Die Reihenfolge ist die Rangfolge: drinnen
+   sticht alles, dann die Gruft, dann der Kampf, dann das Rennen. */
+function sichtWaehlen() {
+  if (state.imHaus) return SICHTEN.stube;
+  if (state.imDungeon || state.under > 0.6) return SICHTEN.gruft;
+  if (feinde.bedrohung(player.pos, 13)) return SICHTEN.kampf;
+  if (state.rennt) return SICHTEN.rennen;
+  if (doerfer.dorfUnter(player.pos.x, player.pos.z)) return SICHTEN.dorf;
+  return SICHTEN.land;
+}
+
+function kameraPflegen(dt) {
+  const ziel = sichtWaehlen();
+  // Hin geht es gemächlich, zurück etwas schneller — so fühlt sich das
+  // Herankommen wie ein Ankommen an und nicht wie ein Ruck.
+  const tempo = Math.min(1, dt * (ziel === SICHTEN.land ? 1.1 : 1.6));
+  camZiel.dist += (ziel.dist - camZiel.dist) * tempo;
+  camZiel.hoehe += (ziel.hoehe - camZiel.hoehe) * tempo;
+  camZiel.weite += (ziel.weite - camZiel.weite) * tempo;
+
+  // Im Stehen wandert der Blick ganz leicht — die Welt atmet mit
+  const ruht = Math.hypot(player.vel.x, player.vel.z) < 0.4 && !state.imHaus;
+  const atmen = ruht ? Math.sin(state.time * 620) * 0.5 : 0;
+
+  camDist = camZiel.dist;
+  camRoh.set(atmen * 0.35, camZiel.hoehe + atmen * 0.2, camZiel.weite);
+  CAM_DIR.copy(camRoh).normalize();
+}
+
 /* -------------------------------- Schleife --------------------------------- */
 const clock = new THREE.Clock();
 let saveTimer = 0;
@@ -2117,6 +2272,7 @@ function frame() {
     player.rennt = state.rennt;
     player.update(dt, move, world);
     // Häuser und Stämme sind Modelle, keine Blöcke — hier erst werden sie fest
+    schritteHoeren();
     const raus = doerfer.wegSchieben(player.pos.x, player.pos.z)
       || orteSchieben(player.pos.x, player.pos.z)
       || flora.wegSchieben(player.pos.x, player.pos.z);
@@ -2243,6 +2399,7 @@ function frame() {
     state.cut += (wantCut - state.cut) * Math.min(1, dt * 7);
     cutPlane.constant = Math.round(state.cut) - 0.03;
 
+    kameraPflegen(dt);
     steckenPruefen(dt, move, tief);
 
     state.under = Math.max(0, Math.min(1, tief / 4));
@@ -2303,6 +2460,8 @@ el('redeBtn').addEventListener('click', handeln);
 el('trinkBtn').addEventListener('click', trinken);
 el('rollBtn').addEventListener('click', ausweichen);
 el('ladenZu').addEventListener('click', ladenSchliessen);
+el('esseZu').addEventListener('click', esseSchliessen);
+el('esse').addEventListener('click', (e) => { if (e.target === el('esse')) esseSchliessen(); });
 for (const b of document.querySelectorAll('.lreiter')) {
   b.addEventListener('click', () => { ladenSeite = b.dataset.seite; ladenZeichnen(); });
 }
@@ -2328,7 +2487,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'f') ausweichen();
   if (k === 'i') { menuZeichnen('fert'); el('menu').classList.toggle('hidden'); }
   if (k === 'r') heimkehr();
-  if (k === 'escape') { redeSchliessen(); ladenSchliessen(); el('menu').classList.add('hidden'); }
+  if (k === 'escape') { esseSchliessen(); redeSchliessen(); ladenSchliessen(); el('menu').classList.add('hidden'); }
 });
 
 const soundBtn = el('soundBtn');
@@ -2399,6 +2558,7 @@ function writeSave(auchTot = false) {
       vorteile: [...h.vorteile], getoetet: h.getoetet, hilfen: h.hilfen || 0,
       dungeons: [...h.dungeons], orte: [...(h.orte || [])],
       gesehen: [...(h.gesehen || [])], erlegt: h.erlegt || {},
+      schliff: h.schliff || {},
       beutel: h.beutel, rue: h.rue,
     },
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8),
@@ -2590,6 +2750,7 @@ function weiterSpielen(d) {
   h.orte = new Set(d.held.orte || []);
   h.gesehen = new Set(d.held.gesehen || []);
   h.erlegt = d.held.erlegt || {};
+  h.schliff = d.held.schliff || {};
   state.held = h;
 
   state.buch = new Auftragsbuch();
@@ -2682,6 +2843,8 @@ window.__game = {
   orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel, wetter,
   ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden, geschosse,
   applyDaytime, sun, hemi, nachtGrad,
+  camDistWert: () => camDist, camRohWert: () => camRoh,
+  esseOeffnen, esseZeichnen, dinge, fert,
 };
 
 resize();

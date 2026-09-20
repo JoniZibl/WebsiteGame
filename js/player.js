@@ -97,6 +97,9 @@ export class Player {
     this.bogen = false;
     this.rennt = false;
     this.schritt = 0;   // Phase der Beinarbeit, läuft mit dem Tempo mit
+    this.letzterSchritt = 0;  // bei welcher Phase zuletzt ein Fuß aufkam
+    this.landung = 0;         // Stauchen nach dem Aufkommen
+    this.warInDerLuft = false;
   }
 
   spawn(world, x, z) {
@@ -215,6 +218,27 @@ export class Player {
     // Die Beine gehen im Takt der Geschwindigkeit — beim Rennen sichtbar schneller
     this.schritt += dt * Math.min(22, sp * 1.9);
     const stride = Math.sin(this.schritt);
+
+    /* Jeder Nulldurchgang der Schrittphase ist ein Fuß, der aufkommt. Daran
+       hängen Ton und Staub — vorher lief die Figur lautlos wie ein Papierbild
+       über die Wiese. */
+    this.fussAuf = null;
+    if (sp > 0.6 && this.onGround && this.rolle <= 0) {
+      const halb = Math.floor(this.schritt / Math.PI);
+      if (halb !== this.letzterSchritt) {
+        this.letzterSchritt = halb;
+        this.fussAuf = { stark: Math.min(1, sp / 7), links: halb % 2 === 0 };
+      }
+    }
+
+    // Landung: einmal in die Knie gehen
+    if (!this.onGround) this.warInDerLuft = true;
+    else if (this.warInDerLuft) {
+      this.warInDerLuft = false;
+      this.landung = 0.22;
+      this.fussAuf = { stark: 1, links: false, landung: true };
+    }
+    if (this.landung > 0) this.landung -= dt;
     const walking = sp > 0.4;
     const weit = this.rennt && walking ? 0.85 : 0.55;
     if (this.huepft > 0) this.huepft -= dt;
@@ -250,6 +274,19 @@ export class Player {
     // Das Laternenglas atmet mit dem Licht
     const puls = 0.94 + Math.sin(this.t * 4.5) * 0.06;
     this.laterne.scale.setScalar(puls);
+
+    /* Der Oberkörper lehnt sich in die Laufrichtung und wippt mit den
+       Schritten, die Kapuze folgt versetzt. Ohne das gleitet die Figur nur
+       über den Boden, statt zu laufen. */
+    const lehnen = Math.min(0.22, sp * 0.028) * (this.rennt ? 1.5 : 1);
+    const wippe = walking ? Math.abs(Math.sin(this.schritt)) * (this.rennt ? 0.07 : 0.045) : 0;
+    const knick = this.landung > 0 ? (this.landung / 0.22) : 0;
+
+    this.torso.rotation.x = this.rolle > 0 ? 0 : lehnen;
+    this.torso.position.y = 0.92 + wippe - knick * 0.12;
+    this.head.position.y = 1.5 + wippe * 0.8 - knick * 0.16;
+    this.head.rotation.x = -lehnen * 0.4 + Math.sin(this.schritt * 0.5) * 0.02;
+    this.group.scale.set(1 + knick * 0.08, 1 - knick * 0.14, 1 + knick * 0.08);
 
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.facing;

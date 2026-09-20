@@ -28,6 +28,20 @@ export class Juice {
       return { mesh: m, t: 0, life: 0, size: 1 };
     });
 
+    /* Staub unter den Füßen: eigener Vorrat, damit die Schockwellen nicht
+       davon aufgebraucht werden. Ein kleiner Wolken-Würfel, der aufgeht und
+       sinkt — er macht aus Gleiten ein Gehen. */
+    const staubGeo = new THREE.IcosahedronGeometry(0.22, 0);
+    this.staubteile = Array.from({ length: 16 }, () => {
+      const m = new THREE.Mesh(staubGeo, new THREE.MeshBasicMaterial({
+        color: '#e6d9bd', transparent: true, opacity: 0, depthWrite: false,
+      }));
+      m.visible = false;
+      m.renderOrder = 3;
+      scene.add(m);
+      return { mesh: m, t: 0, life: 0, size: 1, vx: 0, vz: 0 };
+    });
+
     // Aufsteigende Zahlen als HTML — scharf, billig, funktioniert überall
     this.layer = document.getElementById('popups');
     this.pops = Array.from({ length: 14 }, () => {
@@ -43,6 +57,20 @@ export class Juice {
   freeze(seconds = 0.05) { this.stop = Math.max(this.stop, seconds); }
 
   shake(amount = 0.5) { this.shakeAmount = Math.min(1.4, this.shakeAmount + amount); }
+
+  /** Eine kleine Wolke unter dem Fuß. */
+  staub(pos, stark = 1, farbe = '#e6d9bd') {
+    const t = this.staubteile.find((x) => x.life <= 0);
+    if (!t) return;
+    t.life = 0.42;
+    t.t = 0;
+    t.size = 0.5 + stark * 0.7;
+    t.vx = (Math.random() - 0.5) * 0.7;
+    t.vz = (Math.random() - 0.5) * 0.7;
+    t.mesh.material.color.set(farbe);
+    t.mesh.position.set(pos.x, (pos.y ?? 0) + 0.12, pos.z);
+    t.mesh.visible = true;
+  }
 
   ring(pos, size = 3, color = '#fff2cf', life = 0.4) {
     const r = this.rings.find((x) => x.life <= 0);
@@ -94,6 +122,19 @@ export class Juice {
       const s = (0.3 + k * 0.9) * r.size;
       r.mesh.scale.set(s, 1, s);
       r.mesh.material.opacity = (1 - k) * 0.75;
+    }
+
+    for (const t of this.staubteile) {
+      if (t.life <= 0) continue;
+      t.t += dt;
+      const k = Math.min(1, t.t / t.life);
+      if (k >= 1) { t.life = 0; t.mesh.visible = false; continue; }
+      const s2 = t.size * (0.4 + k * 0.9);
+      t.mesh.scale.set(s2, s2 * 0.6, s2);
+      t.mesh.position.x += t.vx * dt;
+      t.mesh.position.z += t.vz * dt;
+      t.mesh.position.y += dt * 0.35;
+      t.mesh.material.opacity = (1 - k) * 0.5;
     }
 
     for (const p of this.pops) {

@@ -187,13 +187,76 @@ export function boni(held) {
     const id = held.rue[art];
     if (!id) continue;
     const d = DINGE[id];
-    b.schaden += d.schaden || 0;
-    b.panzer += d.panzer || 0;
+    // Der Schliff zählt wie ein Teil des Stücks
+    const w = schliffWirkung(id, (held.schliff && held.schliff[id]) || 0);
+    b.schaden += (d.schaden || 0) + w.schaden;
+    b.panzer += (d.panzer || 0) + w.panzer;
     b.leben += d.leben || 0;
     b.magicka += d.magicka || 0;
     b.tempo += d.tempo || 0;
   }
   return b;
+}
+
+/* --------------------------------- Die Esse --------------------------------
+ * Was man dem Getier abnimmt, soll nicht nur einen Preis haben. An der Esse
+ * wird daraus eine bessere Klinge: fünf Stufen, und jede verlangt Stoff aus
+ * einer anderen Gegend. Wer die vierte Stufe will, muss ins Firnfeld und in
+ * die Düne; wer die fünfte will, war im Roten Grund und hat eine Nacht
+ * überstanden. So hängen Jagd, Landkarte und Ausrüstung an einem Faden.
+ * -------------------------------------------------------------------------- */
+export const SCHLIFF_MAX = 5;
+
+export const SCHLIFF = [
+  { gold: 40,  stoff: { wolfsfell: 2, balg: 1 },
+    wort: 'Ausgebeult und nachgezogen.' },
+  { gold: 95,  stoff: { hauer: 2, krummhorn: 1 },
+    wort: 'Mit Horn beschlagen.' },
+  { gold: 190, stoff: { frostbalg: 2, giftstachel: 1 },
+    wort: 'In Firn gehärtet.' },
+  { gold: 360, stoff: { moosherz: 1, felsschuppe: 2 },
+    wort: 'Mit Fels unterlegt.' },
+  { gold: 650, stoff: { wyrmschuppe: 1, nachtauge: 1, riesenzahn: 1 },
+    wort: 'Etwas darin ist jetzt wach.' },
+];
+
+/** Was eine Stufe Schliff an einem Stück ausmacht. */
+export function schliffWirkung(id, stufe) {
+  const d = DINGE[id];
+  if (!d || !stufe) return { schaden: 0, panzer: 0 };
+  if (d.art === 'waffe') return { schaden: (2 + (d.rang || 0)) * stufe, panzer: 0 };
+  if (d.art === 'ruestung') return { schaden: 0, panzer: 0.025 * stufe };
+  return { schaden: 0, panzer: 0 };
+}
+
+/** Lässt sich das überhaupt schärfen? */
+export const schleifbar = (id) => {
+  const d = DINGE[id];
+  return !!d && (d.art === 'waffe' || d.art === 'ruestung');
+};
+
+/** Fehlt etwas für die nächste Stufe? Gibt die Lücken zurück. */
+export function schliffPruefen(held, id) {
+  const stufe = (held.schliff && held.schliff[id]) || 0;
+  if (stufe >= SCHLIFF_MAX) return { fertig: true };
+  const r = SCHLIFF[stufe];
+  const fehlt = [];
+  for (const [stoff, n] of Object.entries(r.stoff)) {
+    const da = held.beutel[stoff] || 0;
+    if (da < n) fehlt.push({ id: stoff, braucht: n, da });
+  }
+  return { stufe, rezept: r, fehlt, gold: held.gold >= r.gold };
+}
+
+/** Schmiedet eine Stufe drauf. Gibt false, wenn etwas fehlt. */
+export function schleifen(held, id) {
+  const pr = schliffPruefen(held, id);
+  if (pr.fertig || pr.fehlt.length || !pr.gold) return false;
+  held.gold -= pr.rezept.gold;
+  for (const [stoff, n] of Object.entries(pr.rezept.stoff)) ablegen(held, stoff, n);
+  held.schliff = held.schliff || {};
+  held.schliff[id] = pr.stufe + 1;
+  return true;
 }
 
 /* -------------------------------- Der Laden -------------------------------- */

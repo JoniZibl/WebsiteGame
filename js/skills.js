@@ -41,6 +41,7 @@ export function neuerHeld() {
     orte: new Set(),          // welche Schreine schon geantwortet haben
     gesehen: new Set(),       // welche Wesen im Bestiarium stehen
     erlegt: {},               // und wie viele davon je erlegt wurden
+    schliff: {},              // wie oft ein Stück an der Esse war
     magicka: 60, magickaMax: 60,
     fert: { klinge: 1, zaehe: 1, magie: 1, spuren: 1, wandern: 1 },
     vorteile: new Set(),
