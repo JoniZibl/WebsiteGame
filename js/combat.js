@@ -421,6 +421,8 @@ export class Feinde {
       heimX: x, heimZ: z,
       gesinnung: art.gesinnung || 'wild',
       flucht: 0,                      // wie lange es noch wegläuft
+      lahm: 0,                        // von einem Zauber festgehalten
+      schreck: 0,                     // von einem Zauber in die Flucht geschlagen
       schweb: Math.random() * 6,
       gezeichnet,
       name: gezeichnet ? `${BEINAMEN[(Math.random() * BEINAMEN.length) | 0]} ${art.name}` : art.name,
@@ -493,10 +495,12 @@ export class Feinde {
           && spielerLebt && dist < art.sicht && dy < 7) f.wach = true;
       if (f.wach && (dist > art.sicht * 2.2 || dy > 14)) f.wach = false;
       if (f.flucht > 0) f.flucht -= dt;
+      if (f.lahm > 0) f.lahm -= dt;
+      if (f.schreck > 0) f.schreck -= dt;
       if (scheu && spielerLebt && dist < 8 && dy < 5) f.flucht = Math.max(f.flucht, 2.5);
 
       let zielX = 0, zielZ = 0;
-      if (scheu && f.flucht > 0 && dist > 0.001) {
+      if ((scheu || f.schreck > 0) && f.flucht > 0 && dist > 0.001) {
         // Weg vom Spieler, so schnell die Beine tragen
         zielX = -dx / dist; zielZ = -dz / dist;
         f.obj.rotation.y = Math.atan2(zielX, zielZ);
@@ -521,7 +525,7 @@ export class Feinde {
       }
 
       const schritt = art.tempo * (f.flucht > 0 ? 1.25 : 1)
-        * (f.gezeichnet ? 1.1 : 1) * dt;
+        * (f.lahm > 0 ? 0.42 : 1) * (f.gezeichnet ? 1.1 : 1) * dt;
       this.schieben(world, f, zielX * schritt, zielZ * schritt);
 
       // Ein Treffer wirft zurück — daran merkt man, dass er gesessen hat
@@ -565,7 +569,7 @@ export class Feinde {
             this.haken.onTreffer(f);
           }
         }
-      } else if (f.wach && !scheu && art.schaden > 0 && spielerLebt && f.takt <= 0) {
+      } else if (f.wach && !scheu && f.schreck <= 0 && art.schaden > 0 && spielerLebt && f.takt <= 0) {
         const nah = dist < art.reichweite && dy < 2.2;
         const weit = art.fern && dist < art.schussweite && dist > 1.5 && dy < 5;
         if (nah || weit) {
@@ -704,6 +708,17 @@ export class Feinde {
       if (wert < bestWert) { bestWert = wert; best = f; }
     }
     return best;
+  }
+
+  /** Was ein Zauber auf einem Wesen liegen lässt: 'lahm' hält fest, 'schreck' jagt fort. */
+  belegen(f, was, zeit) {
+    if (was === 'lahm') f.lahm = Math.max(f.lahm || 0, zeit);
+    if (was === 'schreck') {
+      f.schreck = Math.max(f.schreck || 0, zeit);
+      f.flucht = Math.max(f.flucht, zeit);
+      f.schlagBereit = false;
+      f.holt = 0;
+    }
   }
 
   /** Zuschlagen mit Wucht: `stoss` ist die Richtung, aus der es kam. */

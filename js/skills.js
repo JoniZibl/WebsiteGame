@@ -43,6 +43,8 @@ export function neuerHeld() {
     erlegt: {},               // und wie viele davon je erlegt wurden
     schliff: {},              // wie oft ein Stück an der Esse war
     magicka: 60, magickaMax: 60,
+    zauber: new Set(),        // welche Sprüche er gelernt hat
+    aktiverZauber: 'funkenschlag',
     fert: { klinge: 1, zaehe: 1, magie: 1, spuren: 1, wandern: 1 },
     vorteile: new Set(),
     getoetet: 0,

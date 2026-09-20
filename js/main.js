@@ -32,6 +32,7 @@ import { GameAudio } from './audio.js';
 import { Juice } from './juice.js';
 import { Wetter } from './wetter.js';
 import { Ereignisse } from './ereignis.js';
+import { ZAUBER, ZAUBER_IDS, ANFANGSZAUBER, gelernte, reichtDieUebung } from './zauber.js';
 
 /* ==========================================================================
  *  Talkunde — ein Rollenspiel von oben.
@@ -136,6 +137,7 @@ const state = {
   under: 0,
   hieb: 0,            // Nachladen des Schlags
   zauber: 0,
+  schutz: 0,          // wie lange die Steinhaut noch trägt
   ort: 'Wildnis',
   imDungeon: null,    // die Gruft, in der wir stecken
   gespraech: null,
@@ -204,7 +206,7 @@ const ui = {
 const sym = (name) => `<span class="ic">${ICONS[name] || ''}</span>`;
 
 symbol(el('hauBtn'), 'schwert');
-symbol(el('wirkBtn'), 'funke');
+symbol(el('wirkBtn'), 'funke');     // wird von zauberKnopfPflegen() ersetzt
 symbol(el('menuBtn'), 'beutel');
 symbol(el('qualityBtn'), 'glanz');
 symbol(el('redeBtn'), 'rede');
@@ -213,6 +215,10 @@ for (const m of document.querySelectorAll('.ic-muenze')) m.innerHTML = ICONS.mue
 
 let hudTimer = 0;
 let letztesZiel = null;
+let zielGezeigt = null;
+let zielHalten = 0;
+let letzteTat = null;
+let tatHalten = 0;
 function waffeZeigen() {
   const id = held().rue.waffe;
   const d = id ? DINGE[id] : null;
@@ -239,7 +245,8 @@ function updateHUD() {
   ui.stufe.textContent = h.stufe;
   ui.xp.style.width = `${Math.min(100, h.xp / h.xpZiel * 100)}%`;
   ui.gold.textContent = h.gold;
-  ui.wirk.classList.toggle('leer', h.magicka < 18);
+  zauberKnopfPflegen();
+  ui.wirk.classList.toggle('leer', h.magicka < aktiverZauber().kosten);
   el('rollBtn').classList.toggle('leer', h.ausdauer < 16);
   trinkKnopfPflegen();
 
@@ -312,7 +319,8 @@ function spielerNimmtSchaden(menge, von) {
   }
   const h = held();
   const abgewehrt = menge * Math.min(0.6, fert.werte.ruestung(h));
-  const echt = Math.max(1, Math.round(menge - abgewehrt));
+  // Die Steinhaut kommt obendrauf — sie ist der Grund, warum man sie wirkt
+  const echt = Math.max(1, Math.round((menge - abgewehrt) * (state.schutz > 0 ? 0.5 : 1)));
   h.hp -= echt;
   fert.uebung(h, 'zaehe', 1);
   juice.shake(0.55);
@@ -511,25 +519,222 @@ function zuschlagen() {
   updateHUD();
 }
 
+/* --------------------------------- Zauber ----------------------------------
+ * Magie war lange ein Knopf. Jetzt ist sie ein Regal: was der Held gelernt
+ * hat, steht in `held.zauber`, einer davon liegt auf dem Knopf. Kurz tippen
+ * wirkt ihn, lang drücken blättert weiter — auf dem Handy will man dafür
+ * nicht ins Menü.
+ * -------------------------------------------------------------------------- */
+function aktiverZauber() {
+  const h = held();
+  const kann = gelernte(h);
+  if (!kann.includes(h.aktiverZauber)) h.aktiverZauber = ANFANGSZAUBER;
+  return ZAUBER[h.aktiverZauber];
+}
+
+function zauberKnopfPflegen() {
+  const z = aktiverZauber();
+  const b = el('wirkBtn');
+  if (b.dataset.zauber !== z.sym) {
+    b.dataset.zauber = z.sym;
+    symbol(b, z.sym);
+  }
+  b.title = `${z.name} — ${z.kosten} Magicka`;
+}
+
+function zauberWaehlen(id, still = false) {
+  const h = held();
+  if (!gelernte(h).includes(id)) return false;
+  h.aktiverZauber = id;
+  zauberKnopfPflegen();
+  if (!still) {
+    meldung(ZAUBER[id].name, ZAUBER[id].farbe, 2.6);
+    audio.gem(2);
+  }
+  updateHUD();
+  return true;
+}
+
+/** Lang auf den Zauberknopf: der nächste Spruch kommt nach vorn. */
+function zauberBlaettern() {
+  const h = held();
+  const kann = gelernte(h);
+  if (kann.length < 2) {
+    meldung('Du kennst nur den einen Spruch.', '#8a7f70', 2.6);
+    return;
+  }
+  aktiverZauber();                       // richtet h.aktiverZauber gerade
+  const i = Math.max(0, kann.indexOf(h.aktiverZauber));
+  zauberWaehlen(kann[(i + 1) % kann.length]);
+}
+
+/** Ein Buch lesen. Wer zu wenig Magie hat, legt es wieder weg. */
+function zauberLernen(id) {
+  const h = held();
+  const d = DINGE[id];
+  const z = ZAUBER[d.lehrt];
+  if (!z) return;
+  h.zauber = h.zauber instanceof Set ? h.zauber : new Set(h.zauber || []);
+  if (h.zauber.has(d.lehrt)) {
+    meldung('Den kannst du schon.', '#8a7f70', 2.6);
+    return;
+  }
+  if (!reichtDieUebung(h, d.lehrt)) {
+    meldung(`Dafür braucht es Magie ${z.braucht}.`, '#c9543f', 2.6);
+    return;
+  }
+  if (!dinge.ablegen(h, id)) return;
+  h.zauber.add(d.lehrt);
+  h.aktiverZauber = d.lehrt;
+  zauberKnopfPflegen();
+  audio.gem(4);
+  juice.ring({ x: player.pos.x, y: player.pos.y + 1.2, z: player.pos.z }, 3, z.farbe, 0.7);
+  meldung(`Gelernt: ${z.name}`, z.farbe, 2.8);
+  fert.uebung(h, 'magie', 2);
+  updateHUD();
+}
+
 function zaubern() {
   const h = held();
-  if (state.zauber > 0 || h.magicka < 18) return;
-  state.zauber = 0.75;
-  h.magicka -= 18;
+  const z = aktiverZauber();
+  if (state.zauber > 0) return;
+  if (h.magicka < z.kosten) { juice.shake(0.08); return; }
+  state.zauber = z.wirkung === 'geschoss' ? 0.5 : 0.75;
+  h.magicka -= z.kosten;
   player.swing = 0.3;
   audio.spit();
 
-  const schaden = Math.round(fert.werte.zauber(h));
+  const kraft = fert.werte.zauber(h);
+  const mitte = { x: player.pos.x, y: player.pos.y + 0.6, z: player.pos.z };
   let getroffen = 0;
-  for (const f of [...feinde.liste]) {
-    const d = Math.hypot(f.pos.x - player.pos.x, f.pos.z - player.pos.z);
-    if (d > 7 || Math.abs(f.pos.y - player.pos.y) > 3) continue;
-    feinde.schlagen(f, schaden);
-    getroffen++;
+
+  switch (z.wirkung) {
+    /* Alles ringsum — der alte Funkenschlag und sein großer Bruder */
+    case 'welle': {
+      for (const f of [...feinde.liste]) {
+        const d = Math.hypot(f.pos.x - player.pos.x, f.pos.z - player.pos.z);
+        if (d > z.weite || Math.abs(f.pos.y - player.pos.y) > 3.5) continue;
+        feinde.schlagen(f, Math.round(kraft * z.kraft), z.stoss ? richtungZu(f) : null);
+        getroffen++;
+      }
+      juice.ring(mitte, z.weite, z.farbe, z.stoss ? 0.8 : 0.55);
+      if (z.stoss) juice.ring(mitte, z.weite * 0.6, '#fdf6e8', 0.5);
+      juice.shake(z.stoss ? 0.65 : 0.3);
+      break;
+    }
+
+    /* Ein Ding fliegt los. Die Wirkung beim Treffer hängt am Geschoss. */
+    case 'geschoss': {
+      const ziel = zielHilfe();
+      const rx = ziel ? ziel.x : Math.sin(player.facing);
+      const rz = ziel ? ziel.z : Math.cos(player.facing);
+      const g = geschosse.schiessen(z.geschoss, player.pos.x + rx * 0.7,
+        player.pos.y + 1.1, player.pos.z + rz * 0.7, rx, rz,
+        Math.round(kraft * z.kraft), 'spieler', ziel ? ziel.d : 26);
+      if (z.lahm) g.lahm = z.lahm;
+      g.farbe = z.farbe;
+      juice.shake(0.12);
+      getroffen = 1;
+      break;
+    }
+
+    /* Ein Kegel nach vorn — breit genug für drei, im Rücken nutzlos */
+    case 'strahl': {
+      const bx = Math.sin(player.facing), bz = Math.cos(player.facing);
+      for (const f of [...feinde.liste]) {
+        const dx = f.pos.x - player.pos.x, dz = f.pos.z - player.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d > z.weite || Math.abs(f.pos.y - player.pos.y) > 3) continue;
+        if (d > 0.001 && (dx / d) * bx + (dz / d) * bz < Math.cos(z.breite)) continue;
+        feinde.schlagen(f, Math.round(kraft * z.kraft), richtungZu(f));
+        getroffen++;
+      }
+      // Die Zunge Feuer: drei Ringe, die nach vorn kleiner werden
+      for (let i = 1; i <= 3; i++) {
+        juice.ring({ x: player.pos.x + bx * i * z.weite * 0.28, y: player.pos.y + 0.7,
+          z: player.pos.z + bz * i * z.weite * 0.28 }, 1.1 + i * 0.9, z.farbe, 0.4 + i * 0.08);
+      }
+      juice.shake(0.28);
+      break;
+    }
+
+    /* Springt vom Nächsten zum Nächsten und wird dabei müder */
+    case 'kette': {
+      let von = { x: player.pos.x, y: player.pos.y + 1.1, z: player.pos.z };
+      const schon = new Set();
+      let schaden = kraft * z.kraft;
+      for (let i = 0; i < z.spruenge; i++) {
+        let best = null, bestD = z.weite;
+        for (const f of feinde.liste) {
+          if (schon.has(f)) continue;
+          const d = Math.hypot(f.pos.x - von.x, f.pos.z - von.z);
+          if (d < bestD) { bestD = d; best = f; }
+        }
+        if (!best) break;
+        schon.add(best);
+        juice.ring({ x: best.pos.x, y: best.pos.y + 0.8, z: best.pos.z }, 1.6, z.farbe, 0.35);
+        feinde.schlagen(best, Math.round(schaden));
+        getroffen++;
+        schaden *= 0.78;
+        von = { x: best.pos.x, y: best.pos.y + 0.8, z: best.pos.z };
+      }
+      juice.shake(0.3);
+      break;
+    }
+
+    /* Ein Fächer glühender Brocken — trifft nicht genau, dafür viel */
+    case 'regen': {
+      const ziel = zielHilfe();
+      const grund = ziel ? Math.atan2(ziel.x, ziel.z) : player.facing;
+      for (let i = 0; i < z.zahl; i++) {
+        const w = grund + (i - (z.zahl - 1) / 2) * 0.16;
+        geschosse.schiessen(z.geschoss, player.pos.x + Math.sin(w) * 0.7,
+          player.pos.y + 1.4, player.pos.z + Math.cos(w) * 0.7,
+          Math.sin(w), Math.cos(w), Math.round(kraft * z.kraft), 'spieler',
+          14 + i * 2.2);
+      }
+      juice.shake(0.4);
+      getroffen = 2;
+      break;
+    }
+
+    /* Zurück auf die Beine */
+    case 'heilen': {
+      const hpMax = fert.werte.lebenMax(h);
+      const gut = Math.min(hpMax - h.hp, Math.round(kraft * z.kraft));
+      h.hp += gut;
+      juice.ring(mitte, 2.6, z.farbe, 0.6);
+      juice.popup({ x: player.pos.x, y: player.pos.y + 2.2, z: player.pos.z },
+        `+${gut}`, z.farbe);
+      getroffen = 1;
+      break;
+    }
+
+    /* Die Haut wird grau und schwer */
+    case 'schutz': {
+      state.schutz = z.dauer;
+      juice.ring(mitte, 2.2, z.farbe, 0.6);
+      meldung('Steinhaut', z.farbe, 2.6);
+      getroffen = 1;
+      break;
+    }
+
+    /* Kein Schaden — sie laufen einfach weg */
+    case 'bann': {
+      for (const f of feinde.liste) {
+        const d = Math.hypot(f.pos.x - player.pos.x, f.pos.z - player.pos.z);
+        if (d > z.weite || Math.abs(f.pos.y - player.pos.y) > 4) continue;
+        feinde.belegen(f, 'schreck', z.dauer);
+        juice.popup({ x: f.pos.x, y: f.pos.y + 1.8, z: f.pos.z }, 'flieht', z.farbe);
+        getroffen++;
+      }
+      juice.ring(mitte, z.weite, z.farbe, 0.55);
+      juice.shake(0.2);
+      break;
+    }
   }
-  juice.ring({ x: player.pos.x, y: player.pos.y + 0.6, z: player.pos.z }, 7, '#8fb8cf', 0.55);
-  juice.shake(0.3);
-  if (getroffen) fert.uebung(h, 'magie', getroffen);
+
+  fert.uebung(h, 'magie', Math.max(1, getroffen));
   updateHUD();
 }
 
@@ -957,7 +1162,9 @@ function schlafen() {
 }
 
 function handeln() {
-  const w = was();
+  // Der Knopf bleibt nach dem letzten Ja kurz stehen — dann muss er auch
+  // noch tun, was er anbietet.
+  const w = was() || (tatHalten > 0 ? letzteTat : null);
   if (!w) return;
   if (w.art === 'truhe') { truheOeffnen(w.ziel); return; }
   if (w.art === 'glimm') { glimmBrechen(w.ziel); return; }
@@ -1460,7 +1667,7 @@ function ladenZeichnen() {
       const z = document.createElement('button');
       z.className = 'ding-zeile laden-zeile' + (kann ? '' : ' aus');
       z.innerHTML = sym(d.sym)
-        + `<span class="txt"><b>${d.name}</b><small>${wirkungText(d)}</small></span>`
+        + `<span class="txt">${dingName(d)}<small>${wirkungText(d)}</small></span>`
         + `<span class="preis">${preis}<i class="ic-muenze">${ICONS.muenze}</i></span>`;
       if (kann) {
         z.addEventListener('click', () => {
@@ -1487,7 +1694,7 @@ function ladenZeichnen() {
       const z = document.createElement('button');
       z.className = 'ding-zeile laden-zeile';
       z.innerHTML = sym(d.sym)
-        + `<span class="txt"><b>${d.name}${h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : ''}</b>`
+        + `<span class="txt">${dingName(d, h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : '')}`
         + `<small>${wirkungText(d)}</small></span>`
         + `<span class="preis">+${preis}<i class="ic-muenze">${ICONS.muenze}</i></span>`;
       z.addEventListener('click', () => {
@@ -1502,8 +1709,18 @@ function ladenZeichnen() {
   }
 }
 
+/** Der Name eines Stücks in der Farbe seiner Güte — im Beutel wie im Laden. */
+function dingName(d, zusatz = '') {
+  const f = d.guete ? dinge.SELTENHEIT[d.guete].farbe : null;
+  return `<b${f ? ` style="color:${f}"` : ''}>${d.name}${zusatz}</b>`;
+}
+
 function wirkungText(d) {
   const teile = [];
+  if (d.guete) teile.push(dinge.SELTENHEIT[d.guete].name);
+  if (d.lehrt && ZAUBER[d.lehrt]) {
+    teile.push(`lehrt ${ZAUBER[d.lehrt].name}`, `Magie ${ZAUBER[d.lehrt].braucht}`);
+  }
   if (d.schaden) teile.push(`+${d.schaden} Schaden`);
   if (d.panzer) teile.push(`+${Math.round(d.panzer * 100)}% Rüstung`);
   if (d.leben) teile.push(`+${d.leben} Leben`);
@@ -1552,7 +1769,7 @@ function esseZeichnen() {
     const zeichen = `<span class="esse-stufen">${'✦'.repeat(stufe)}`
       + `${'✧'.repeat(dinge.SCHLIFF_MAX - stufe)}</span>`;
     if (pr.fertig) {
-      knopf.innerHTML = `<b>${d.name} ${zeichen}</b><small>Besser wird das nicht.</small>`;
+      knopf.innerHTML = `${dingName(d, ` ${zeichen}`)}<small>Besser wird das nicht.</small>`;
     } else {
       const wirkung = dinge.schliffWirkung(id, stufe + 1);
       const gewinn = d.art === 'waffe'
@@ -1562,7 +1779,7 @@ function esseZeichnen() {
         const da = h.beutel[sid] || 0;
         return `<span class="${da >= n ? 'hat' : 'fehlt'}">${DINGE[sid].name} ${da}/${n}</span>`;
       }).join(' · ');
-      knopf.innerHTML = `<b>${d.name} ${zeichen}</b>`
+      knopf.innerHTML = `${dingName(d, ` ${zeichen}`)}`
         + `<small>Stufe ${stufe + 1}: ${gewinn}</small>`
         + `<small><span class="${pr.gold ? 'hat' : 'fehlt'}">${pr.rezept.gold} Gold</span>`
         + ` · ${stoff}</small>`;
@@ -1614,8 +1831,9 @@ function beutelZeichnen() {
     const platz = document.createElement('button');
     platz.className = 'rue-platz' + (id ? ' voll' : ' leer');
     const sorte = art === 'waffe' ? 'schwert' : art === 'ruestung' ? 'schild' : 'ring';
+    const gf = id && DINGE[id].guete ? dinge.SELTENHEIT[DINGE[id].guete].farbe : null;
     platz.innerHTML = id
-      ? `${sym(DINGE[id].sym)}<small>${DINGE[id].name}</small>`
+      ? `${sym(DINGE[id].sym)}<small${gf ? ` style="color:${gf}"` : ''}>${DINGE[id].name}</small>`
       : `${sym(sorte)}<small>${art === 'waffe' ? 'Waffe' : art === 'ruestung' ? 'Rüstung' : 'Schmuck'}</small>`;
     if (id) platz.addEventListener('click', () => { dinge.ausziehen(h, art); audio.step(); beutelZeichnen(); updateHUD(); });
     kopf.append(platz);
@@ -1642,13 +1860,16 @@ function beutelZeichnen() {
     const z = document.createElement('div');
     z.className = 'ding-zeile';
     z.innerHTML = sym(d.sym)
-      + `<span class="txt"><b>${d.name}${h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : ''}</b>`
-      + `<small>${d.text}</small></span>`;
+      + `<span class="txt">${dingName(d, h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : '')}`
+      + `<small>${wirkungText(d)}</small></span>`;
     const tun = document.createElement('button');
     tun.className = 'ding-tun';
     if (dinge.TRAGBAR.includes(d.art)) {
       tun.textContent = 'anlegen';
       tun.addEventListener('click', () => { dinge.anlegen(h, id); audio.gem(2); beutelZeichnen(); updateHUD(); });
+    } else if (d.art === 'lehre') {
+      tun.textContent = 'lesen';
+      tun.addEventListener('click', () => { zauberLernen(id); beutelZeichnen(); });
     } else if (d.art === 'trank') {
       tun.textContent = 'trinken';
       tun.addEventListener('click', () => { trinkenGezielt(id); beutelZeichnen(); });
@@ -1683,6 +1904,8 @@ function fertZeichnen() {
     : 'Fertigkeiten steigen dadurch, dass du sie benutzt.';
   feld.append(hinweis);
 
+  zauberliste(feld);
+
   for (const [id, f] of Object.entries(fert.FERTIGKEITEN)) {
     const z = document.createElement('div');
     z.className = 'fert-zeile';
@@ -1705,6 +1928,39 @@ function fertZeichnen() {
       }
       feld.append(b);
     }
+  }
+}
+
+/* Was er sprechen kann, steht unter den Fertigkeiten — antippen legt den
+   Spruch auf den Knopf. Was er noch nicht kann, steht blass daneben: so
+   weiß man, wonach man in den Truhen sucht. */
+function zauberliste(feld) {
+  const h = held();
+  const kann = gelernte(h);
+
+  const kopf = document.createElement('div');
+  kopf.className = 'fert-zeile';
+  kopf.innerHTML = sym('funke')
+    + `<span class="txt"><b>Zauber</b><small>Antippen legt ihn auf den Knopf · `
+    + `lang auf den Knopf drücken blättert weiter</small></span>`
+    + `<span class="stufe-zahl">${kann.length}</span>`;
+  feld.append(kopf);
+
+  for (const id of ZAUBER_IDS) {
+    const z = ZAUBER[id];
+    const hat = kann.includes(id);
+    const dran = hat && h.aktiverZauber === id;
+    const b = document.createElement('button');
+    b.className = 'vorteil zauber-zeile' + (dran ? ' hat' : hat ? '' : ' aus');
+    b.innerHTML = `${sym(z.sym)}<span class="txt">`
+      + `<b style="color:${dinge.SELTENHEIT[z.guete].farbe}">${dran ? '✓ ' : ''}${z.name}</b>`
+      + `<small>${hat ? `${z.kurz} · ${z.kosten} Magicka`
+        : `${dinge.SELTENHEIT[z.guete].name} · noch nicht gelernt — ab Magie ${z.braucht}`}`
+      + `</small></span>`;
+    if (hat && !dran) {
+      b.addEventListener('click', () => { zauberWaehlen(id); fertZeichnen(); });
+    }
+    feld.append(b);
   }
 }
 
@@ -2344,6 +2600,11 @@ function frame() {
         juice.ring({ x: g.pos.x, y: g.pos.y, z: g.pos.z }, 1.2, '#f0e7d2', 0.3);
         audio.hit();
         feinde.schlagen(f, schaden, { x: g.vx, z: g.vz });
+        // Was die Eislanze trifft, kommt eine Weile nicht vom Fleck
+        if (g.lahm) {
+          feinde.belegen(f, 'lahm', g.lahm);
+          juice.popup({ x: f.pos.x, y: f.pos.y + 2.1, z: f.pos.z }, 'lahm', '#9fd8e8');
+        }
       },
       trefferSpieler: (schaden) => spielerNimmtSchaden(schaden, null),
       aufschlag: (g) => juice.ring({ x: g.pos.x, y: g.pos.y, z: g.pos.z }, 0.9, '#b9aa98', 0.25),
@@ -2376,6 +2637,14 @@ function frame() {
     if (state.time < vorher) state.tag++;    // ein Tag ist herum, die Läden füllen auf
     if (state.hieb > 0) state.hieb -= dt;
     if (state.zauber > 0) state.zauber -= dt;
+    if (state.schutz > 0) {
+      state.schutz -= dt;
+      // Solange sie traegt, staubt es grau um die Fuesse
+      if (Math.random() < dt * 6) {
+        juice.staub({ x: player.pos.x, y: player.pos.y + 0.4, z: player.pos.z }, 0.4, '#9aa3ab');
+      }
+      if (state.schutz <= 0) meldung('Die Steinhaut fällt ab.', '#9aa3ab', 2.6);
+    }
 
     // Ausdauer und Magicka füllen sich von allein — das Rennen zehrt daran
     h.ausdauer = state.rennt
@@ -2467,28 +2736,38 @@ function frame() {
     darkU.uDark.value = Math.max(state.under * 0.3, night * 0.45);
     darkU.uDarkTint.value.set(0.72, 0.58, 0.46);
 
-    // Zielleiste über dem Gegner, den wir gerade treffen würden
+    /* Zielleiste und Reden-Knopf hängen an Entfernungen, und genau an der
+       Grenze flackerten sie: ein Schritt hin, ein Schritt her, an, aus, an.
+       Deshalb bleiben beide nach dem letzten Ja noch einen Moment stehen —
+       das Auge sieht dann eine Anzeige statt eines Flimmerns. */
     const z = feinde.ziel(player.pos, player.facing, 3.4);
-    ui.ziel.classList.toggle('hidden', !z);
-    if (z) {
-      if (z !== letztesZiel) {
-        letztesZiel = z;
-        const st = z.art.stufe || 1;
-        ui.zielName.innerHTML = `${z.name || z.art.name} `
+    if (z) { letztesZiel = z; zielHalten = 0.35; } else if (zielHalten > 0) zielHalten -= dt;
+    const zeigeZiel = z || (zielHalten > 0 && letztesZiel && letztesZiel.hp > 0
+      ? letztesZiel : null);
+    ui.ziel.classList.toggle('hidden', !zeigeZiel);
+    if (zeigeZiel) {
+      if (zeigeZiel !== zielGezeigt) {
+        zielGezeigt = zeigeZiel;
+        const st = zeigeZiel.art.stufe || 1;
+        ui.zielName.innerHTML = `${zeigeZiel.name || zeigeZiel.art.name} `
           + `<span class="gefahr g${st}">${'◆'.repeat(st)}</span>`;
-        ui.ziel.classList.toggle('gezeichnet', !!z.gezeichnet);
+        ui.ziel.classList.toggle('gezeichnet', !!zeigeZiel.gezeichnet);
       }
-      ui.zielHp.style.width = `${Math.max(0, z.hp / z.hpMax * 100)}%`;
-    } else letztesZiel = null;
+      ui.zielHp.style.width = `${Math.max(0, zeigeZiel.hp / zeigeZiel.hpMax * 100)}%`;
+    } else { letztesZiel = null; zielGezeigt = null; }
+
     // Der Reden-Knopf erscheint nur, wenn es etwas zu tun gibt
     const w = was();
-    ui.rede.classList.toggle('hidden', !w);
-    if (w && w.art !== ui.rede.dataset.art) {
-      ui.rede.dataset.art = w.art;
-      symbol(ui.rede, w.art === 'npc' ? 'rede' : w.art === 'truhe' ? 'truhe'
-        : w.art === 'glimm' ? 'kristall' : w.art === 'waechter' ? 'kerze'
-        : w.art === 'bett' ? 'kerze' : w.art === 'schrein' ? 'glanz' : 'tor');
+    if (w) { letzteTat = w; tatHalten = 0.4; } else if (tatHalten > 0) tatHalten -= dt;
+    const zeigeTat = w || (tatHalten > 0 ? letzteTat : null);
+    ui.rede.classList.toggle('hidden', !zeigeTat);
+    if (zeigeTat && zeigeTat.art !== ui.rede.dataset.art) {
+      ui.rede.dataset.art = zeigeTat.art;
+      symbol(ui.rede, zeigeTat.art === 'npc' ? 'rede' : zeigeTat.art === 'truhe' ? 'truhe'
+        : zeigeTat.art === 'glimm' ? 'kristall' : zeigeTat.art === 'waechter' ? 'kerze'
+        : zeigeTat.art === 'bett' ? 'kerze' : zeigeTat.art === 'schrein' ? 'glanz' : 'tor');
     }
+    if (!zeigeTat) letzteTat = null;
 
     pfeilPflegen(dt);
 
@@ -2507,7 +2786,22 @@ function frame() {
 
 /* --------------------------------- Knöpfe ---------------------------------- */
 el('hauBtn').addEventListener('click', zuschlagen);
-el('wirkBtn').addEventListener('click', zaubern);
+/* Kurz tippen wirkt, lang drücken blättert zum nächsten Spruch. Auf dem
+   Handy ist das der kürzeste Weg — das Menü kann man sich sparen. */
+(() => {
+  const b = el('wirkBtn');
+  let halt = 0, geblaettert = false;
+  const los = () => {
+    geblaettert = false;
+    halt = setTimeout(() => { geblaettert = true; zauberBlaettern(); }, 420);
+  };
+  const auf = () => { clearTimeout(halt); };
+  b.addEventListener('pointerdown', los);
+  b.addEventListener('pointerup', auf);
+  b.addEventListener('pointercancel', auf);
+  b.addEventListener('pointerleave', auf);
+  b.addEventListener('click', () => { if (!geblaettert) zaubern(); geblaettert = false; });
+})();
 el('redeBtn').addEventListener('click', handeln);
 el('trinkBtn').addEventListener('click', trinken);
 el('rollBtn').addEventListener('click', ausweichen);
@@ -2534,6 +2828,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === ' ' || k === 'j') { zuschlagen(); e.preventDefault(); }
   if (k === 'k') zaubern();
+  if (k === 'l') zauberBlaettern();
   if (k === 'e') handeln();
   if (k === 'h') trinken();
   if (k === 'f') ausweichen();
@@ -2611,6 +2906,7 @@ function writeSave(auchTot = false) {
       dungeons: [...h.dungeons], orte: [...(h.orte || [])],
       gesehen: [...(h.gesehen || [])], erlegt: h.erlegt || {},
       schliff: h.schliff || {},
+      zauber: [...(h.zauber || [])], aktiverZauber: h.aktiverZauber || 'funkenschlag',
       beutel: h.beutel, rue: h.rue,
     },
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8),
@@ -2776,6 +3072,7 @@ function neuesSpiel() {
   state.buch = new Auftragsbuch();
   state.time = 0.3;
   state.dead = false;
+  state.schutz = 0;
   state.imDungeon = null;
   state.fallFrom = null;
   beutelAufloesen();
@@ -2803,6 +3100,8 @@ function weiterSpielen(d) {
   h.gesehen = new Set(d.held.gesehen || []);
   h.erlegt = d.held.erlegt || {};
   h.schliff = d.held.schliff || {};
+  h.zauber = new Set(d.held.zauber || []);
+  h.aktiverZauber = d.held.aktiverZauber || 'funkenschlag';
   state.held = h;
 
   state.buch = new Auftragsbuch();
@@ -2812,6 +3111,7 @@ function weiterSpielen(d) {
   state.time = d.time ?? 0.3;
   state.tag = d.tag ?? 0;
   state.dead = false;
+  state.schutz = 0;
   state.imDungeon = null;
   state.fallFrom = null;
   juice.reset();
@@ -2857,6 +3157,7 @@ el('againBtn').addEventListener('click', () => {
   h.ausdauer = h.ausdauerMax;
   h.magicka = fert.werte.magickaMax(h);
   state.dead = false;
+  state.schutz = 0;
   state.imDungeon = null;
   feinde.clear();
   const s = startplatz();
@@ -2897,6 +3198,8 @@ window.__game = {
   applyDaytime, sun, hemi, nachtGrad,
   camDistWert: () => camDist, camRohWert: () => camRoh,
   esseOeffnen, esseZeichnen, dinge, fert, auftragFuer, kontextFuer, leute,
+  ZAUBER, ZAUBER_IDS, gelernte, aktiverZauber, zauberWaehlen, zauberBlaettern,
+  zauberLernen, fertZeichnen,
 };
 
 resize();

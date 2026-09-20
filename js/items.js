@@ -9,63 +9,183 @@ import { mulberry32 } from './noise.js';
  *  damit sich das Gleichgewicht an einem Ort nachziehen lässt.
  * ========================================================================== */
 
+/* Vier Stufen. Sie färben den Namen, stehen im Beutel und im Laden, und sie
+   sagen einem auf einen Blick, ob ein Fund etwas taugt. Der Faktor ist keine
+   Rechenregel, sondern die Erwartung: ein sagenhaftes Stück ist ungefähr
+   doppelt so gut wie ein gemeines desselben Rangs. */
+export const SELTENHEIT = {
+  gemein:    { name: 'gemein',    farbe: '#8a7f70' },
+  selten:    { name: 'selten',    farbe: '#4f7fa8' },
+  episch:    { name: 'episch',    farbe: '#8a6bb0' },
+  sagenhaft: { name: 'sagenhaft', farbe: '#d9902a' },
+};
+
 export const DINGE = {
-  /* ------------------------------- Waffen -------------------------------- */
-  knueppel:    { name: 'Knüppel',        art: 'waffe', sym: 'schwert', schaden: 3,  wert: 18,  rang: 0,
+  /* --------------------------------- Waffen -------------------------------
+   * `form` sagt, wie die Waffe in der Hand aussieht — eine Axt ist kein
+   * Schwert mit anderer Zahl. `sym` ist ihr Zeichen im Beutel.
+   * ---------------------------------------------------------------------- */
+  knueppel:    { name: 'Knüppel',        art: 'waffe', sym: 'schwert', form: 'kolben',
+                 schaden: 3,  wert: 18,  rang: 0, guete: 'gemein',
                  klinge: '#9a6138', griff: '#7a4a2e',
                  text: 'Ein Ast mit Entschlossenheit.' },
-  kurzschwert: { name: 'Kurzschwert',    art: 'waffe', sym: 'schwert', schaden: 7,  wert: 70,  rang: 1,
+  beil:        { name: 'Handbeil',       art: 'waffe', sym: 'axt', form: 'axt',
+                 schaden: 5,  wert: 42,  rang: 0, guete: 'gemein',
+                 klinge: '#b9aa98', griff: '#8a5230',
+                 text: 'Eigentlich für Holz. Eigentlich.' },
+  kurzschwert: { name: 'Kurzschwert',    art: 'waffe', sym: 'schwert', form: 'klinge',
+                 schaden: 7,  wert: 70,  rang: 1, guete: 'gemein',
                  klinge: '#d8dde2', griff: '#8a5230',
                  text: 'Handlich. Tut, was man von ihm erwartet.' },
-  streitkolben:{ name: 'Streitkolben',   art: 'waffe', sym: 'schwert', schaden: 11, wert: 150, rang: 2,
+  holzspeer:   { name: 'Holzspeer',      art: 'waffe', sym: 'speer', form: 'speer',
+                 schaden: 6,  wert: 55,  rang: 1, guete: 'gemein', reichweite: 0.6,
+                 klinge: '#c3b79c', griff: '#a8743f',
+                 text: 'Man bleibt damit gern auf Abstand.' },
+
+  streitkolben:{ name: 'Streitkolben',   art: 'waffe', sym: 'kolben', form: 'kolben',
+                 schaden: 11, wert: 150, rang: 2, guete: 'selten',
                  klinge: '#b9aa98', griff: '#5e4634',
                  text: 'Gegen Knochen besonders überzeugend.' },
-  langschwert: { name: 'Langschwert',    art: 'waffe', sym: 'schwert', schaden: 16, wert: 320, rang: 3,
+  kriegsbeil:  { name: 'Kriegsbeil',     art: 'waffe', sym: 'axt', form: 'axt',
+                 schaden: 14, wert: 230, rang: 2, guete: 'selten',
+                 klinge: '#cfd6dd', griff: '#6a4a30',
+                 text: 'Zwei Hände wären besser, eine reicht.' },
+  langschwert: { name: 'Langschwert',    art: 'waffe', sym: 'schwert', form: 'klinge',
+                 schaden: 16, wert: 320, rang: 3, guete: 'selten',
                  klinge: '#e6ecf2', griff: '#4a3b30',
                  text: 'Reichweite ist die halbe Miete.' },
-  runenklinge: { name: 'Runenklinge',    art: 'waffe', sym: 'schwert', schaden: 24, wert: 760, rang: 4,
+  jagdspiess:  { name: 'Jagdspieß',     art: 'waffe', sym: 'speer', form: 'speer',
+                 schaden: 13, wert: 260, rang: 2, guete: 'selten', reichweite: 0.8,
+                 klinge: '#d8dde2', griff: '#8a5230',
+                 text: 'Der Keiler kommt bis hierher und nicht weiter.' },
+
+  mondsichel:  { name: 'Mondsichel',     art: 'waffe', sym: 'schwert', form: 'sichel',
+                 schaden: 20, wert: 520, rang: 3, guete: 'episch',
+                 klinge: '#dfe7ee', griff: '#3f3a52',
+                 text: 'Die Schneide liegt auf der falschen Seite. Trotzdem schneidet sie.' },
+  rabenschnabel:{ name: 'Rabenschnabel', art: 'waffe', sym: 'axt', form: 'picke',
+                 schaden: 22, wert: 610, rang: 3, guete: 'episch',
+                 klinge: '#9aa3ab', griff: '#2f2b3f',
+                 text: 'Sucht sich die Lücke im Panzer allein.' },
+  runenklinge: { name: 'Runenklinge',    art: 'waffe', sym: 'schwert', form: 'klinge',
+                 schaden: 24, wert: 760, rang: 4, guete: 'episch',
                  klinge: '#9fd8e8', griff: '#3f3a52',
                  text: 'Die Zeichen darauf liest niemand mehr.' },
 
-  /* -------------------------------- Bögen --------------------------------
+  glimmklinge: { name: 'Glimmklinge',    art: 'waffe', sym: 'schwert', form: 'klinge',
+                 schaden: 31, wert: 1450, rang: 4, guete: 'sagenhaft',
+                 klinge: '#f5c451', griff: '#7d5227', leuchtet: true,
+                 text: 'Sie war einmal eine Laterne. Jemand hat sie umgeschmiedet.' },
+  aschespalter:{ name: 'Aschespalter',   art: 'waffe', sym: 'axt', form: 'axt',
+                 schaden: 35, wert: 1700, rang: 4, guete: 'sagenhaft',
+                 klinge: '#e0654b', griff: '#4e3520', leuchtet: true,
+                 text: 'Aus dem Roten Grund. Sie ist dort nicht zufällig gelegen.' },
+  firnspeer:   { name: 'Firnspeer',      art: 'waffe', sym: 'speer', form: 'speer',
+                 schaden: 28, wert: 1380, rang: 4, guete: 'sagenhaft', reichweite: 0.9,
+                 klinge: '#bfdfe4', griff: '#93aec4', leuchtet: true,
+                 text: 'Die Spitze taut nicht auf.' },
+
+  /* --------------------------------- Bögen --------------------------------
    * `fern` macht aus dem Schlagknopf einen Schussknopf. Bögen tragen weniger
    * Schaden als Klingen desselben Rangs — sie bezahlen ihn mit Abstand.
    * ---------------------------------------------------------------------- */
-  jagdbogen:   { name: 'Jagdbogen',      art: 'waffe', sym: 'schwert', schaden: 5,  wert: 85,  rang: 1,
+  jagdbogen:   { name: 'Jagdbogen',      art: 'waffe', sym: 'bogen', form: 'bogen',
+                 schaden: 5,  wert: 85,  rang: 1, guete: 'gemein',
                  fern: 'pfeil', klinge: '#a8743f', griff: '#f0e7d2',
                  text: 'Zieht leicht. Trifft, wenn du ruhig stehst.' },
-  hornbogen:   { name: 'Hornbogen',      art: 'waffe', sym: 'schwert', schaden: 11, wert: 290, rang: 2,
+  hornbogen:   { name: 'Hornbogen',      art: 'waffe', sym: 'bogen', form: 'bogen',
+                 schaden: 11, wert: 290, rang: 2, guete: 'selten',
                  fern: 'pfeil', klinge: '#8a5230', griff: '#f6ead6',
                  text: 'Aus Horn und Sehne. Knackt beim Spannen.' },
-  langbogen:   { name: 'Langbogen',      art: 'waffe', sym: 'schwert', schaden: 18, wert: 680, rang: 3,
+  langbogen:   { name: 'Langbogen',      art: 'waffe', sym: 'bogen', form: 'bogen',
+                 schaden: 18, wert: 680, rang: 3, guete: 'episch',
                  fern: 'pfeil', klinge: '#6a4a30', griff: '#fdf6e8',
                  text: 'So hoch wie du. Er will beide Arme.' },
+  sturmbogen:  { name: 'Sturmbogen',     art: 'waffe', sym: 'bogen', form: 'bogen',
+                 schaden: 26, wert: 1520, rang: 4, guete: 'sagenhaft',
+                 fern: 'pfeil', klinge: '#9fd8e8', griff: '#ffffff', leuchtet: true,
+                 text: 'Der Pfeil ist fort, bevor die Sehne zurück ist.' },
 
   /* ------------------------------ Rüstungen ------------------------------ */
-  wams:        { name: 'Lederwams',      art: 'ruestung', sym: 'schild', panzer: 0.07, wert: 55,  rang: 1,
+  kutte:       { name: 'Wollkutte',      art: 'ruestung', sym: 'schild', panzer: 0.04, wert: 26,  rang: 0, guete: 'gemein',
+                 text: 'Besser als nichts, und das ist alles, was sie behauptet.' },
+  wams:        { name: 'Lederwams',      art: 'ruestung', sym: 'schild', panzer: 0.07, wert: 55,  rang: 1, guete: 'gemein',
                  text: 'Hält den Wind ab und manchmal mehr.' },
-  kettenhemd:  { name: 'Kettenhemd',     art: 'ruestung', sym: 'schild', panzer: 0.14, wert: 170, rang: 2,
+  kettenhemd:  { name: 'Kettenhemd',     art: 'ruestung', sym: 'schild', panzer: 0.14, wert: 170, rang: 2, guete: 'selten',
                  text: 'Schwer, laut, sein Geld wert.' },
-  schuppen:    { name: 'Schuppenpanzer', art: 'ruestung', sym: 'schild', panzer: 0.22, wert: 420, rang: 3,
+  hornpanzer:  { name: 'Hornpanzer',     art: 'ruestung', sym: 'schild', panzer: 0.18, wert: 280, rang: 2, guete: 'selten',
+                 text: 'Geschient mit dem, was der Keiler nicht mehr braucht.' },
+  schuppen:    { name: 'Schuppenpanzer', art: 'ruestung', sym: 'schild', panzer: 0.22, wert: 420, rang: 3, guete: 'episch',
                  text: 'Woher die Schuppen stammen, sagt der Händler nicht.' },
-  grabharnisch:{ name: 'Grabharnisch',   art: 'ruestung', sym: 'schild', panzer: 0.3,  wert: 880, rang: 4,
+  wyrmleder:   { name: 'Wyrmlederrock',  art: 'ruestung', sym: 'schild', panzer: 0.26, wert: 640, rang: 3, guete: 'episch',
+                 text: 'Es wird warm darin, sobald es kalt wird.' },
+  grabharnisch:{ name: 'Grabharnisch',   art: 'ruestung', sym: 'schild', panzer: 0.3,  wert: 880, rang: 4, guete: 'sagenhaft',
                  text: 'Jemand hat ihn lange getragen. Sehr lange.' },
+  firnharnisch:{ name: 'Firnharnisch',   art: 'ruestung', sym: 'schild', panzer: 0.34, wert: 1560, rang: 4, guete: 'sagenhaft',
+                 text: 'Er klirrt leise, auch wenn niemand sich bewegt.' },
 
   /* ------------------------------- Schmuck ------------------------------- */
-  kraftamulett:{ name: 'Amulett der Kraft', art: 'schmuck', sym: 'ring', schaden: 5,  wert: 190, rang: 2,
+  glasperle:   { name: 'Glasperle',         art: 'schmuck', sym: 'ring', magicka: 12, wert: 60,  rang: 0, guete: 'gemein',
+                 text: 'Ein Marktstück. Trotzdem wird der Kopf etwas klarer.' },
+  hasenpfote:  { name: 'Hasenpfote',        art: 'schmuck', sym: 'ring', tempo: 0.06, wert: 70,  rang: 1, guete: 'gemein',
+                 text: 'Dem Hasen hat sie weniger geholfen als dir.' },
+  kraftamulett:{ name: 'Amulett der Kraft', art: 'schmuck', sym: 'ring', schaden: 5,  wert: 190, rang: 2, guete: 'selten',
                  text: 'Der Arm wird nicht müder, nur überzeugter.' },
-  lebensring:  { name: 'Ring des Atems',    art: 'schmuck', sym: 'ring', leben: 30,   wert: 220, rang: 2,
+  lebensring:  { name: 'Ring des Atems',    art: 'schmuck', sym: 'ring', leben: 30,   wert: 220, rang: 2, guete: 'selten',
                  text: 'Man steht ein wenig länger.' },
-  magiestein:  { name: 'Quellstein',        art: 'schmuck', sym: 'ring', magicka: 35, wert: 210, rang: 2,
+  magiestein:  { name: 'Quellstein',        art: 'schmuck', sym: 'ring', magicka: 35, wert: 210, rang: 2, guete: 'selten',
                  text: 'Kalt, auch in der Sonne.' },
-  wanderschuh: { name: 'Schuhe des Boten',  art: 'schmuck', sym: 'stiefel', tempo: 0.18, wert: 240, rang: 3,
+  wanderschuh: { name: 'Schuhe des Boten',  art: 'schmuck', sym: 'stiefel', tempo: 0.18, wert: 240, rang: 3, guete: 'episch',
                  text: 'Sie kennen den Weg besser als du.' },
+  wolfskette:  { name: 'Zahnkette',         art: 'schmuck', sym: 'ring', schaden: 11, wert: 520, rang: 3, guete: 'episch',
+                 text: 'Neun Zähne, neun Wölfe. Man hört sie noch klappern.' },
+  ahnenring:   { name: 'Ring der Ahnen',    art: 'schmuck', sym: 'ring', schaden: 14, leben: 40, wert: 1400, rang: 4, guete: 'sagenhaft',
+                 text: 'Er sitzt sofort, als hätte er auf diese Hand gewartet.' },
+  sternenreif: { name: 'Sternenreif',       art: 'schmuck', sym: 'ring', magicka: 90, wert: 1250, rang: 4, guete: 'sagenhaft',
+                 text: 'Nachts sieht man darin mehr Licht, als ringsum ist.' },
 
   /* -------------------------------- Tränke ------------------------------- */
-  heiltrank:   { name: 'Heiltrank',      art: 'trank', sym: 'trank', heilt: 50, wert: 40, rang: 1,
+  heiltrank:   { name: 'Heiltrank',      art: 'trank', sym: 'trank', heilt: 50, wert: 40, rang: 1, guete: 'gemein',
                  text: 'Schmeckt nach Eisen und Minze.' },
-  magietrank:  { name: 'Quelltrank',     art: 'trank', sym: 'trank', magie: 45, wert: 35, rang: 1,
+  magietrank:  { name: 'Quelltrank',     art: 'trank', sym: 'trank', magie: 45, wert: 35, rang: 1, guete: 'gemein',
                  text: 'Prickelt hinter der Stirn.' },
+  grossHeil:   { name: 'Großer Heiltrank', art: 'trank', sym: 'trank', heilt: 130, wert: 120, rang: 3, guete: 'selten',
+                 text: 'Ein halber Liter. Man trinkt ihn nicht nebenbei.' },
+  grossMagie:  { name: 'Tiefe Quelle',   art: 'trank', sym: 'trank', magie: 120, wert: 110, rang: 3, guete: 'selten',
+                 text: 'Danach summt es eine Weile in den Fingern.' },
+
+  /* ------------------------------- Die Lehren -----------------------------
+   * Zauber liegen als Bücher in Truhen. Wer eines liest, kann den Spruch für
+   * immer — sofern seine Magie weit genug ist. Sonst legt er es zurück und
+   * übt erst einmal.
+   * ---------------------------------------------------------------------- */
+  lehreSplitter: { name: 'Vom Splittern der Steine', art: 'lehre', sym: 'buch',
+                   lehrt: 'steinsplitter', wert: 90,  rang: 1, guete: 'gemein',
+                   text: 'Eine Seite lang, der Rest sind Kritzeleien.' },
+  lehreEis:      { name: 'Das kalte Wort',           art: 'lehre', sym: 'buch',
+                   lehrt: 'eislanze',     wert: 320, rang: 2, guete: 'selten',
+                   text: 'Der Einband ist feucht, obwohl es hier nicht regnet.' },
+  lehreFlamme:   { name: 'Atem und Zunder',          art: 'lehre', sym: 'buch',
+                   lehrt: 'flammenhauch', wert: 340, rang: 2, guete: 'selten',
+                   text: 'An den Rändern angekokelt. Von innen.' },
+  lehreBalsam:   { name: 'Kräuter für Wunden',       art: 'lehre', sym: 'buch',
+                   lehrt: 'balsam',       wert: 360, rang: 2, guete: 'selten',
+                   text: 'Halb Rezeptbuch, halb Spruch. Beides hilft.' },
+  lehreStein:    { name: 'Der graue Panzer',         art: 'lehre', sym: 'buch',
+                   lehrt: 'steinhaut',    wert: 720, rang: 3, guete: 'episch',
+                   text: 'So schwer, dass man es kaum trägt. Das ist Absicht.' },
+  lehreRuf:      { name: 'Was sie fürchten',         art: 'lehre', sym: 'buch',
+                   lehrt: 'schreckensruf', wert: 700, rang: 3, guete: 'episch',
+                   text: 'Jemand hat jede zweite Zeile durchgestrichen.' },
+  lehreBlitz:    { name: 'Die springende Naht',      art: 'lehre', sym: 'buch',
+                   lehrt: 'blitzkette',   wert: 860, rang: 3, guete: 'episch',
+                   text: 'Die Schließe ist geschmolzen.' },
+  lehreSturm:    { name: 'Vom Himmel herab',         art: 'lehre', sym: 'buch',
+                   lehrt: 'himmelssturm', wert: 1900, rang: 4, guete: 'sagenhaft',
+                   text: 'Nur drei Worte darin. Man braucht Jahre für sie.' },
+  lehreAsche:    { name: 'Der Rote Grund spricht',   art: 'lehre', sym: 'buch',
+                   lehrt: 'ascheregen',   wert: 1800, rang: 4, guete: 'sagenhaft',
+                   text: 'Es färbt die Finger und lässt sich nicht abwaschen.' },
 
   /* -------------------------------- Krempel ------------------------------ */
   wolfsfell:   { name: 'Wolfsfell',      art: 'beute', sym: 'fell', wert: 14, rang: 0,

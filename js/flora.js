@@ -14,10 +14,12 @@ import * as props from './props.js';
  *  Standorte werden je Chunk einmal ausgerechnet und gemerkt.
  * ========================================================================== */
 
-const HOECHSTZAHL = {
-  tanne: 420, nadelbaum: 420, schneetanne: 260, birke: 300, laubbaum: 300,
-  palme: 140, totholz: 200, kaktus: 160, busch: 520, halm: 900, blume: 420, fels: 200,
-};
+/* Reichlich bemessen: ein dichter Nadelwald bringt im Umkreis leicht über
+   achthundert Stämme, und was darüber liegt, fällt weg. Lieber ein paar
+   Instanzen mehr zeichnen als Löcher im Wald. */
+const HOECHSTZAHL = { tanne: 900, nadelbaum: 900, schneetanne: 520, birke: 620,
+  laubbaum: 620, palme: 260, totholz: 400, kaktus: 300, busch: 900, halm: 1200,
+  blume: 700, fels: 380 };
 
 const BAUER = {
   tanne:       () => props.tanneBauen({ hoehe: 5 }),
@@ -106,20 +108,32 @@ export class Flora {
     for (const art of Object.keys(this.netze)) zaehler[art] = 0;
     this.nah = [];
 
+    /* Die Obergrenze je Sorte schneidet ab, sobald ein dichter Wald mehr
+       hergibt. Entscheidend ist, WAS sie abschneidet: lief man die Chunks
+       stur von -x nach +x ab, fiel immer dieselbe Ecke weg — und bei jedem
+       Chunkwechsel eine andere. Genau das ließ ganze Baumgruppen
+       verschwinden und wieder auftauchen. Jetzt kommen die nahen Chunks
+       zuerst, also fällt nur weg, was ohnehin im Dunst steht. */
+    const felder = [];
     for (let dz = -this.radius; dz <= this.radius; dz++) {
       for (let dx = -this.radius; dx <= this.radius; dx++) {
-        for (const g of this.chunkGewaechse(ccx + dx, ccz + dz)) {
-          const netz = this.netze[g.art];
-          const i = zaehler[g.art];
-          if (i >= HOECHSTZAHL[g.art]) continue;
-          _pos.set(g.x, g.y, g.z);
-          _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), g.dreh);
-          _skal.setScalar(g.skal);
-          _m.compose(_pos, _q, _skal);
-          netz.setMatrixAt(i, _m);
-          zaehler[g.art] = i + 1;
-          if (STAMMDICK[g.art]) this.nah.push(g);
-        }
+        felder.push({ dx, dz, d: dx * dx + dz * dz });
+      }
+    }
+    felder.sort((a, b) => a.d - b.d);
+
+    for (const { dx, dz } of felder) {
+      for (const g of this.chunkGewaechse(ccx + dx, ccz + dz)) {
+        const netz = this.netze[g.art];
+        const i = zaehler[g.art];
+        if (i >= HOECHSTZAHL[g.art]) continue;
+        _pos.set(g.x, g.y, g.z);
+        _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), g.dreh);
+        _skal.setScalar(g.skal);
+        _m.compose(_pos, _q, _skal);
+        netz.setMatrixAt(i, _m);
+        zaehler[g.art] = i + 1;
+        if (STAMMDICK[g.art]) this.nah.push(g);
       }
     }
 

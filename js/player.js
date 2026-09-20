@@ -75,9 +75,21 @@ export class Player {
     this.tool.position.set(-0.4, 0.92, 0.22);
     this.head2 = new THREE.Mesh(box(0.13, 0.5, 0.06), this.klingeMat);
     this.head2.position.set(-0.4, 0.66, 0.22);
+    // Ein drittes Stueck: Parierstange, Axtnacken, Wicklung - je nach Form.
+    // Ohne es sieht jede Waffe aus wie ein Brett an einem Stock.
+    this.zier = new THREE.Mesh(box(0.26, 0.1, 0.07), this.klingeMat);
+    this.zier.position.set(-0.4, 0.79, 0.22);
+    this.zier.visible = false;
+
+    // Wo die drei Stuecke ruhen. setWaffe schreibt hier hinein, die
+    // Schlaganimation rechnet von hier aus weiter.
+    this.wGriffY = 0.92;
+    this.wKopfX = 0; this.wKopfY = 0.66; this.wKopfKipp = 0;
+    this.wZierX = 0; this.wZierY = 0.79; this.wZierKipp = 0;
 
     [this.torso, rock, this.head, kapuze, schirm, augeL, augeR, this.armL, this.armR,
-     buegel, this.laterne, deckel, boden, this.legL, this.legR, this.tool, this.head2]
+     buegel, this.laterne, deckel, boden, this.legL, this.legR, this.tool, this.head2,
+     this.zier]
       .forEach((m) => { m.castShadow = true; this.group.add(m); });
 
     scene.add(this.group);
@@ -268,8 +280,17 @@ export class Player {
     const swingK = Math.max(0, this.swing / 0.25) * (this.bogen ? 0.45 : 1);
     this.armL.rotation.x = -swingK * 1.5 + (walking ? -stride * 0.4 : 0);
     this.tool.rotation.x = -swingK * 1.5;
-    this.tool.position.set(-0.4, 0.92 - swingK * 0.22, 0.22 + swingK * 0.2);
-    this.head2.position.set(-0.4, 0.66 - swingK * 0.44, 0.22 + swingK * 0.36);
+    this.tool.position.set(-0.4, this.wGriffY - swingK * 0.22, 0.22 + swingK * 0.2);
+    this.head2.rotation.x = -swingK * 1.5;
+    this.head2.rotation.z = this.wKopfKipp;
+    this.head2.position.set(-0.4 + this.wKopfX, this.wKopfY - swingK * 0.44,
+      0.22 + swingK * 0.36);
+    if (this.zier.visible) {
+      this.zier.rotation.x = -swingK * 1.5;
+      this.zier.rotation.z = this.wZierKipp;
+      this.zier.position.set(-0.4 + this.wZierX, this.wZierY - swingK * 0.32,
+        0.22 + swingK * 0.28);
+    }
 
     // Das Laternenglas atmet mit dem Licht
     const puls = 0.94 + Math.sin(this.t * 4.5) * 0.06;
@@ -297,25 +318,99 @@ export class Player {
     if (!d) {
       this.tool.visible = false;
       this.head2.visible = false;
+      this.zier.visible = false;
       return;
     }
     this.tool.visible = true;
     this.head2.visible = true;
     this.bogen = !!d.fern;
-    if (this.bogen) {
-      // Ein Bogen ist hoch und schmal, kein Blatt — und die Sehne ist hell
-      this.head2.scale.set(0.5, 1.9, 1.6);
-      this.tool.scale.set(0.35, 1.6, 0.35);
-      this.klingeMat.color.set(d.klinge || '#a8743f');
-      this.griffMat.color.set(d.griff || '#f0e7d2');
-      return;
-    }
-    this.tool.scale.set(1, 1, 1);
-    const laenge = 0.34 + (d.schaden || 0) * 0.026;
-    const breite = 0.1 + (d.schaden || 0) * 0.006;
-    this.head2.scale.set(breite / 0.13, laenge / 0.5, 1);
     this.klingeMat.color.set(d.klinge || '#d8dde2');
     this.griffMat.color.set(d.griff || '#8a5230');
+    // Sagenhaftes glimmt von selbst - das sieht man schon von weitem
+    this.klingeMat.emissive.set(d.leuchtet ? (d.klinge || '#f5c451') : '#000000');
+    this.klingeMat.emissiveIntensity = d.leuchtet ? 0.55 : 0;
+
+    // Grundstellung; jede Form schiebt danach nur, was sie braucht
+    this.tool.scale.set(1, 1, 1);
+    this.wGriffY = 0.92;
+    this.wKopfX = 0; this.wKopfY = 0.66; this.wKopfKipp = 0;
+    this.wZierX = 0; this.wZierY = 0.79; this.wZierKipp = 0;
+    this.zier.visible = false;
+    this.zier.scale.set(1, 1, 1);
+
+    const wucht = d.schaden || 0;
+
+    switch (d.form || (d.fern ? 'bogen' : 'klinge')) {
+      case 'bogen': {
+        // Ein Bogen ist hoch und schmal, kein Blatt - und die Sehne ist hell
+        this.head2.scale.set(0.5, 1.9, 1.6);
+        this.tool.scale.set(0.35, 1.6, 0.35);
+        this.wKopfY = 0.72;
+        break;
+      }
+      case 'kolben': {
+        // Kurzer Stiel, schwerer Klotz am Ende
+        this.tool.scale.set(1.15, 1.25, 1.15);
+        this.wGriffY = 0.95;
+        this.head2.scale.set(1.5 + wucht * 0.02, 0.5 + wucht * 0.012, 2.6);
+        this.wKopfY = 0.6;
+        break;
+      }
+      case 'axt': {
+        // Stiel lang, Blatt zur Seite, kleiner Nacken dagegen
+        this.tool.scale.set(0.95, 1.7, 0.95);
+        this.wGriffY = 0.88;
+        this.head2.scale.set(1.9 + wucht * 0.02, 0.62, 1.3);
+        this.wKopfX = -0.13; this.wKopfY = 0.56; this.wKopfKipp = 0.12;
+        this.zier.visible = true;
+        this.zier.scale.set(0.38, 0.85, 0.9);
+        this.wZierX = 0.08; this.wZierY = 0.58;
+        break;
+      }
+      case 'picke': {
+        // Schmaler Schnabel, weit nach vorn - sucht die Luecke
+        this.tool.scale.set(0.9, 1.5, 0.9);
+        this.wGriffY = 0.9;
+        this.head2.scale.set(0.45, 0.4, 3.4);
+        this.wKopfX = -0.05; this.wKopfY = 0.6; this.wKopfKipp = 0.5;
+        this.zier.visible = true;
+        this.zier.scale.set(0.34, 0.9, 0.7);
+        this.wZierX = 0.07; this.wZierY = 0.6;
+        break;
+      }
+      case 'speer': {
+        // Langer Schaft, kleine Spitze oben, zwei Wicklungen
+        this.tool.scale.set(0.8, 3.4, 0.8);
+        this.wGriffY = 0.9;
+        this.head2.scale.set(0.62, 0.46, 1.1);
+        this.wKopfY = 1.52;
+        this.zier.visible = true;
+        this.zier.scale.set(0.42, 0.22, 0.9);
+        this.wZierY = 1.22;
+        break;
+      }
+      case 'sichel': {
+        // Die Schneide liegt schraeg - zwei Stuecke, die sich biegen
+        this.tool.scale.set(1, 1.1, 1);
+        const l = 0.34 + wucht * 0.02;
+        this.head2.scale.set(0.9, l / 0.5, 1);
+        this.wKopfX = -0.08; this.wKopfY = 0.68; this.wKopfKipp = 0.55;
+        this.zier.visible = true;
+        this.zier.scale.set(0.5, 1.5, 0.9);
+        this.wZierX = -0.17; this.wZierY = 0.5; this.wZierKipp = 1.05;
+        break;
+      }
+      default: {
+        // Klinge: laenger und breiter, je mehr sie austeilt, dazu die Stange
+        const laenge = 0.34 + wucht * 0.026;
+        const breite = 0.1 + wucht * 0.006;
+        this.head2.scale.set(breite / 0.13, laenge / 0.5, 1);
+        this.zier.visible = true;
+        this.zier.scale.set(0.8 + wucht * 0.012, 1, 1);
+        this.wZierY = 0.8;
+        break;
+      }
+    }
   }
 
   jump() {

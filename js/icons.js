@@ -164,6 +164,95 @@ export const ICONS = {
     <path d="M8 3.2 h4.2 v7.4 l5.8 3.6 a3 3 0 0 1 1.4 2.6 v2 a1.6 1.6 0 0 1 -1.6 1.6 H5.6 A1.6 1.6 0 0 1 4 18.8 V4.8 A1.6 1.6 0 0 1 5.6 3.2 Z" fill="${F.holz}"/>
     <rect x="4" y="17.6" width="15.4" height="2.8" rx="1.2" fill="${F.holzTief}"/>`),
 
+  /* Eine Axt von oben: Stiel, Blatt, Nacken. */
+  axt: svg(`
+    <rect x="10.8" y="2.6" width="2.4" height="18.8" rx="1.1" fill="${F.holz}"/>
+    <path d="M13 3.6 C18.4 5 21 8.4 20.6 12.6 C18.6 11 15.8 10.4 13 10.6 Z" fill="${F.stahl}"/>
+    <path d="M13 3.6 C16.2 4.5 18.4 6.2 19.6 8.4 C17.6 7.4 15.2 6.9 13 6.8 Z" fill="${F.stahlTief}"/>
+    <rect x="9.6" y="9.6" width="3.6" height="2" rx="0.8" fill="${F.holzTief}"/>`),
+
+  /* Ein Speer: langer Schaft, schmale Spitze, Wicklung. */
+  speer: svg(`
+    <rect x="11" y="6.4" width="2" height="15" rx="0.9" fill="${F.holz}"/>
+    <path d="M12 1.4 L15 7.2 L12 9.2 L9 7.2 Z" fill="${F.stahl}"/>
+    <path d="M12 1.4 L15 7.2 L12 9.2 Z" fill="${F.stahlTief}"/>
+    <rect x="9.8" y="9.6" width="4.4" height="1.5" rx="0.7" fill="${F.holzTief}"/>
+    <rect x="9.8" y="12" width="4.4" height="1.5" rx="0.7" fill="${F.holzTief}"/>`),
+
+  /* Ein Streitkolben: Stiel und ein schwerer, gezackter Kopf. */
+  kolben: svg(`
+    <rect x="10.9" y="9" width="2.2" height="12.4" rx="1" fill="${F.holz}"/>
+    <path d="M12 1.6 L16.6 4.2 L16.6 9.4 L12 12 L7.4 9.4 L7.4 4.2 Z" fill="${F.stahl}"/>
+    <path d="M12 6.8 L16.6 4.2 L16.6 9.4 L12 12 Z" fill="${F.stahlTief}"/>
+    <rect x="9.6" y="20.4" width="4.8" height="2" rx="0.9" fill="${F.holzTief}"/>`),
+
+  /* Ein aufgeschlagenes Buch — daraus lernt man einen Zauber. */
+  buch: svg(`
+    <path d="M2.6 5.4 C6 4 9.4 4.2 12 6 L12 20 C9.4 18.2 6 18 2.6 19.4 Z" fill="${F.putz}"/>
+    <path d="M21.4 5.4 C18 4 14.6 4.2 12 6 L12 20 C14.6 18.2 18 18 21.4 19.4 Z" fill="${F.stahl}"/>
+    <path d="M11.2 5.6 h1.6 v14.8 h-1.6 Z" fill="${F.holzTief}"/>
+    <path d="M4.6 8.6 C6.6 8 8.4 8.2 10 9" fill="none" stroke="${F.holz}" stroke-width="1" opacity=".55"/>
+    <path d="M14 9 C15.6 8.2 17.4 8 19.4 8.6" fill="none" stroke="${F.holz}" stroke-width="1" opacity=".55"/>`),
+
+  /* ----------------------------- Zauberzeichen -----------------------------
+   * Jeder Zauber trägt sein eigenes Zeichen — auf dem Knopf sieht man, was
+   * gleich passiert, ohne den Namen zu lesen.
+   * ---------------------------------------------------------------------- */
+
+  /* Steinsplitter: drei Scherben nach außen. */
+  splitter: svg(`
+    <path d="M12 2.4 L15.4 9.6 L12 12.6 L8.6 9.6 Z" fill="${F.stahlTief}"/>
+    <path d="M4.4 12.4 L10.4 13.6 L9.4 19.4 L5 16.6 Z" fill="${F.holzTief}"/>
+    <path d="M19.6 12.4 L13.6 13.6 L14.6 19.4 L19 16.6 Z" fill="${F.holzTief}"/>`),
+
+  /* Eislanze: ein Kristallsplitter mit Frostkanten. */
+  eis: svg(`
+    <path d="M12 1.8 L16 10 L12 22.2 L8 10 Z" fill="#bfe4ef"/>
+    <path d="M12 1.8 L16 10 L12 22.2 Z" fill="#7fb8cf"/>
+    <path d="M4.4 7.4 L9.4 11 M19.6 7.4 L14.6 11" stroke="${F.putz}" stroke-width="1.5" stroke-linecap="round"/>`),
+
+  /* Flammenhauch: eine Zunge Feuer. */
+  flamme: svg(`
+    <path d="M12 1.6 C16.6 6.4 19 10 19 13.8 A7 7 0 0 1 5 13.8 C5 10.6 6.6 8.4 8.4 6.6 C8.2 9 9 10.4 10.2 11 C10 7.6 10.6 4.4 12 1.6 Z" fill="#e0654b"/>
+    <path d="M12 9.4 C14.4 12 15.4 13.8 15.4 15.4 A3.4 3.4 0 0 1 8.6 15.4 C8.6 13.8 10 11.8 12 9.4 Z" fill="${F.gold}"/>`),
+
+  /* Balsam: ein Blatt mit einem Tropfen — das heilt. */
+  balsam: svg(`
+    <path d="M19.4 4 C11 4 5.6 7.4 5.6 13.6 C5.6 16.8 7.4 19 10 19.6 C11.4 12.8 15 8.6 19.4 4 Z" fill="${F.salbei}"/>
+    <path d="M19.4 4 C15 8.6 11.4 12.8 10 19.6 C9.4 15.4 12 8.6 19.4 4 Z" fill="#5c8a42"/>
+    <path d="M6.4 20.4 C4.6 18.6 4 17 4 15.6" fill="none" stroke="#5c8a42" stroke-width="1.6" stroke-linecap="round"/>`),
+
+  /* Steinhaut: ein Schild aus Bruchstein. */
+  steinhaut: svg(`
+    <path d="M12 2.2 L20 5 V12 C20 17 16.6 20.4 12 21.8 C7.4 20.4 4 17 4 12 V5 Z" fill="#9aa3ab"/>
+    <path d="M12 2.2 L20 5 V12 C20 17 16.6 20.4 12 21.8 Z" fill="#7d868e"/>
+    <path d="M12 6.4 L15.6 9.4 L14.2 14 H9.8 L8.4 9.4 Z" fill="${F.putz}" opacity=".7"/>`),
+
+  /* Schreckensruf: ein Mund und drei Schallringe. */
+  ruf: svg(`
+    <path d="M4 9.4 L8.2 9.4 L12.6 5.2 V18.8 L8.2 14.6 L4 14.6 Z" fill="${F.putz}"/>
+    <path d="M15.2 8.4 C17 10.4 17 13.6 15.2 15.6" fill="none" stroke="${F.gold}" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M18 5.8 C21.2 9 21.2 15 18 18.2" fill="none" stroke="${F.gold}" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>`),
+
+  /* Blitzkette: der Zickzack. */
+  blitz: svg(`
+    <path d="M13.6 1.6 L5.6 13 H10.8 L9.4 22.4 L18.4 10.2 H12.8 Z" fill="${F.gold}"/>
+    <path d="M13.6 1.6 L5.6 13 H10.8 Z" fill="${F.putz}" opacity=".8"/>`),
+
+  /* Himmelssturm: eine Wolke, aus der es zuckt. */
+  sturm: svg(`
+    <path d="M6.6 13.6 A4 4 0 0 1 7.6 5.8 A5.4 5.4 0 0 1 17.6 6.8 A3.6 3.6 0 0 1 17.2 13.6 Z" fill="#8f9aa4"/>
+    <path d="M12.8 12.4 L8.4 18.4 H11.4 L10.4 23 L15.4 16.4 H12.2 Z" fill="${F.gold}"/>
+    <path d="M5.4 16.4 L4 19.6 M19 16.4 L17.6 19.6" stroke="#8f9aa4" stroke-width="1.6" stroke-linecap="round"/>`),
+
+  /* Ascheregen: Körner, die fallen. */
+  asche: svg(`
+    <path d="M5.4 10.6 A3.6 3.6 0 0 1 6.6 3.8 A5 5 0 0 1 16 4.8 A3.2 3.2 0 0 1 15.8 10.6 Z" fill="#7d6a5e"/>
+    <circle cx="7" cy="14.4" r="1.7" fill="#e0654b"/>
+    <circle cx="12.4" cy="17.4" r="2.1" fill="#e0654b"/>
+    <circle cx="17.6" cy="13.6" r="1.5" fill="${F.gold}"/>
+    <circle cx="15" cy="21" r="1.3" fill="#e0654b" opacity=".7"/>`),
+
   /* Eine Münze. */
   muenze: svg(`
     <circle cx="12" cy="12" r="9" fill="${F.gold}"/>
