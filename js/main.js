@@ -879,6 +879,8 @@ function beutelZeigen() {
 
 function beutelAufloesen() {
   if (beutelObj) { scene.remove(beutelObj); beutelObj = null; }
+  rauteKern.visible = false;
+  rauteRand.visible = false;
   state.beutel = null;
 }
 
@@ -1335,6 +1337,71 @@ function naechsteGruft() {
                   - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
 }
 
+/* ---------------------------- Wer gemeint ist ------------------------------
+ * Der Pfeil zeigt eine Richtung, aber im Dorf stehen fünfzehn Leute, und
+ * einer davon wartet. Über dem wartet deshalb eine Raute: sie schwebt, dreht
+ * sich langsam und liegt über allem — auch über Dächern, sonst müsste man
+ * jedes Haus einzeln betreten, um sie zu finden.
+ * -------------------------------------------------------------------------- */
+const rauteGeo = new THREE.OctahedronGeometry(0.58, 0);
+const rauteKern = new THREE.Mesh(rauteGeo, new THREE.MeshBasicMaterial({
+  color: '#f5c451', transparent: true, opacity: 0.98,
+  depthWrite: false, depthTest: false,
+}));
+rauteKern.renderOrder = 22;
+const rauteRand = new THREE.Mesh(rauteGeo, new THREE.MeshBasicMaterial({
+  color: '#7d5227', transparent: true, opacity: 0.9,
+  depthWrite: false, depthTest: false,
+}));
+rauteRand.renderOrder = 21;
+rauteRand.scale.setScalar(1.32);
+rauteKern.visible = false;
+rauteRand.visible = false;
+scene.add(rauteKern, rauteRand);
+
+/** Wen soll man gerade ansprechen? Gibt den Dorfbewohner zurück oder nichts. */
+function gemeinterMensch() {
+  const v = verfolgtes();
+  if (!v) return null;
+
+  if (v.art === 'haupt') {
+    // Zum Chronisten muss man, solange kein Kapitel läuft oder eines voll ist
+    const st = state.geschichte;
+    if (st.gestartet && !story.kapitelFertig(st)) return null;
+    return leute.liste.find((n) => n.chronist) || null;
+  }
+
+  // Ein erledigter Auftrag will zurückgebracht werden — zu genau dem einen
+  const q = v.q;
+  if (!q || !q.fertig) return null;
+  return leute.liste.find((n) => (q.geberSaat != null && n.saat === q.geberSaat))
+    || leute.liste.find((n) => n.name === q.geberName) || null;
+}
+
+let rautenDreh = 0;
+function rautePflegen(dt) {
+  const wer = gemeinterMensch();
+  if (!wer) { rauteKern.visible = false; rauteRand.visible = false; return; }
+
+  const hoch = wer.obj && wer.obj.visible !== false;
+  const d = Math.hypot(wer.pos.x - player.pos.x, wer.pos.z - player.pos.z);
+  if (!hoch || d > 90) { rauteKern.visible = false; rauteRand.visible = false; return; }
+
+  rautenDreh += dt * 1.6;
+  const schweben = Math.sin(rautenDreh * 1.1) * 0.16;
+  const y = wer.pos.y + 2.7 + schweben;
+  rauteKern.position.set(wer.pos.x, y, wer.pos.z);
+  rauteRand.position.set(wer.pos.x, y, wer.pos.z);
+  rauteKern.rotation.y = rautenDreh;
+  rauteRand.rotation.y = rautenDreh;
+  // Ganz nah wird sie kleiner: dann sieht man ja, vor wem man steht
+  const gross = (d < 4 ? 0.65 : 1) * (1 + Math.sin(rautenDreh * 2.2) * 0.06);
+  rauteKern.scale.setScalar(gross);
+  rauteRand.scale.setScalar(gross * 1.32);
+  rauteKern.visible = true;
+  rauteRand.visible = true;
+}
+
 function pfeilPflegen(dt) {
   const ziel = zielPunkt();
   if (!ziel) { pfeil.visible = false; pfeilRand.visible = false; return; }
@@ -1399,7 +1466,7 @@ function chronistOeffnen(n) {
   if (!st.vorgestellt && k.id === 0) {
     const herk = herkunftVon(h.herkunft);
     redeZeigen(story.fuellen(k.rede, st, schlundRichtung()), [
-      { label: `„${herk.wort}"`, unten: `aus der ${herk.name}`,
+      { label: `„${herk.wort}"`, unten: herk.woher,
         tun: () => {
           st.vorgestellt = true;
           redeZeigen(`${herk.antwort}\n\n${k.aufgabe}`, [
@@ -1979,7 +2046,7 @@ function menuZeichnen(tab = 'fert') {
   const [titel, unter] = MENU_KOPF[tab] || MENU_KOPF.fert;
   el('menuTitel').textContent = titel;
   el('menuUnter').textContent = tab === 'fert'
-    ? `${h.name || 'Namenlos'} aus der ${herkunftVon(h.herkunft).name} · Stufe ${h.stufe}`
+    ? `${h.name || 'Namenlos'} ${herkunftVon(h.herkunft).woher} · Stufe ${h.stufe}`
       + `${h.punkte > 0 ? ` · ${h.punkte} Punkt${h.punkte > 1 ? 'e' : ''} frei` : ''}`
     : unter;
   el('menuGold').textContent = h.gold;
@@ -3244,6 +3311,7 @@ function frame() {
     if (!zeigeTat) letzteTat = null;
 
     pfeilPflegen(dt);
+    rautePflegen(dt);
 
     hudTimer -= dt;
     if (hudTimer <= 0) { hudTimer = 0.22; updateHUD(); }
@@ -3980,7 +4048,7 @@ window.__game = {
   flora, biomeAt, surfaceAt,
   dinge, trinken, ladenOeffnen, ladenZeichnen, beutelZeichnen,
   story, chronistOeffnen, waechterAnsprechen, endeZeigen, kapitelGeschafft,
-  pfeil, zielPunkt, questsZeichnen,
+  pfeil, zielPunkt, questsZeichnen, gemeinterMensch, rauteKern,
   heimkehr, karteZeichnen, menuZeichnen,
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
   orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel, wetter,

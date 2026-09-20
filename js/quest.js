@@ -159,6 +159,10 @@ export function auftragFuer(geberSaat, kontext, beruf = '') {
       : kontext.dungeonPos,
     geberOrt: kontext.geberPos || null,
     geberName: kontext.geberName || null,
+    /* Die Saat des Gebers: nur daran lässt sich später genau der eine
+       Mensch wiederfinden, der den Auftrag gegeben hat — Namen gibt es
+       im Dorf mehrfach, Standorte wandern. */
+    geberSaat,
     wo: v.wo || (v.art === 'toeten' || v.art === 'truhe' ? 'dungeon' : 'frei'),
     menge,
     stand: 0,

@@ -46,9 +46,12 @@ export const LATERNEN = [
  * Jede gibt Ausrüstung, eine Fertigkeit und — wichtiger — einen Satz. Der
  * Chronist antwortet darauf, und der Wächter am Ende erinnert sich daran.
  * -------------------------------------------------------------------------- */
+/* `woher` steht ausgeschrieben dabei, weil „aus der Wildwald" falsch ist und
+   eine Regel für den Artikel mehr Code wäre als vier Zeilen Text. */
 export const HERKUNFT = [
   {
     id: 'koehler',
+    woher: 'aus der Köhlerhütte',
     name: 'Köhlerhütte',
     text: 'Im Rauch groß geworden, mit einem Beil in der Hand.',
     gabe: 'Handbeil · 2 Heiltränke · Klinge 2',
@@ -61,6 +64,7 @@ export const HERKUNFT = [
   },
   {
     id: 'kraemer',
+    woher: 'aus dem Krämerladen',
     name: 'Krämerladen',
     text: 'Rechnen konntest du, bevor du lesen konntest.',
     gabe: '260 Gold · Lederwams · Spüren 2',
@@ -73,6 +77,7 @@ export const HERKUNFT = [
   },
   {
     id: 'kloster',
+    woher: 'aus der Klosterschule',
     name: 'Klosterschule',
     text: 'Man hat dir Buchstaben beigebracht, bis du sie hasstest.',
     gabe: 'Steinsplitter · 2 Quelltränke · Magie 2',
@@ -86,6 +91,7 @@ export const HERKUNFT = [
   },
   {
     id: 'wildwald',
+    woher: 'aus dem Wildwald',
     name: 'Wildwald',
     text: 'Der Wald hat dich durchgefüttert. Der Förster hat dich nie erwischt.',
     gabe: 'Jagdbogen · Hasenpfote · Wandern 2',
