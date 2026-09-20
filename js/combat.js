@@ -419,6 +419,19 @@ export class Feinde {
       schaden: Math.round(art.schaden * skalierung),
       wach: false, takt: 0, weh: 0, wank: Math.random() * 7,
       heimX: x, heimZ: z,
+      /* Umherziehen hat einen eigenen Kopf: ein Ziel, zu dem es geht, eine
+         Pause, in der es steht, und eine Blickrichtung, die es nicht in
+         einem Bild wechselt. Vorher lief all das über `wank` — dieselbe
+         Zahl, die den Gang taktet. Weil die beim Gehen elfmal in der
+         Sekunde weiterzählt, drehte sich die Laufrichtung genauso schnell:
+         das Getier lief im Kreis, statt irgendwohin. */
+      gehZiel: null,
+      ruhe: Math.random() * 4,        // steht noch so lange herum
+      schlender: 0.36 + Math.random() * 0.2,   // keiner geht wie der andere
+      zaeh: 0,                        // wie lange es schon an dasselbe Ziel will
+      blick: Math.random() * Math.PI * 2,
+      schauZeit: Math.random() * 3,
+      schauZiel: Math.random() * Math.PI * 2,
       gesinnung: art.gesinnung || 'wild',
       flucht: 0,                      // wie lange es noch wegläuft
       lahm: 0,                        // von einem Zauber festgehalten
@@ -500,10 +513,17 @@ export class Feinde {
       if (scheu && spielerLebt && dist < 8 && dy < 5) f.flucht = Math.max(f.flucht, 2.5);
 
       let zielX = 0, zielZ = 0;
+      /* Gedreht wird nie in einem Bild, sondern mit einer Drehgeschwindigkeit.
+         Im Kampf schnell, beim Herumstehen gemächlich — ein Wolf, der
+         augenblicklich herumschnappt, sieht aus wie ein Zeiger, kein Tier. */
+      let drehZu = null, drehTempo = 7;
+
       if ((scheu || f.schreck > 0) && f.flucht > 0 && dist > 0.001) {
         // Weg vom Spieler, so schnell die Beine tragen
         zielX = -dx / dist; zielZ = -dz / dist;
-        f.obj.rotation.y = Math.atan2(zielX, zielZ);
+        drehZu = Math.atan2(zielX, zielZ);
+        drehTempo = 9;
+        f.gehZiel = null;
       } else if (f.wach && spielerLebt) {
         if (art.fern && dist < art.abstand && dist > 0.001) {
           // Schützen suchen den Abstand, aus dem sie treffen und nicht getroffen werden
@@ -513,16 +533,58 @@ export class Feinde {
         } else if (dist > art.reichweite * 0.8) {
           zielX = dx / dist; zielZ = dz / dist;
         }
-        f.obj.rotation.y = Math.atan2(dx, dz);
+        drehZu = Math.atan2(dx, dz);
+        drehTempo = 8;
+        f.gehZiel = null;
       } else {
-        // Ohne Ziel wandert er ein wenig um seinen Platz
-        f.wank += dt * 0.6;
+        /* Sonst lebt es vor sich hin: ein Stück gehen, stehen bleiben, sich
+           umsehen, weitergehen. Wer zu weit von zu Hause ist, sucht sich sein
+           nächstes Ziel in die Richtung zurück. */
+        if (f.ruhe > 0) f.ruhe -= dt;
         const hx = f.heimX - f.pos.x, hz = f.heimZ - f.pos.z;
         const hd = Math.hypot(hx, hz);
-        if (hd > 6) { zielX = hx / hd * 0.4; zielZ = hz / hd * 0.4; }
-        else { zielX = Math.cos(f.wank) * 0.25; zielZ = Math.sin(f.wank * 0.7) * 0.25; }
-        if (zielX || zielZ) f.obj.rotation.y = Math.atan2(zielX, zielZ);
+
+        if (!f.gehZiel && f.ruhe <= 0) {
+          const heim = hd > 7 ? Math.atan2(hx, hz) : Math.random() * Math.PI * 2;
+          const w = heim + (hd > 7 ? (Math.random() - 0.5) * 1.1 : 0);
+          const weit = 2.5 + Math.random() * 5;
+          f.gehZiel = { x: f.pos.x + Math.sin(w) * weit, z: f.pos.z + Math.cos(w) * weit };
+          f.zaeh = 0;
+        }
+
+        if (f.gehZiel) {
+          const gx = f.gehZiel.x - f.pos.x, gz = f.gehZiel.z - f.pos.z;
+          const gd = Math.hypot(gx, gz);
+          f.zaeh += dt;
+          if (gd < 0.7 || f.zaeh > 7) {
+            // Angekommen — oder es kommt nicht weiter. Beides heißt: Pause.
+            f.gehZiel = null;
+            f.ruhe = 1.6 + Math.random() * 5.5;
+            f.schauZeit = 0.4 + Math.random() * 1.2;
+          } else {
+            // Gemächlich, nicht im Jagdtempo
+            zielX = (gx / gd) * f.schlender; zielZ = (gz / gd) * f.schlender;
+            drehZu = Math.atan2(gx, gz);
+            drehTempo = 2.6;
+          }
+        } else {
+          // Im Stehen dreht sich der Kopf ab und zu woandershin
+          f.schauZeit -= dt;
+          if (f.schauZeit <= 0) {
+            f.schauZeit = 1.4 + Math.random() * 3.5;
+            f.schauZiel = f.blick + (Math.random() - 0.5) * 2.4;
+          }
+          drehZu = f.schauZiel;
+          drehTempo = 1.5;
+        }
       }
+
+      if (drehZu !== null) {
+        const weg = ((drehZu - f.blick + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        const kann = drehTempo * dt;
+        f.blick += Math.max(-kann, Math.min(kann, weg));
+      }
+      f.obj.rotation.y = f.blick;
 
       const schritt = art.tempo * (f.flucht > 0 ? 1.25 : 1)
         * (f.lahm > 0 ? 0.42 : 1) * (f.gezeichnet ? 1.1 : 1) * dt;
@@ -636,6 +698,15 @@ export class Feinde {
     } else {
       // Atem im Stand: kaum sichtbar, aber ohne wirkt alles wie eingefroren
       lang = 1 + Math.sin(f.wank) * 0.012;
+      /* Und alle paar Atemzüge geht der Kopf ins Gras. Das ist die billigste
+         Art, aus einer stehenden Figur ein Tier zu machen: es tut etwas,
+         auch wenn es nichts tut. Wer wach ist, frisst natürlich nicht. */
+      if (bau === 'vierbeiner' && !f.wach && !f.gehZiel) {
+        const t = Math.sin(f.wank * 0.55);
+        const grasen = Math.max(0, t - 0.2) / 0.8;
+        neig += grasen * 0.32;
+        hoch -= grasen * 0.06;
+      }
     }
 
     // Ausholen: zurücklehnen und größer werden, dann nach vorn schnellen
