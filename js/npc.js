@@ -55,6 +55,7 @@ export class Leute {
     this.scene = scene;
     this.liste = [];
     this.muster = new Map();
+    this.stand = -1;              // Stand der Dorfliste, die zuletzt gesehen wurde
   }
 
   musterFuer(kleid, haar) {
@@ -66,10 +67,21 @@ export class Leute {
   clear() {
     for (const n of this.liste) this.scene.remove(n.obj);
     this.liste.length = 0;
+    this.stand = -1;              // beim nächsten Mal wieder neu aufstellen
   }
 
   /** Stellt die Leute der Dörfer in Reichweite auf und räumt ferne ab. */
   update(dt, world, doerfer, spielerPos, nacht = false) {
+    // Nur wenn ein Dorf dazugekommen oder weggefallen ist — sonst steht die
+    // Mannschaft ja schon.
+    if (this.stand !== doerfer.stand) {
+      this.stand = doerfer.stand;
+      this.aufstellen(world, doerfer);
+    }
+    this.laufen(dt, world, spielerPos, nacht);
+  }
+
+  aufstellen(world, doerfer) {
     const gewollt = new Map();
     for (const l of doerfer.alleLeute()) {
       // Der Schlüssel muss die Person meinen, nicht das Haus — im Wirtshaus
@@ -114,8 +126,10 @@ export class Leute {
         takt: rand() * 6, ziel: null, auftrag: null,
       });
     }
+  }
 
-    // Umherlaufen — tagsüber ums Haus, nachts hinein
+  /** Umherlaufen — tagsüber ums Haus, nachts hinein. */
+  laufen(dt, world, spielerPos, nacht) {
     for (const n of this.liste) {
       if (n.stubenhocker) this.stubenlauf(n, dt);
       else if (nacht) this.heimgehen(n, dt);

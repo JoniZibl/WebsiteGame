@@ -115,6 +115,29 @@ const plaene = new Map();
 const zellen = new Map();
 export function zellenLeeren() { zellen.clear(); plaene.clear(); }
 
+/* Gemerkt wird, was einmal gerechnet wurde — sonst liefe für jeden Block ein
+   neuer Zufallsgenerator an. Nur: wer eine halbe Stunde in eine Richtung
+   läuft, schleppt sonst jede Gruft mit, an der er je vorbeikam. Was weit
+   hinter einem liegt, darf vergessen werden; kommt man zurück, steht es aus
+   demselben Saatkorn wieder genauso da. */
+const GEDAECHTNIS = 9;          // Zellen in jede Richtung, also gut 1500 Schritt
+
+function fernVergessen(karte, i0, j0) {
+  for (const key of karte.keys()) {
+    const k = key.indexOf(',');
+    if (Math.abs(+key.slice(0, k) - i0) > GEDAECHTNIS
+        || Math.abs(+key.slice(k + 1) - j0) > GEDAECHTNIS) karte.delete(key);
+  }
+}
+
+export function vergessen(x, z) {
+  const grenze = (GEDAECHTNIS * 2 + 1) * (GEDAECHTNIS * 2 + 1);
+  if (zellen.size <= grenze && plaene.size <= grenze) return;
+  const i0 = Math.round(x / RASTER), j0 = Math.round(z / RASTER);
+  fernVergessen(zellen, i0, j0);
+  fernVergessen(plaene, i0, j0);
+}
+
 /** Liegt in dieser Rasterzelle eine Gruft? Das Ergebnis wird gemerkt — sonst
  *  liefe für jeden einzelnen Block ein neuer Zufallsgenerator an. */
 export function gruftInZelle(i, j) {

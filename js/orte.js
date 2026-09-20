@@ -33,6 +33,21 @@ const NAMEN = {
 const zellen = new Map();
 export function zellenLeeren() { zellen.clear(); }
 
+/* Wie bei den Gruften: gemerkt bleibt die Nachbarschaft, nicht die ganze
+   zurückgelegte Strecke. Alles hier hängt nur am Saatkorn, steht also beim
+   Zurückkommen unverändert wieder da. */
+const GEDAECHTNIS = 9;
+
+export function vergessen(x, z) {
+  if (zellen.size <= (GEDAECHTNIS * 2 + 1) * (GEDAECHTNIS * 2 + 1)) return;
+  const i0 = Math.round(x / RASTER), j0 = Math.round(z / RASTER);
+  for (const key of zellen.keys()) {
+    const k = key.indexOf(',');
+    if (Math.abs(+key.slice(0, k) - i0) > GEDAECHTNIS
+        || Math.abs(+key.slice(k + 1) - j0) > GEDAECHTNIS) zellen.delete(key);
+  }
+}
+
 export function ortInZelle(i, j) {
   const key = i + ',' + j;
   if (zellen.has(key)) return zellen.get(key);

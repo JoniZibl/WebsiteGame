@@ -151,6 +151,10 @@ export class GameAudio {
     osc.connect(gain).connect(this.master);
     osc.start(t);
     osc.stop(t + dur + 0.02);
+    /* Abgeklemmt wird von Hand. Ein verklungener Ton bleibt sonst als toter
+       Knoten am Mischpult hängen, und nach einer halben Stunde Spielen hängen
+       dort Tausende — der Tonfaden rechnet sie jedes Mal mit durch. */
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   /** Gefilterter Rauschstoß — für alles, was schlägt oder zischt. */
@@ -168,6 +172,7 @@ export class GameAudio {
     src.connect(filter).connect(gain).connect(this.master);
     src.start(t);
     src.stop(t + dur + 0.02);
+    src.onended = () => { src.disconnect(); filter.disconnect(); gain.disconnect(); };
   }
 
   // ---------------------------------------------------------------- Effekte
@@ -255,6 +260,7 @@ export class GameAudio {
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 5.5);
     gain.connect(this.master);
 
+    let offen = 2;
     for (const detune of [-4, 4]) {
       const osc = this.ctx.createOscillator();
       osc.type = s.klang;
@@ -263,6 +269,7 @@ export class GameAudio {
       osc.connect(gain);
       osc.start(t);
       osc.stop(t + 5.7);
+      osc.onended = () => { osc.disconnect(); if (--offen === 0) gain.disconnect(); };
     }
   }
 }

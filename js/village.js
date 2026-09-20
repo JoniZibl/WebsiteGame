@@ -220,6 +220,10 @@ export class Doerfer {
     this.scene = scene;
     this.heimatKey = null;         // im Heimatdorf wohnt der Chronist
     this.aktiv = new Map();        // "i,j" -> { gruppe, dorf, plan }
+    /* Zählt jedes Ein- und Aushängen. Wer die Dorfbewohner aufstellt, braucht
+       die Liste nur dann neu — vorher wurde sie in jedem einzelnen Bild
+       zusammengesetzt, samt einer Kopie jeder Person. */
+    this.stand = 0;
     this.muster = {
       brunnen: props.brunnenBauen(),
       laterne: props.laterneBauen(),
@@ -283,12 +287,14 @@ export class Doerfer {
       }
       this.scene.add(gruppe);
       this.aktiv.set(key, { gruppe, dorf, plan });
+      this.stand++;
     }
 
     for (const [key, eintrag] of [...this.aktiv]) {
       if (gewollt.has(key)) continue;
       this.scene.remove(eintrag.gruppe);
       this.aktiv.delete(key);
+      this.stand++;
     }
   }
 

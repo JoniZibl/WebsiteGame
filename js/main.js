@@ -3,7 +3,7 @@ import {
   VoxelWorld, B, BLOCKS, AIR, isSolid, setSeed, getSeed, biomeAt, surfaceAt, stratumAt,
   BIOMES,
   kartenBild,
-  doerferUm, dorfBei, HEIGHT, SEA, CHUNK,
+  doerferUm, dorfBei, HEIGHT, SEA, CHUNK, dorfZellenPflegen,
 } from './voxel.js';
 import { Player } from './player.js';
 import { Input } from './input.js';
@@ -3092,7 +3092,9 @@ let saveTimer = 0;
 
 function frame() {
   requestAnimationFrame(frame);
-  const raw = Math.min(clock.getDelta(), 1 / 20);
+  const roh = clock.getDelta();
+  leistungPruefen(roh);
+  const raw = Math.min(roh, 1 / 20);
   const dt = juice.update(raw);
 
   if (state.running && !state.gespraech && !ladenWirt) {
@@ -3130,6 +3132,13 @@ function frame() {
     world.update(player.pos.x, player.pos.z, 1);
     doerfer.update(player.pos.x, player.pos.z);
     flora.update(player.pos.x, player.pos.z);
+    /* Alles, was aus dem Saatkorn gerechnet und dann gemerkt wird, vergisst
+       hier, was weit hinter einem liegt. Ohne das wächst der Speicher mit
+       jeder Minute Laufen weiter, und irgendwann räumt der Browser mitten im
+       Bild auf — das ist das Ruckeln, das nach einer Weile einsetzt. */
+    gruft.vergessen(player.pos.x, player.pos.z);
+    orte.vergessen(player.pos.x, player.pos.z);
+    dorfZellenPflegen(player.pos.x, player.pos.z);
     leute.update(dt, world, doerfer, player.pos, istNacht());
     // Wer in ein Haus tritt, dem wird das Dach abgenommen
     state.imHaus = doerfer.daecherPflegen(player.pos.x, player.pos.z);
@@ -3486,9 +3495,14 @@ tippen(soundBtn, () => {
 });
 
 /* ------------------------------- Bildgröße --------------------------------- */
+/* Obergrenze für die Pixeldichte. Null heißt: keine. Der Wächter weiter
+   unten zieht sie herunter, wenn das Gerät nicht mehr mitkommt. */
+let dprDeckel = 0;
+
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
-  const dpr = Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : 1.5);
+  const dpr = Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : 1.5,
+    dprDeckel || 99);
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
   post.setSize(w, h, dpr);
@@ -3518,8 +3532,86 @@ function applyQuality() {
 }
 tippen(el('qualityBtn'), () => {
   quality = quality === 'high' ? 'low' : 'high';
+  /* Wer selbst schaltet, hat das letzte Wort: der Wächter fängt von vorn an,
+     und das Bild bekommt wieder volle Auflösung und vollen Bewuchs. */
+  wunschGrafik = quality;
+  sparstufe = 0;
+  dprDeckel = 0;
+  hakenFolge = 0;
+  glattFolge = 0;
+  flora.duennen(1);
   applyQuality();
 });
+
+/* ------------------------------ Wenn es hakt -------------------------------
+ * Ein Telefon wird warm, und irgendwann drosselt es sich selbst. Dagegen hilft
+ * kein Aufräumen im Spiel — dann muss das Bild billiger werden. Gemessen wird
+ * alle vier Sekunden die mittlere Bildzeit.
+ *
+ * Herunter geht es erst, wenn sie zweimal hintereinander über vierzig
+ * Millisekunden liegt — ein Gerät, das sauber mit dreißig Bildern läuft, ist
+ * damit sicher: dreiunddreißig Millisekunden sind kein Hakeln. Herauf geht es
+ * wieder, wenn eine halbe Minute lang alles glatt lief. Die Lücke zwischen
+ * beiden Schwellen ist Absicht: ein Bild, das zwischen zwei Stufen hin und her
+ * springt, ist unangenehmer als eines, das dauerhaft etwas einfacher aussieht.
+ * -------------------------------------------------------------------------- */
+const HAKT = 0.040;             // darüber ist es zu langsam (unter 25 Bilder)
+const GLATT = 0.022;            // darunter läuft es sicher rund (über 45)
+let sparstufe = 0;              // 0 = alles an, 3 = so sparsam wie möglich
+let hakenFolge = 0;
+let glattFolge = 0;
+const bildzeiten = [];
+let hakenTimer = 4;
+
+/* Was der Spieler haben will. Der Wächter darf darunter bleiben, aber nie
+   darüber hinausgehen — und wenn es wieder rund läuft, kommt genau das
+   zurück, was hier steht. */
+let wunschGrafik = quality;
+
+function sparstufeSetzen(stufe) {
+  sparstufe = Math.max(0, Math.min(3, stufe));
+  // Stufe 1 nimmt den Schattenwurf, 2 die Pixeldichte, 3 den halben Bewuchs
+  const soll = sparstufe >= 1 ? 'low' : wunschGrafik;
+  dprDeckel = sparstufe >= 2 ? 1 : 0;
+  flora.duennen(sparstufe >= 3 ? 0.6 : 1);
+  if (soll !== quality) { quality = soll; applyQuality(); }   // ruft resize mit
+  else resize();
+}
+
+function leistungPruefen(roh) {
+  // Im Menü und nach dem Wegklicken wird nicht gemessen
+  if (!state.running || roh > 0.5) return;
+  bildzeiten.push(roh);
+  hakenTimer -= roh;
+  if (hakenTimer > 0) return;
+  hakenTimer = 4;
+  /* Wenige Messwerte heißt nicht „nichts gemessen", sondern: es lief so
+     zäh, dass in vier Sekunden kaum ein Bild zustande kam. Genau dann muss
+     der Wächter zuschlagen — eine hohe Mindestzahl hat ihn vorher gerade in
+     diesem Fall ausgeschaltet. */
+  if (bildzeiten.length < 5) { bildzeiten.length = 0; return; }
+  bildzeiten.sort((a, b) => a - b);
+  const mitte = bildzeiten[bildzeiten.length >> 1];
+  bildzeiten.length = 0;
+
+  if (mitte > HAKT) {
+    glattFolge = 0;
+    if (++hakenFolge < 2 || sparstufe >= 3) return;
+    hakenFolge = 0;
+    sparstufeSetzen(sparstufe + 1);
+    meldung(sparstufe >= 3 ? 'Weniger Gewächs — damit es läuft'
+      : sparstufe === 2 ? 'Bild etwas gröber — dafür flüssiger'
+      : 'Grafik: einfacher — für ruhigere Bilder', '#7d5227', 2.8);
+    return;
+  }
+
+  hakenFolge = 0;
+  if (mitte > GLATT || sparstufe === 0) { glattFolge = 0; return; }
+  // Eine halbe Minute ohne Hakeln: eine Stufe zurück nach oben
+  if (++glattFolge < 8) return;
+  glattFolge = 0;
+  sparstufeSetzen(sparstufe - 1);
+}
 
 /* ------------------------------ Spielstand --------------------------------- */
 function writeSave(auchTot = false) {
@@ -4059,6 +4151,7 @@ window.__game = {
   ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden, geschosse,
   applyDaytime, sun, hemi, nachtGrad,
   camDistWert: () => camDist, camRohWert: () => camRoh,
+  sparstufeWert: () => sparstufe,
   esseOeffnen, esseZeichnen, dinge, fert, auftragFuer, kontextFuer, leute,
   updateHUD, dingBlatt, fertZeichnen, verkaufFuer,
   ZAUBER, ZAUBER_IDS, gelernte, aktiverZauber, zauberWaehlen, zauberBlaettern,

@@ -44,6 +44,7 @@ const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _pos = new THREE.Vector3();
 const _skal = new THREE.Vector3();
+const _achse = new THREE.Vector3(0, 1, 0);
 
 export class Flora {
   constructor(scene, radius = 4) {
@@ -52,6 +53,10 @@ export class Flora {
     this.chunks = new Map();      // "cx,cz" -> Liste von Gewächsen
     this.netze = {};
     this.letzterChunk = null;
+    /* Wie voll es stehen darf. Eins heißt: so dicht wie gedacht. Der
+       Leistungswächter zieht das herunter, wenn ein Gerät nicht mehr
+       mitkommt — lieber ein lichterer Wald als ein hakendes Bild. */
+    this.duenn = 1;
 
     for (const [art, bauer] of Object.entries(BAUER)) {
       const { geometry, material } = props.bauteil(bauer);
@@ -97,12 +102,27 @@ export class Flora {
     return liste;
   }
 
+  /* Wer eine Stunde lang geradeaus läuft, hat sonst jedes Feld, das er je
+     gesehen hat, noch im Kopf — und der Speicher wächst, bis das Aufräumen
+     des Browsers jedes Bild unterbricht. Gemerkt bleibt nur, was in
+     Sichtweite liegt; der Rest ist in einem Wimpernschlag neu gerechnet. */
+  vergessen(ccx, ccz) {
+    const weit = this.radius + 3;
+    if (this.chunks.size <= (weit * 2 + 1) * (weit * 2 + 1)) return;
+    for (const key of this.chunks.keys()) {
+      const k = key.indexOf(',');
+      const cx = +key.slice(0, k), cz = +key.slice(k + 1);
+      if (Math.abs(cx - ccx) > weit || Math.abs(cz - ccz) > weit) this.chunks.delete(key);
+    }
+  }
+
   /** Nur bei Chunkwechsel neu zusammenstellen — das reicht völlig. */
   update(px, pz, erzwingen = false) {
     const ccx = Math.floor(px / CHUNK), ccz = Math.floor(pz / CHUNK);
     const key = `${ccx},${ccz}`;
     if (!erzwingen && key === this.letzterChunk) return;
     this.letzterChunk = key;
+    this.vergessen(ccx, ccz);
 
     const zaehler = {};
     for (const art of Object.keys(this.netze)) zaehler[art] = 0;
@@ -126,9 +146,9 @@ export class Flora {
       for (const g of this.chunkGewaechse(ccx + dx, ccz + dz)) {
         const netz = this.netze[g.art];
         const i = zaehler[g.art];
-        if (i >= HOECHSTZAHL[g.art]) continue;
+        if (i >= HOECHSTZAHL[g.art] * this.duenn) continue;
         _pos.set(g.x, g.y, g.z);
-        _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), g.dreh);
+        _q.setFromAxisAngle(_achse, g.dreh);
         _skal.setScalar(g.skal);
         _m.compose(_pos, _q, _skal);
         netz.setMatrixAt(i, _m);
@@ -142,6 +162,12 @@ export class Flora {
       netz.instanceMatrix.needsUpdate = true;
       netz.computeBoundingSphere?.();
     }
+  }
+
+  /** Lichtet den Bewuchs aus und stellt ihn im nächsten Bild neu auf. */
+  duennen(faktor) {
+    this.duenn = Math.max(0.35, Math.min(1, faktor));
+    this.letzterChunk = null;
   }
 
   /** Schiebt einen Punkt aus dem nächsten Stamm heraus. */

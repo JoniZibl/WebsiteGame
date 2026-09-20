@@ -148,6 +148,21 @@ const DORF_RASTER = 230;
 
 const dorfZellen = new Map();
 
+/* Auch hier wird nur die Nachbarschaft behalten. Das Raster ist grob, also
+   fällt das kaum ins Gewicht — aber „kaum" mal einer Stunde Laufen ist eben
+   doch etwas. */
+const DORF_GEDAECHTNIS = 7;
+
+export function dorfZellenPflegen(x, z) {
+  if (dorfZellen.size <= (DORF_GEDAECHTNIS * 2 + 1) * (DORF_GEDAECHTNIS * 2 + 1)) return;
+  const i0 = Math.round(x / DORF_RASTER), j0 = Math.round(z / DORF_RASTER);
+  for (const key of dorfZellen.keys()) {
+    const k = key.indexOf(',');
+    if (Math.abs(+key.slice(0, k) - i0) > DORF_GEDAECHTNIS
+        || Math.abs(+key.slice(k + 1) - j0) > DORF_GEDAECHTNIS) dorfZellen.delete(key);
+  }
+}
+
 /** Liegt in dieser Rasterzelle ein Dorf? Rein aus den Koordinaten gerechnet.
  *  Gemerkt wird es trotzdem: surfaceAt fragt für jeden Block nach. */
 export function dorfInZelle(i, j) {
@@ -398,6 +413,27 @@ export class VoxelWorld {
     this.queue = [];
     this.edits = new Map();      // "x,y,z" -> Blocksorte (auch AIR)
     this.plants = new Map();     // vorgemerkte Pflanzenblöcke je Chunk
+    /* Dieselben Änderungen noch einmal, nach Chunk sortiert. Ohne das lief
+       jeder gebaute Chunk durch ALLE Änderungen und zerlegte jeden Schlüssel neu —
+       wer lange gräbt, bezahlt das bei jedem nachgeladenen Stück Welt. */
+    this.editChunks = new Map();
+    this.editStand = -1;
+  }
+
+  /** Die Änderungen dieses Chunks — einmal sortiert, dann gemerkt. */
+  editsIn(cx, cz) {
+    if (this.editStand !== this.edits.size) {
+      this.editStand = this.edits.size;
+      this.editChunks.clear();
+      for (const [k, block] of this.edits) {
+        const [x, y, z] = k.split(',');
+        const key = Math.floor(+x / CHUNK) + ',' + Math.floor(+z / CHUNK);
+        let liste = this.editChunks.get(key);
+        if (!liste) { liste = []; this.editChunks.set(key, liste); }
+        liste.push(+x, +y, +z, block);
+      }
+    }
+    return this.editChunks.get(cx + ',' + cz);
   }
 
   key(cx, cz) { return cx + ',' + cz; }
@@ -420,6 +456,7 @@ export class VoxelWorld {
 
   set(x, y, z, block) {
     this.edits.set(this.ekey(x, y, z), block);
+    this.editStand = -1;            // die Sortierung nach Chunks ist veraltet
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     const chunk = this.chunks.get(this.key(cx, cz));
     if (chunk) {
@@ -454,10 +491,11 @@ export class VoxelWorld {
     }
 
     // Veränderungen des Spielers gewinnen immer
-    for (const [k, block] of this.edits) {
-      const [ex, ey, ez] = k.split(',').map(Number);
-      if (ex < ox || ex >= ox + CHUNK || ez < oz || ez >= oz + CHUNK) continue;
-      data[((ez - oz) * CHUNK + (ex - ox)) * HEIGHT + ey] = block;
+    const eigene = this.editsIn(cx, cz);
+    if (eigene) {
+      for (let i = 0; i < eigene.length; i += 4) {
+        data[((eigene[i + 2] - oz) * CHUNK + (eigene[i] - ox)) * HEIGHT + eigene[i + 1]] = eigene[i + 3];
+      }
     }
 
     const chunk = { cx, cz, data, mesh: null, water: null };

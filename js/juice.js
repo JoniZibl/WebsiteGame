@@ -51,6 +51,15 @@ export class Juice {
       return { el, t: 0, life: 0, pos: new THREE.Vector3(), rise: 0 };
     });
     this._v = new THREE.Vector3();
+
+    /* Die Bildgröße wird gemerkt statt in jedem Bild für jede Zahl neu beim
+       Browser erfragt — das Abfragen kann ihn zwingen, das Layout vorher
+       fertig zu rechnen, und das mitten im Bild. */
+    this.breite = window.innerWidth;
+    this.hoehe = window.innerHeight;
+    const messen = () => { this.breite = window.innerWidth; this.hoehe = window.innerHeight; };
+    window.addEventListener('resize', messen);
+    window.addEventListener('orientationchange', () => setTimeout(messen, 200));
   }
 
   /** Kurzer Bildruck — der Klassiker, der jeden Treffer verkauft. */
@@ -144,8 +153,8 @@ export class Juice {
       if (k >= 1) { p.life = 0; p.el.style.opacity = '0'; continue; }
 
       this._v.copy(p.pos).project(this.camera);
-      const x = (this._v.x * 0.5 + 0.5) * window.innerWidth;
-      const y = (-this._v.y * 0.5 + 0.5) * window.innerHeight - k * p.rise;
+      const x = (this._v.x * 0.5 + 0.5) * this.breite;
+      const y = (-this._v.y * 0.5 + 0.5) * this.hoehe - k * p.rise;
       const pop = k < 0.2 ? 1 + (0.2 - k) * 2.4 : 1;
       p.el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${pop})`;
       p.el.style.opacity = String(1 - k * k);
