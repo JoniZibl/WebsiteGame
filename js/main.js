@@ -269,7 +269,8 @@ function updateHUD() {
 
   ui.ortName.textContent = state.ort;
   if (state.imDungeon) {
-    ui.ortInfo.textContent = `Gruft · Stufe ${state.imDungeon.stufe}`;
+    const a = gruft.artVon(state.imDungeon);
+    ui.ortInfo.textContent = `${a.name} · Stufe ${state.imDungeon.stufe}`;
   } else {
     const gegend = biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
     const g = gefahrVon(gegend.id);
@@ -2558,7 +2559,7 @@ function karteZeichnen() {
     box.append(s);
   };
   for (const d of doerferUm(px, pz, R)) setz(d.x, d.z, 'dorf');
-  for (const g of gruft.grueftUm(px, pz, R)) setz(g.x, g.z, 'gruft');
+  for (const g of gruft.grueftUm(px, pz, R)) setz(g.x, g.z, `gruft ${g.art || 'gruft'}`);
   for (const o of orte.orteUm(px, pz, R)) setz(o.x, o.z, `ort ${o.art}`);
   const ziel = zielPunkt();
   if (ziel) setz(ziel.x, ziel.z, 'ziel');
@@ -2574,6 +2575,9 @@ function karteZeichnen() {
   leg.className = 'karte-legende';
   leg.innerHTML = '<span class="wort"><span class="punkt dorf"></span>Dorf</span>'
     + '<span class="wort"><span class="punkt gruft"></span>Gruft</span>'
+    + '<span class="wort"><span class="punkt gruft frost"></span>Frost</span>'
+    + '<span class="wort"><span class="punkt gruft moor"></span>Moor</span>'
+    + '<span class="wort"><span class="punkt gruft glut"></span>Glut</span>'
     + '<span class="wort"><span class="punkt ort turm"></span>Landmarke</span>'
     + '<span class="wort"><span class="punkt ziel"></span>Ziel</span>'
     + '<span class="wort"><span class="punkt du"></span>du</span>'

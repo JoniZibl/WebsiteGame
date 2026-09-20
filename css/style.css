@@ -868,3 +868,11 @@ body:not(.spielt) #zielleiste { display: none; }
 
 /* Der Schlusstext hat Absätze — sie sollen auch welche bleiben. */
 #endeText, #deadWer { white-space: pre-line; }
+
+/* Die Gruften auf der Karte tragen die Farbe ihrer Art — man sieht vorher,
+   worauf man sich einlässt. */
+.punkt.gruft.frost   { background: #9fd8e8; }
+.punkt.gruft.moor    { background: #6f8452; }
+.punkt.gruft.glut    { background: #c9543f; }
+.punkt.gruft.stollen { background: #8a5230; }
+.punkt.gruft.halle   { background: #e8a83c; }

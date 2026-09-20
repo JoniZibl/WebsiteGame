@@ -283,8 +283,7 @@ export function generateIn(sp, x, y, z) {
   // der Schacht muss ja irgendwo anfangen.
   if (sp.gruften.length) {
     const hohl = gruft.hohlIn(sp.gruften, x, y, z);
-    if (hohl === 1) return AIR;
-    if (hohl === 2 || hohl === 3) return B.planke;
+    if (hohl) return gruftStoff(sp.gruften, x, z, hohl);
   }
 
   const surface = sp.surface;
@@ -308,6 +307,37 @@ export function generateIn(sp, x, y, z) {
   }
   if (depth < 4) return B.erde;
   return oreAt(x, y, z, depth);
+}
+
+/* ---------------------------- Die Stoffe unter Tage ------------------------
+ * dungeon.js sagt nur, welche Rolle ein Block spielt — Boden, Säule, Wasser,
+ * Ader. Woraus das gemacht ist, entscheidet die Art der Gruft: die Mine legt
+ * Geröll und Stützbalken, die Halle Planken und Quader, die Frostgrotte
+ * friert alles zu Eis. Damit sieht jede Art anders aus, ohne dass der
+ * Grundriss davon etwas wissen müsste.
+ * -------------------------------------------------------------------------- */
+const GRUFTSTOFF = {
+  gruft:   { 2: B.planke,  3: B.planke, 4: B.wasser, 5: B.glimm, 6: B.kies,   7: B.stein },
+  stollen: { 2: B.kies,    3: B.planke, 4: B.wasser, 5: B.glimm, 6: B.stamm,  7: B.stamm },
+  halle:   { 2: B.planke,  3: B.planke, 4: B.wasser, 5: B.glimm, 6: B.kies,   7: B.planke },
+  frost:   { 2: B.schnee,  3: B.eis,    4: B.eis,    5: B.glimm, 6: B.eis,    7: B.eis },
+  moor:    { 2: B.moor,    3: B.planke, 4: B.wasser, 5: B.moos,  6: B.stamm,  7: B.planke },
+  glut:    { 2: B.rotfels, 3: B.planke, 4: B.wasser, 5: B.glimm, 6: B.kies,   7: B.rotfels },
+};
+
+function gruftStoff(plaeneNah, x, z, rolle) {
+  if (rolle === 1) return AIR;
+  // Welcher Plan hier liegt, entscheidet über den Stoff; meist ist es nur einer
+  let art = 'gruft';
+  for (const p of plaeneNah) {
+    const h = p.huelle;
+    if (x >= h.minX - 1 && x <= h.maxX + 1 && z >= h.minZ - 1 && z <= h.maxZ + 1) {
+      art = p.art || 'gruft';
+      break;
+    }
+  }
+  const tafel = GRUFTSTOFF[art] || GRUFTSTOFF.gruft;
+  return tafel[rolle] || B.planke;
 }
 
 /** Einzelabfrage — bequem, aber teuer. In Schleifen lieber spalte() nehmen. */
@@ -625,4 +655,4 @@ export function kartenBild(mx, mz, schritt, n) {
 
 /* Die Gruften bekommen Gelände und Saatkorn erst hier - vorher gibt es
    rohSurface noch nicht. */
-gruft.verbinden(rohSurface, () => SEED);
+gruft.verbinden(rohSurface, () => SEED, (x, z) => biomeAt(x, z).id);
