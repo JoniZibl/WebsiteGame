@@ -243,6 +243,11 @@ function updateHUD() {
   el('rollBtn').classList.toggle('leer', h.ausdauer < 16);
   trinkKnopfPflegen();
 
+  // Was im Beutel liegt, erledigt Lieferaufträge von selbst
+  for (const q of state.buch.beutelPruefen(h)) {
+    meldung(`„${q.titel}" — beisammen`, '#7fae5e', 3.0);
+  }
+
   ui.ortName.textContent = state.ort;
   if (state.imDungeon) {
     ui.ortInfo.textContent = `Gruft · Stufe ${state.imDungeon.stufe}`;
@@ -361,8 +366,14 @@ function feindGefallen(f) {
     audio.gem(3);
     meldung(`Stufe ${h.stufe}!`, '#e8a83c', 3.2);
   }
-  const fertigeQ = state.buch.melden('toeten',
-    { imDungeon: !!state.imDungeon, friedlich: f.gesinnung === 'friedlich' });
+  const fertigeQ = [
+    ...state.buch.melden('toeten',
+      { imDungeon: !!state.imDungeon, friedlich: f.gesinnung === 'friedlich' }),
+    // Ein erlegtes Wesen zählt gleich für mehrere Arten von Auftrag
+    ...state.buch.melden('jagd', { wesen: f.id }),
+    ...state.buch.melden('gezeichnet', { gezeichnet: !!f.gezeichnet }),
+    ...state.buch.melden('ort', { ortId: f.herkunft }),
+  ];
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
   if (f.id === 'waechter' && story.melden(state.geschichte, 'waechter', {})) {
      endeZeigen('klinge');
@@ -775,6 +786,9 @@ function schreinAnrufen(ort) {
   audio.gem(3);
   juice.ring({ x: ort.x, y: player.pos.y + 0.5, z: ort.z }, 3.4, '#f5c451');
   meldung('Der Schrein nimmt dich an — +4 Leben', '#e8a83c', 3.4);
+  for (const q of state.buch.melden('schrein', { ortId: ort.id })) {
+    meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
+  }
   updateHUD();
   writeSave();
 }
@@ -1237,12 +1251,50 @@ function ortsname(dorf) {
   return silben1[a] + silben2[b];
 }
 
+/* Was ein Auftraggeber über seine Umgebung weiß: die nächste Gruft, das
+   Nachbardorf, und — neu — welche Landmarken in seiner Reichweite liegen,
+   was in seiner Gegend herumläuft und welcher Stoff ihm gerade fehlt.
+   Dadurch schickt er einen an einen Ort, den es wirklich gibt. */
 function kontextFuer(n) {
   const naheGruft = gruft.grueftUm(n.pos.x, n.pos.z, 520)
     .sort((a, b) => Math.hypot(a.x - n.pos.x, a.z - n.pos.z) - Math.hypot(b.x - n.pos.x, b.z - n.pos.z))[0];
   const nachbar = doerferUm(n.pos.x, n.pos.z, 700)
     .filter((d) => d.i !== n.dorf.i || d.j !== n.dorf.j)[0];
+
+  // Die nächste Landmarke je Sorte — nur was in Laufweite liegt
+  const nah = {};
+  for (const o of orte.orteUm(n.pos.x, n.pos.z, 480)) {
+    const d = Math.hypot(o.x - n.pos.x, o.z - n.pos.z);
+    if (!nah[o.art] || d < nah[o.art].d) {
+      nah[o.art] = { id: o.id, name: o.name, x: o.x, z: o.z, d,
+                     zahl: orte.inhalt(o).feinde.length };
+    }
+  }
+
+  // Ein Wesen aus der Gegend, das einem auch etwas tut
+  const gegend = biomeAt(Math.floor(n.pos.x), Math.floor(n.pos.z));
+  let wesen = null;
+  for (let i = 0; i < 8 && !wesen; i++) {
+    const id = wesenWaehlen(gegend.id, i > 4);
+    const a = ARTEN[id];
+    if (a && a.gesinnung !== 'friedlich' && !a.boss) wesen = { id, name: a.name };
+  }
+
+  // Und ein Stoff, den es in dieser Gegend zu holen gibt
+  const stoffe = [];
+  const bew = BEWOHNER[gegend.id];
+  if (bew) {
+    for (const [w] of [...bew.tag, ...bew.nacht]) {
+      const beute = ARTEN[w] && ARTEN[w].beute;
+      if (beute && DINGE[beute] && !stoffe.includes(beute)) stoffe.push(beute);
+    }
+  }
+  const wareId = stoffe.length ? stoffe[Math.abs(n.saat) % stoffe.length] : null;
+
   return {
+    orte: nah,
+    wesen,
+    ware: wareId ? { id: wareId, name: DINGE[wareId].name } : null,
     dungeonName: naheGruft ? naheGruft.name : 'der alten Gruft',
     dungeonPos: naheGruft ? { x: naheGruft.x, z: naheGruft.z } : null,
     nachbarort: nachbar ? ortsname(nachbar) : 'Steinfurt',
@@ -1253,7 +1305,7 @@ function kontextFuer(n) {
 }
 
 function redeOeffnen(n) {
-  if (!n.auftrag) n.auftrag = auftragFuer(n.saat, kontextFuer(n));
+  if (!n.auftrag) n.auftrag = auftragFuer(n.saat, kontextFuer(n), n.gewerbe.name);
   state.gespraech = n;
   el('redeName').textContent = n.name;
   el('redeBeruf').textContent = n.gewerbe.name;
@@ -2844,7 +2896,7 @@ window.__game = {
   ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden, geschosse,
   applyDaytime, sun, hemi, nachtGrad,
   camDistWert: () => camDist, camRohWert: () => camRoh,
-  esseOeffnen, esseZeichnen, dinge, fert,
+  esseOeffnen, esseZeichnen, dinge, fert, auftragFuer, kontextFuer, leute,
 };
 
 resize();
