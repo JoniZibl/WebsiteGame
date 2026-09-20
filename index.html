@@ -141,7 +141,43 @@
     </div>
   </div>
 
-  <div id="start" class="overlay">
+  <!-- Der Vorspann: drei Sätze über dem dunklen Land, bevor irgendetwas anderes
+       kommt. Wer ihn kennt, tippt ihn weg. -->
+  <div id="vorspann" class="vorspann hidden">
+    <p id="vorspannText"></p>
+    <small id="vorspannHinweis">tippen &rarr; weiter</small>
+  </div>
+
+  <!-- Wer man ist. Die Figur steht dahinter im Bild und dreht sich. -->
+  <div id="schoepfung" class="overlay unten hidden">
+    <div class="karte schoepf-karte">
+      <header class="blatt-kopf">
+        <span class="kopf-text"><b>Wer bist du?</b><small id="schoepfUnter">Such dir ein Gesicht aus.</small></span>
+        <button id="wuerfelBtn" class="schliessen" title="würfeln">&#9860;</button>
+      </header>
+      <div class="blatt-koerper">
+        <div class="name-feld">
+          <span>Name</span>
+          <input id="heldName" type="text" maxlength="14" autocomplete="off" spellcheck="false" />
+        </div>
+        <p class="abschnitt">Gewand</p>
+        <div class="farbreihe" id="wahlGewand"></div>
+        <p class="abschnitt">Haut</p>
+        <div class="farbreihe" id="wahlHaut"></div>
+        <p class="abschnitt">Haar &amp; Kapuze</p>
+        <div class="farbreihe" id="wahlHaar"></div>
+        <p class="abschnitt">Laterne</p>
+        <div class="farbreihe" id="wahlLaterne"></div>
+        <p class="abschnitt">Herkunft</p>
+        <div id="wahlHerkunft"></div>
+      </div>
+      <div class="start-fuss">
+        <button id="schoepfFertig" class="primary">So bin ich &mdash; aufbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="start" class="overlay hidden">
     <div class="karte start-karte">
       <div class="start-kopf">
         <h1>Talkunde</h1>
@@ -149,7 +185,8 @@
           Gruften, als du leeren kannst.</p>
       </div>
       <div class="blatt-koerper">
-        <ul class="how">
+        <button id="howBtn" class="karten-knopf how-knopf">Wie es geht</button>
+        <ul class="how hidden">
           <li><b>Ziehen</b> l&auml;uft, weit hinausziehen <b>rennt</b> — das kostet Ausdauer.
               Rechts: schlagen, zaubern, ausweichen, ansprechen.</li>
           <li>Die <b>Rauten</b> neben dem Ortsnamen sagen, wie b&ouml;se eine Gegend ist —

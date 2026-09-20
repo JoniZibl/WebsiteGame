@@ -33,6 +33,8 @@ import { Juice } from './juice.js';
 import { Wetter } from './wetter.js';
 import { Ereignisse } from './ereignis.js';
 import { ZAUBER, ZAUBER_IDS, ANFANGSZAUBER, gelernte, reichtDieUebung } from './zauber.js';
+import { farbenVon, herkunftVon, neuesAussehen, GEWAENDER, HAUT, HAAR, LATERNEN,
+  HERKUNFT, NAMEN } from './aussehen.js';
 
 /* ==========================================================================
  *  Talkunde — ein Rollenspiel von oben.
@@ -156,6 +158,8 @@ const state = {
   schlund: null,
   heimat: null,
   tag: 0,
+  portrait: false,   // steht die Kamera gerade vor der Figur?
+  schau: false,      // langsamer Rundblick über dem Titel
 };
 
 const DAY = 420;
@@ -402,6 +406,7 @@ function feindGefallen(f) {
     ...state.buch.melden('ort', { ortId: f.herkunft }),
   ];
   for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
+  if (f.gezeichnet && story.melden(state.geschichte, 'gezeichnet', {})) kapitelGeschafft();
   if (f.id === 'waechter' && story.melden(state.geschichte, 'waechter', {})) {
      endeZeigen('klinge');
   }
@@ -1031,6 +1036,7 @@ function schreinAnrufen(ort) {
   for (const q of state.buch.melden('schrein', { ortId: ort.id })) {
     meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
   }
+  if (story.melden(state.geschichte, 'schrein', { id: ort.id })) kapitelGeschafft();
   updateHUD();
   writeSave();
 }
@@ -1304,6 +1310,14 @@ function zielPunkt() {
                     - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
     return fremd ? { x: fremd.x, z: fremd.z, name: ortsname(fremd) } : null;
   }
+  if (k.art === 'schrein') {
+    const h = held();
+    const offen = orte.orteUm(player.pos.x, player.pos.z, 900)
+      .filter((o) => o.art === 'schrein' && !(h.orte && h.orte.has(o.id)))
+      .sort((a, b) => Math.hypot(a.x - player.pos.x, a.z - player.pos.z)
+                    - Math.hypot(b.x - player.pos.x, b.z - player.pos.z))[0];
+    return offen ? { x: offen.x, z: offen.z, name: offen.name || 'Schrein' } : null;
+  }
   if (k.art === 'schlund' || k.art === 'waechter') {
     return state.schlund ? { x: state.schlund.x, z: state.schlund.z, name: 'Der Schlund' } : null;
   }
@@ -1368,44 +1382,54 @@ function schlundRichtung() {
 
 function chronistOeffnen(n) {
   const st = state.geschichte;
+  const h = held();
   state.gespraech = n;
   el('redeName').textContent = 'Der Chronist';
   el('redeBeruf').textContent = n.name;
+  el('rede').classList.remove('hidden');
 
-  if (st.fertig) {
-    redeZeigen(st.ende === 'wort'
-      ? 'Die Laternen brennen wieder länger. Ich habe es aufgeschrieben — zum ersten Mal '
-        + 'ein Strich, der länger wird.\n\nDanke, dass Ihr geredet habt statt zugeschlagen.'
-      : 'Das Glimm kommt zurück. Die Gruften sind still geworden, stiller als vorher.\n\n'
-        + 'Ich weiß nicht, ob das ein guter Handel war. Aber es ist getan.',
-      [{ label: 'Lebt wohl.', tun: redeSchliessen }]);
-    el('rede').classList.remove('hidden');
+  if (st.fertig) { chronistNachher(st); return; }
+
+  const k = story.aktuell(st);
+  if (!k) { redeSchliessen(); return; }
+
+  /* Der erste Besuch ist kein Auftrag, sondern eine Vorstellung. Wer man ist,
+     steht in der Herkunft — und er antwortet darauf. Das ist die einzige
+     Stelle, an der der Anfang für jeden Helden anders klingt. */
+  if (!st.vorgestellt && k.id === 0) {
+    const herk = herkunftVon(h.herkunft);
+    redeZeigen(story.fuellen(k.rede, st, schlundRichtung()), [
+      { label: `„${herk.wort}"`, unten: `aus der ${herk.name}`,
+        tun: () => {
+          st.vorgestellt = true;
+          redeZeigen(`${herk.antwort}\n\n${k.aufgabe}`, [
+            { label: 'Fünf Steine. Gut.', unten: k.wo,
+              tun: () => { kapitelAnnehmen(st, n); } },
+            { label: 'Ein andermal.', tun: redeSchliessen },
+          ]);
+        } },
+      { label: 'Ich habe es eilig.', tun: redeSchliessen },
+    ]);
     return;
   }
 
-  const k = story.aktuell(st);
-
   if (!st.gestartet) {
-    redeZeigen(story.fuellen(k.rede, st, schlundRichtung()), [
-      { label: 'Ich sehe mich um.', unten: k.ziel.replace('{gruft}', st.gruftName || ''),
-        tun: () => {
-          st.gestartet = true;
-          audio.gem(1);
-          redeZeigen('Gut. Ich bin hier, wenn Ihr etwas habt.',
-            [{ label: 'Bis dann.', tun: redeSchliessen }]);
-          updateHUD();
-        } },
+    const text = k.id === 0 ? k.aufgabe : story.fuellen(k.rede, st, schlundRichtung());
+    redeZeigen(text, [
+      { label: 'Ich sehe mich um.', unten: story.fuellen(k.wo || k.ziel, st, schlundRichtung()),
+        tun: () => kapitelAnnehmen(st, n) },
       { label: 'Nicht heute.', tun: redeSchliessen },
     ]);
   } else if (story.kapitelFertig(st)) {
     const abschluss = k.abschluss || 'Ihr habt es also gesehen.';
     redeZeigen(story.fuellen(abschluss, st, schlundRichtung()), [
       { label: 'Und weiter?', tun: () => {
-          story.weiter(st);
-          st.gestartet = false;
-          const naechst = story.aktuell(st);
-          if (!naechst || st.fertig) { redeSchliessen(); return; }
-          chronistOeffnen(n);
+          // Erst die Frage dieses Kapitels, dann das nächste
+          if (k.frage && k.wahlen && !story.wahlVon(st, k.id)) {
+            frageStellen(st, k, n);
+            return;
+          }
+          kapitelWeiter(st, n);
         } },
     ]);
   } else {
@@ -1414,7 +1438,59 @@ function chronistOeffnen(n) {
       { label: 'Ich gehe weiter.', tun: redeSchliessen },
     ]);
   }
-  el('rede').classList.remove('hidden');
+}
+
+/** Kapitel annehmen: er sagt einen Satz, das Ziel steht im Buch. */
+function kapitelAnnehmen(st, n) {
+  st.gestartet = true;
+  audio.gem(1);
+  const k = story.aktuell(st);
+  redeZeigen('Gut. Ich bin hier, wenn Ihr etwas habt. Ich gehe nirgendwohin.',
+    [{ label: 'Bis dann.', tun: redeSchliessen }]);
+  if (k) meldung(`„${k.titel}"`, '#e8a83c', 3.0);
+  updateHUD();
+  writeSave();
+}
+
+/** Eine Frage, deren Antwort stehen bleibt. */
+function frageStellen(st, k, n) {
+  const wahlen = k.wahlen.map((w) => ({
+    label: w.label, unten: w.unten,
+    tun: () => {
+      story.antworten(st, k.id, w.id);
+      audio.gem(2);
+      redeZeigen(w.antwort, [
+        { label: 'Und weiter?', tun: () => kapitelWeiter(st, n) },
+      ]);
+      writeSave();
+    },
+  }));
+  redeZeigen(k.frage, wahlen);
+}
+
+function kapitelWeiter(st, n) {
+  story.weiter(st);
+  st.gestartet = false;
+  const naechst = story.aktuell(st);
+  if (!naechst || st.fertig) { redeSchliessen(); return; }
+  chronistOeffnen(n);
+}
+
+/** Was er sagt, wenn alles vorbei ist — je nachdem, wie es ausging. */
+function chronistNachher(st) {
+  const gewarnt = story.wahlVon(st, 2) === 'warnen';
+  redeZeigen(st.ende === 'wort'
+    ? 'Die Laternen brennen wieder länger. Ich habe es aufgeschrieben — zum ersten '
+      + 'Mal ein Strich, der länger wird.\n\n'
+      + (gewarnt
+        ? 'Und in den anderen Dörfern haben sie es gewusst. Sie haben nicht '
+          + 'gefeiert, sie haben genickt. Das ist mehr wert.'
+        : 'In den anderen Dörfern wird man sich wundern, warum es plötzlich '
+          + 'heller ist. Sollen sie. Nicht jeder muss alles wissen.')
+    : 'Das Glimm kommt zurück. Die Gruften sind still geworden, stiller als vorher.\n\n'
+      + 'Ich weiß nicht, ob das ein guter Handel war. Aber es ist getan, und '
+      + 'ich schreibe es auf, wie es war.',
+    [{ label: 'Lebt wohl.', tun: redeSchliessen }]);
 }
 
 /* ----------------------------- Der Wächter -------------------------------- */
@@ -1430,9 +1506,32 @@ function waechterInReichweite() {
 
 function waechterAnsprechen(f) {
   const h = held();
+  const st = state.geschichte;
   state.gespraech = { pos: f.pos };
   el('redeName').textContent = 'Der Wächter';
   el('redeBeruf').textContent = 'im Schlund';
+
+  /* Er weiß, wer da vor ihm steht. Herkunft und die beiden Antworten von
+     unterwegs stehen in seinem ersten Satz — sonst wäre alles davor nur
+     ein Zähler gewesen. */
+  const herk = herkunftVon(h.herkunft);
+  const erkennt = {
+    koehler:  'Ihr riecht nach Rauch. Ein Köhlerkind, das Feuer hütet.',
+    kraemer:  'Ihr rechnet, während Ihr mich anseht. Ein Krämerskind.',
+    kloster:  'Ihr habt gelesen. Man sieht es an den Augen, die nach Zeilen suchen.',
+    wildwald: 'Ihr seid leise hereingekommen. Das schafft niemand, der in Dörfern groß wird.',
+  }[herk.id] || '';
+
+  const gewarnt = story.wahlVon(st, 2) === 'warnen';
+  const begraben = story.wahlVon(st, 4) === 'begraben';
+  const erinnerung = gewarnt
+    ? 'Sie reden oben von mir. Ihr habt es ihnen gesagt — ich habe es gehört, '
+      + 'so wie ich alles höre, was zu wenig Licht hat.'
+    : 'Oben weiß es niemand. Ihr habt geschwiegen. Ob das freundlich war, '
+      + 'weiß ich nicht.';
+  const zweites = begraben
+    ? '\n\nUnd Ihr habt eines von ihnen begraben. Das hat seit zehn Jahren niemand getan.'
+    : '';
 
   const darf = story.darfReden(h);
   const wahlen = [];
@@ -1444,7 +1543,10 @@ function waechterAnsprechen(f) {
         redeZeigen('Ihr wart bei ihnen. Bei allen diesen.\n\n'
           + 'Ich habe das Licht genommen, weil niemand mehr danach gefragt hat. '
           + 'Ein Licht, um das niemand bittet, ist Verschwendung.\n\n'
-          + 'Nehmt es mit. Und sagt ihnen, sie sollen fragen.',
+          + (begraben
+            ? 'Ihr habt eines von ihnen in die Erde gelegt, statt es aufzuschneiden. '
+              + 'Dann nehmt es mit. Und sagt ihnen, sie sollen fragen.'
+            : 'Nehmt es mit. Und sagt ihnen, sie sollen fragen.'),
           [{ label: 'Das werde ich.', tun: () => { redeSchliessen(); endeZeigen('wort'); } }]);
       },
     });
@@ -1457,9 +1559,10 @@ function waechterAnsprechen(f) {
   }
   wahlen.push({ label: 'Dann nehme ich es mir.', tun: redeSchliessen });
 
-  redeZeigen('Ihr seid weit gelaufen für etwas, das niemand vermisst hat.\n\n'
+  redeZeigen(`${erkennt}\n\n`
     + 'Zehn Jahre sitze ich hier. In zehn Jahren ist niemand gekommen, um zu fragen, '
-    + 'wo das Licht geblieben ist. Nur Ihr. Und Ihr fragt nicht — Ihr holt.',
+    + `wo das Licht geblieben ist. Nur Ihr, ${h.name || 'Fremder'}.\n\n`
+    + `${erinnerung}${zweites}`,
     wahlen);
   el('rede').classList.remove('hidden');
 }
@@ -1474,12 +1577,17 @@ function endeZeigen(art) {
     h.gold += 600;
     fert.xpGeben(h, 800);
   }
+  const gewarnt = story.wahlVon(st, 2) === 'warnen';
   el('endeTitel').textContent = art === 'wort' ? 'Das Licht kehrt zurück.' : 'Der Schlund ist still.';
-  el('endeText').textContent = art === 'wort'
-    ? 'Der Wächter gibt das Glimm heraus. In den Dörfern brennen die Laternen wieder '
-      + 'länger — weil jemand danach gefragt hat.'
-    : 'Der Wächter fällt, und mit ihm gibt der Fels sein Licht zurück. Es war zu holen. '
-      + 'Ob es zu nehmen war, sagt niemand.';
+  el('endeText').textContent = (art === 'wort'
+    ? 'Der Wächter gibt das Glimm heraus. In den Dörfern brennen die Laternen '
+      + 'wieder länger — weil jemand danach gefragt hat. '
+      + (gewarnt
+        ? 'In zwei Dörfern haben sie darauf gewartet: Ihr hattet es ihnen gesagt.'
+        : 'In zwei Dörfern wundert man sich, woher das kommt. Ihr habt geschwiegen.')
+    : 'Der Wächter fällt, und mit ihm gibt der Fels sein Licht zurück. Es war zu '
+      + 'holen. Ob es zu nehmen war, sagt niemand. ')
+    + `\n\nDer Chronist schreibt einen Namen in sein Buch: ${h.name || 'Niemand'}.`;
   el('endeStats').textContent = `Stufe ${h.stufe} · ${h.getoetet} erlegt · `
     + `${h.hilfen || 0} Menschen geholfen`;
   el('ende').classList.remove('hidden');
@@ -1871,7 +1979,8 @@ function menuZeichnen(tab = 'fert') {
   const [titel, unter] = MENU_KOPF[tab] || MENU_KOPF.fert;
   el('menuTitel').textContent = titel;
   el('menuUnter').textContent = tab === 'fert'
-    ? `Stufe ${h.stufe}${h.punkte > 0 ? ` · ${h.punkte} Punkt${h.punkte > 1 ? 'e' : ''} frei` : ''}`
+    ? `${h.name || 'Namenlos'} aus der ${herkunftVon(h.herkunft).name} · Stufe ${h.stufe}`
+      + `${h.punkte > 0 ? ` · ${h.punkte} Punkt${h.punkte > 1 ? 'e' : ''} frei` : ''}`
     : unter;
   el('menuGold').textContent = h.gold;
   for (const [id, name] of [['tabFert', 'fert'], ['tabBeutel', 'beutel'],
@@ -2264,6 +2373,13 @@ function questsZeichnen() {
     stand.textContent = !st.gestartet ? 'noch nicht begonnen'
       : fertig ? 'zurück zum Chronisten'
       : `${story.fuellen(k.ziel, st)} · ${st.ziel}/${k.menge}`;
+    // Wo man suchen muss, steht dabei — sonst läuft man ratlos im Kreis
+    if (st.gestartet && !fertig && k.wo) {
+      const wo = document.createElement('p');
+      wo.style.cssText = 'margin:2px 0 0;font-size:11.5px;opacity:.62;font-weight:700';
+      wo.textContent = story.fuellen(k.wo, st, schlundRichtung());
+      z.append(wo);
+    }
     const knopf = document.createElement('button');
     knopf.className = 'q-verfolgen' + (dran ? ' an' : '');
     knopf.textContent = dran ? '◆ verfolgt' : '◇ verfolgen';
@@ -2563,7 +2679,7 @@ function neuanfangKnopf() {
       return;
     }
     el('menu').classList.add('hidden');
-    neuesSpiel();
+    schoepfungOeffnen();
   });
   return knopf;
 }
@@ -3122,11 +3238,54 @@ function frame() {
     if (saveTimer <= 0) { saveTimer = 10; writeSave(); }
   }
 
-  const want = state.camPos.copy(player.pos).addScaledVector(CAM_DIR, camDist);
-  camera.position.lerp(want, 1 - Math.pow(0.002, raw));
-  camera.lookAt(player.pos.x, player.pos.y + 1, player.pos.z);
+  if (state.portrait) {
+    portraitKamera(raw);
+  } else if (state.schau) {
+    schauKamera(raw);
+  } else {
+    const want = state.camPos.copy(player.pos).addScaledVector(CAM_DIR, camDist);
+    camera.position.lerp(want, 1 - Math.pow(0.002, raw));
+    camera.lookAt(player.pos.x, player.pos.y + 1, player.pos.z);
+  }
   juice.applyToCamera();
   post.render(scene, camera);
+}
+
+/* Bei der Schöpfung steht die Kamera vorn und tief, und die Figur dreht sich
+   langsam. Gezielt wird ein Stück unter die Füße — so sitzt der Held im
+   oberen Drittel und das Blatt darunter verdeckt ihn nicht. */
+/* Über dem Vorspann und dem Titel kreist die Kamera ganz langsam über dem
+   Dorf. Ein stehendes Bild sieht aus wie ein Ladefehler; ein wanderndes sagt:
+   hier läuft schon etwas, du bist nur noch nicht dabei. */
+let schauDreh = 0.4;
+function schauKamera(dt) {
+  // Ohne laufendes Spiel rührt sich die Figur nicht von allein — hier steht,
+  // wo ihr Körper hingehört, solange niemand sie bewegt.
+  player.group.position.copy(player.pos);
+  schauDreh += dt * 0.055;
+  const ziel = state.camPos.set(
+    player.pos.x + Math.sin(schauDreh) * 30,
+    player.pos.y + 21,
+    player.pos.z + Math.cos(schauDreh) * 30);
+  camera.position.lerp(ziel, 1 - Math.pow(0.05, dt));
+  camera.lookAt(player.pos.x, player.pos.y + 1.2, player.pos.z);
+}
+
+let portraitDreh = 0.6;
+function portraitKamera(dt) {
+  player.group.position.copy(player.pos);
+  portraitDreh += dt * 0.5;
+  player.facing = portraitDreh;
+  player.group.rotation.y = portraitDreh;
+  /* Neun Schritt Abstand, vier über dem Boden, und gezielt wird unter die
+     Füße: dann steht die ganze Figur im oberen Drittel, und das Blatt
+     darunter verdeckt sie nicht. */
+  const kx = player.pos.x + 6.6, kz = player.pos.z + 8.8;
+  // Nicht in den Hang: die Kamera bleibt über dem Boden, auf dem sie steht
+  const boden = surfaceAt(Math.round(kx), Math.round(kz)) + 1.6;
+  const ziel = state.camPos.set(kx, Math.max(player.pos.y + 5, boden), kz);
+  camera.position.lerp(ziel, 1 - Math.pow(0.004, dt));
+  camera.lookAt(player.pos.x, player.pos.y - 2.4, player.pos.z);
 }
 
 /* --------------------------------- Knöpfe ----------------------------------
@@ -3298,6 +3457,7 @@ function writeSave(auchTot = false) {
       gesehen: [...(h.gesehen || [])], erlegt: h.erlegt || {},
       schliff: h.schliff || {},
       zauber: [...(h.zauber || [])], aktiverZauber: h.aktiverZauber || 'funkenschlag',
+      aussehen: h.aussehen || null, name: h.name || null, herkunft: h.herkunft || null,
       beutel: h.beutel, rue: h.rue,
     },
     quests: { offen: state.buch.offen, erledigt: state.buch.erledigt.slice(-8),
@@ -3369,6 +3529,9 @@ function welteinrichtung(heimat) {
 }
 
 function aufstellen(x, z) {
+  state.schau = false;
+  state.portrait = false;
+  document.body.classList.add('spielt');
   world.update(x, z, 95);
   doerfer.update(x, z);
   flora.update(x, z, true);
@@ -3454,12 +3617,13 @@ function hinweisZeigen(an) {
   k.classList.toggle('hidden', !an);
 }
 
-function neuesSpiel() {
+function neuesSpiel(wahl = null) {
   save.clear();
   saatSetzen((Math.random() * 1e9) | 0);
   weltLeeren();
   world.edits.clear();
   state.held = fert.neuerHeld();
+  heldEinkleiden(state.held, wahl || neuesAussehen());
   state.buch = new Auftragsbuch();
   state.time = 0.3;
   state.dead = false;
@@ -3475,7 +3639,41 @@ function neuesSpiel() {
   welteinrichtung(s.dorf);
   state.ort = s.dorf ? ortsname(s.dorf) : 'Wildnis';
   aufstellen(s.x, s.z);
+  /* Der erste Moment im Spiel darf nicht leer sein: der Pfeil zeigt schon auf
+     den Chronisten, und ein Band sagt, warum. */
+  bannerZeigen(state.ort, 'Im Dorf wartet jemand, der mitschreibt.', '#e8a83c');
   writeSave();
+}
+
+/* Was die Schöpfung am Helden ändert: Aussehen, Name, Herkunft — und die
+   Gabe, die zu ihr gehört. Sie ist absichtlich klein: sie soll die ersten
+   zwei Stunden färben, nicht das ganze Spiel entscheiden. */
+function heldEinkleiden(h, wahl) {
+  h.aussehen = { ...wahl };
+  h.name = wahl.name || 'Niemand';
+  h.herkunft = wahl.herkunft;
+  const hk = herkunftVon(h.herkunft);
+  h.fert[hk.fert] = Math.max(h.fert[hk.fert], 2);
+  h.gold += hk.gold || 0;
+  for (const [id, n] of Object.entries(hk.sachen || {})) dinge.nehmen(h, id, n);
+  if (hk.zauber) {
+    h.zauber = h.zauber instanceof Set ? h.zauber : new Set(h.zauber || []);
+    h.zauber.add(hk.zauber);
+    h.aktiverZauber = hk.zauber;
+  }
+  // Was man anziehen kann, zieht man auch an
+  for (const id of Object.keys(hk.sachen || {})) {
+    const d = DINGE[id];
+    if (d && dinge.TRAGBAR.includes(d.art) && !h.rue[d.art]) dinge.anlegen(h, id);
+  }
+  aussehenAnlegen(h);
+}
+
+/** Farben aus dem Helden auf Figur und Grubenlampe legen. */
+function aussehenAnlegen(h) {
+  const f = farbenVon(h.aussehen || {});
+  player.setAussehen(f);
+  lamp.color.set(f.licht);
 }
 
 function weiterSpielen(d) {
@@ -3494,7 +3692,11 @@ function weiterSpielen(d) {
   h.schliff = d.held.schliff || {};
   h.zauber = new Set(d.held.zauber || []);
   h.aktiverZauber = d.held.aktiverZauber || 'funkenschlag';
+  h.aussehen = d.held.aussehen || neuesAussehen();
+  h.name = d.held.name || 'Niemand';
+  h.herkunft = d.held.herkunft || HERKUNFT[0].id;
   state.held = h;
+  aussehenAnlegen(h);
 
   state.buch = new Auftragsbuch();
   state.buch.offen = (d.quests?.offen || []);
@@ -3526,11 +3728,192 @@ function weiterSpielen(d) {
 }
 
 /* ------------------------------ Spiel starten ------------------------------ */
+/* =========================== Vorspann & Schöpfung ==========================
+ * Das Erste, was man sieht, entscheidet, ob man bleibt. Also kein Regelblatt,
+ * sondern: dunkles Land, drei Sätze, Titel. Danach steht die eigene Figur im
+ * Bild und dreht sich, während man sie zusammenstellt — und erst dann geht
+ * es los.
+ * ========================================================================== */
+let schoepfung = neuesAussehen();
+
+function vorspannSpielen(fertig) {
+  const kasten = el('vorspann');
+  const zeile = el('vorspannText');
+  kasten.classList.remove('hidden', 'weg');
+  let i = -1;
+  let timer = 0;
+  const weiter = () => {
+    i++;
+    if (i >= story.VORSPANN.length) { schluss(); return; }
+    zeile.classList.remove('an');
+    setTimeout(() => {
+      zeile.textContent = story.VORSPANN[i];
+      zeile.classList.add('an');
+    }, i === 0 ? 40 : 520);
+    clearTimeout(timer);
+    timer = setTimeout(weiter, i === 0 ? 3000 : 3400);
+  };
+  const schluss = () => {
+    clearTimeout(timer);
+    kasten.removeEventListener('pointerdown', tippe);
+    kasten.classList.add('weg');
+    setTimeout(() => { kasten.classList.add('hidden'); fertig(); }, 600);
+  };
+  // Tippen springt weiter, zweimal tippen überspringt alles
+  const tippe = (e) => {
+    e.preventDefault();
+    audio.unlock();                  // die erste Berührung schaltet den Ton frei
+    if (i >= story.VORSPANN.length - 1) schluss(); else weiter();
+  };
+  kasten.addEventListener('pointerdown', tippe);
+  weiter();
+}
+
+/* --------------------------- Die Figur bauen ------------------------------ */
+function schoepfungZeichnen() {
+  const f = farbenVon(schoepfung);
+  player.setAussehen(f);
+  lamp.color.set(f.licht);
+  el('heldName').value = schoepfung.name;
+
+  const reihe = (feldId, liste, istAn, waehle, bauen) => {
+    const feld = el(feldId);
+    feld.replaceChildren();
+    for (const e of liste) {
+      const b = document.createElement('button');
+      b.className = 'farbe' + (istAn(e) ? ' an' : '');
+      bauen(b, e);
+      b.addEventListener('click', () => { waehle(e); schoepfungZeichnen(); audio.step(); });
+      feld.append(b);
+    }
+    return feld;
+  };
+
+  reihe('wahlGewand', GEWAENDER, (e) => e.id === schoepfung.gewand,
+    (e) => { schoepfung.gewand = e.id; },
+    (b, e) => {
+      b.title = e.name;
+      b.style.background = e.kutte;
+      b.innerHTML = `<i class="unten" style="background:${e.saum}"></i>`;
+    });
+
+  reihe('wahlHaut', HAUT, (e) => e.id === schoepfung.haut,
+    (e) => { schoepfung.haut = e.id; },
+    (b, e) => { b.style.background = e.farbe; });
+
+  const haarFeld = reihe('wahlHaar', HAAR, (e) => e.id === schoepfung.haar && !schoepfung.kapuze,
+    (e) => { schoepfung.haar = e.id; schoepfung.kapuze = false; },
+    (b, e) => { b.style.background = e.farbe; });
+  // Die Kapuze gehört in dieselbe Reihe: sie entscheidet, ob man Haar sieht
+  const kap = document.createElement('button');
+  kap.className = 'farbe knopf' + (schoepfung.kapuze ? ' an' : '');
+  kap.textContent = 'Kapuze';
+  kap.addEventListener('click', () => {
+    schoepfung.kapuze = !schoepfung.kapuze;
+    schoepfungZeichnen();
+    audio.step();
+  });
+  haarFeld.append(kap);
+
+  reihe('wahlLaterne', LATERNEN, (e) => e.id === schoepfung.laterne,
+    (e) => { schoepfung.laterne = e.id; },
+    (b, e) => {
+      b.title = e.name;
+      b.style.background = e.glas;
+      b.innerHTML = `<i class="unten" style="background:${e.licht}"></i>`;
+    });
+
+  const hFeld = el('wahlHerkunft');
+  hFeld.replaceChildren();
+  for (const hk of HERKUNFT) {
+    const b = document.createElement('button');
+    b.className = 'herkunft-wahl' + (hk.id === schoepfung.herkunft ? ' an' : '');
+    b.innerHTML = `<b>${hk.name}</b><small>${hk.text}</small>`
+      + `<span class="gabe">${hk.gabe}</span>`;
+    b.addEventListener('click', () => {
+      schoepfung.herkunft = hk.id;
+      schoepfungZeichnen();
+      audio.gem(1);
+    });
+    hFeld.append(b);
+  }
+}
+
+function schoepfungOeffnen() {
+  schoepfung = neuesAussehen();
+  state.running = false;             // während der Schöpfung läuft die Welt nicht
+  document.body.classList.remove('spielt');
+  state.time = 0.26;                 // früher Morgen: gutes Licht für ein Bild
+  /* Für das Bild muss die Figur frei stehen. Im Dorf steckt die Kamera sonst
+     in einer Wand — also ein Stück hinaus, mit dem Dorf im Rücken. */
+  const s = startplatz();
+  /* Ein flacher Platz sieht besser aus als ein Hang: ein paar Stellen rings
+     um das Dorf prüfen und die nehmen, die am wenigsten kippt. */
+  /* Und zwar südöstlich: die Kamera steht bei +x/+z vor der Figur und blickt
+     zurück — so liegt das Dorf hinter ihr im Bild statt leerer Wiese. */
+  let px = Math.round(s.x + 20), pz = Math.round(s.z + 20), besteEbene = 1e9;
+  for (let a = 0; a < 7; a++) {
+    const w = Math.PI * (0.17 + a * 0.028);        // grob Südost
+    const tx = Math.round(s.x + Math.sin(w) * 26), tz = Math.round(s.z + Math.cos(w) * 26);
+    const mitte = surfaceAt(tx, tz);
+    const kippe = Math.abs(surfaceAt(tx + 4, tz + 5) - mitte)
+      + Math.abs(surfaceAt(tx - 3, tz - 3) - mitte)
+      + Math.abs(surfaceAt(tx + 3, tz - 4) - mitte);
+    if (mitte > SEA + 1 && kippe < besteEbene) { besteEbene = kippe; px = tx; pz = tz; }
+  }
+  world.update(px, pz, 95);
+  doerfer.update(px, pz);
+  flora.update(px, pz, true);
+  player.spawn(world, px, pz);
+  leute.update(0.016, world, doerfer, player.pos, false);
+  state.cut = HEIGHT + 4;
+  cutPlane.constant = state.cut;
+  state.portrait = true;
+  state.schau = false;
+  camera.position.set(player.pos.x + 6.6, player.pos.y + 5, player.pos.z + 8.8);
+  applyDaytime();
+  schoepfungZeichnen();
+  el('schoepfung').classList.remove('hidden');
+}
+
+el('wuerfelBtn').addEventListener('click', () => {
+  const name = el('heldName').value.trim();
+  schoepfung = neuesAussehen();
+  if (name) schoepfung.name = name;   // der Name bleibt, wenn man ihn selbst gesetzt hat
+  schoepfungZeichnen();
+  audio.gem(2);
+});
+el('heldName').addEventListener('input', () => {
+  schoepfung.name = el('heldName').value.slice(0, 14);
+});
+
+el('schoepfFertig').addEventListener('click', () => {
+  audio.unlock();
+  schoepfung.name = (el('heldName').value.trim() || schoepfung.name || 'Niemand').slice(0, 14);
+  el('schoepfung').classList.add('hidden');
+  state.portrait = false;
+  neuesSpiel(schoepfung);
+});
+
+/* Die Regeln stehen zusammengeklappt da: der erste Blick soll Titel und Bild
+   sein, nicht ein Merkblatt. Wer sie will, tippt einmal. */
+el('howBtn').addEventListener('click', () => {
+  const liste = document.querySelector('#start .how');
+  const zu = liste.classList.toggle('hidden');
+  el('howBtn').textContent = zu ? 'Wie es geht' : 'Wie es geht ✕';
+});
+
 el('startBtn').addEventListener('click', () => {
   audio.unlock();
   el('start').classList.add('hidden');
-  neuesSpiel();
+  schoepfungOeffnen();
 });
+
+/** Einstieg ohne Vorspann und ohne Schöpfung — für Prüfläufe. */
+function schnellStart(wahl = null) {
+  for (const id of ['vorspann', 'start', 'schoepfung']) el(id).classList.add('hidden');
+  neuesSpiel(wahl || neuesAussehen());
+}
 
 el('endeWeiter').addEventListener('click', () => {
   // Nach dem Ende geht die Welt weiter — sie hört ja nicht auf
@@ -3594,15 +3977,41 @@ window.__game = {
   esseOeffnen, esseZeichnen, dinge, fert, auftragFuer, kontextFuer, leute,
   updateHUD, dingBlatt, fertZeichnen, verkaufFuer,
   ZAUBER, ZAUBER_IDS, gelernte, aktiverZauber, zauberWaehlen, zauberBlaettern,
+  schnellStart, schoepfungOeffnen, herkunftVon, farbenVon,
   zauberLernen,
 };
 
+/* ------------------------------ Hochfahren --------------------------------
+ * Beim Aufschlagen steht schon eine Welt da — ein Dorf bei Nacht, über dem
+ * die Kamera kreist. Darüber läuft der Vorspann, danach der Titel. Wer einen
+ * Spielstand hat, bekommt den Titel sofort; den Vorspann hat er gesehen.
+ * -------------------------------------------------------------------------- */
 resize();
 applyQuality();
 saatSetzen(20260916);
-world.update(0, 0, 95);
-player.spawn(world, 0, 0);
-camera.position.copy(player.pos).addScaledVector(CAM_DIR, camDist);
-camera.lookAt(player.pos);
+{
+  const s = startplatz();
+  state.time = 0.88;                 // Nacht, damit die Laternen etwas zu tun haben
+  world.update(s.x, s.z, 95);
+  doerfer.update(s.x, s.z);
+  flora.update(s.x, s.z, true);
+  player.spawn(world, s.x, s.z);
+  leute.update(0.016, world, doerfer, player.pos, true);
+  gruftenPflegen(s.x, s.z);
+  ortePflegen(s.x, s.z);
+  aussehenAnlegen({ aussehen: schoepfung });
+  state.schau = true;
+  camera.position.copy(player.pos).addScaledVector(CAM_DIR, camDist);
+  camera.lookAt(player.pos);
+  applyDaytime();
+}
 updateHUD();
 frame();
+
+const titelZeigen = () => {
+  // Läuft längst ein Spiel (Schnellstart), hat der Titel nichts mehr zu suchen
+  if (state.running) return;
+  el('start').classList.remove('hidden');
+};
+if (gespeichert && gespeichert.held) titelZeigen();
+else vorspannSpielen(titelZeigen);

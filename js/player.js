@@ -20,10 +20,13 @@ export class Player {
        auf dem Schirm steht, zählt nur die Umrisslinie. */
     /* Der Spieler muss sich auf einen Blick von den Dorfleuten abheben —
        dieselbe Bauweise, aber Stahl und Blau statt Leinen und Erdfarben. */
-    const kutte = new THREE.MeshLambertMaterial({ color: '#4a6f9e', flatShading: true });
-    const saum  = new THREE.MeshLambertMaterial({ color: '#33506f', flatShading: true });
-    const haut  = new THREE.MeshLambertMaterial({ color: '#f0cba0', flatShading: true });
-    const glas  = new THREE.MeshBasicMaterial({ color: '#ffe9b0' });
+    /* Die Stoffe liegen am Objekt, nicht nur in der Funktion: die Figur wird
+       bei der Erschaffung umgefärbt, und zwar während man zuschaut. */
+    const kutte = this.matKutte = new THREE.MeshLambertMaterial({ color: '#4a6f9e', flatShading: true });
+    const saum  = this.matSaum  = new THREE.MeshLambertMaterial({ color: '#33506f', flatShading: true });
+    const haut  = this.matHaut  = new THREE.MeshLambertMaterial({ color: '#f0cba0', flatShading: true });
+    const glas  = this.matGlas  = new THREE.MeshBasicMaterial({ color: '#ffe9b0' });
+    const haar  = this.matHaar  = new THREE.MeshLambertMaterial({ color: '#6b452a', flatShading: true });
     const metall = new THREE.MeshLambertMaterial({ color: '#d8dde2', flatShading: true });
     const auge  = new THREE.MeshBasicMaterial({ color: '#3f3328' });
 
@@ -38,10 +41,20 @@ export class Player {
     // Kopf steckt in der Kapuze — nur ein Streifen Gesicht bleibt frei
     this.head = new THREE.Mesh(box(0.46, 0.4, 0.42), haut);
     this.head.position.y = 1.5;
-    const kapuze = new THREE.Mesh(box(0.56, 0.42, 0.52), kutte);
-    kapuze.position.set(0, 1.58, -0.06);
-    const schirm = new THREE.Mesh(box(0.58, 0.12, 0.2), saum);
-    schirm.position.set(0, 1.62, 0.2);
+    this.kapuze = new THREE.Mesh(box(0.56, 0.42, 0.52), kutte);
+    this.kapuze.position.set(0, 1.58, -0.06);
+    this.schirm = new THREE.Mesh(box(0.58, 0.12, 0.2), saum);
+    this.schirm.position.set(0, 1.62, 0.2);
+    const kapuze = this.kapuze, schirm = this.schirm;
+
+    /* Ohne Kapuze sieht man das Haar. Zwei Stücke reichen: die Decke auf dem
+       Kopf und ein Nacken dahinter — mehr trägt die Silhouette nicht. */
+    this.haarOben = new THREE.Mesh(box(0.5, 0.16, 0.46), haar);
+    this.haarOben.position.set(0, 1.68, -0.01);
+    this.haarNacken = new THREE.Mesh(box(0.46, 0.26, 0.12), haar);
+    this.haarNacken.position.set(0, 1.5, -0.2);
+    this.haarOben.visible = false;
+    this.haarNacken.visible = false;
 
     const augeL = new THREE.Mesh(box(0.08, 0.08, 0.04), auge);
     augeL.position.set(-0.11, 1.45, 0.22);
@@ -87,7 +100,8 @@ export class Player {
     this.wKopfX = 0; this.wKopfY = 0.66; this.wKopfKipp = 0;
     this.wZierX = 0; this.wZierY = 0.79; this.wZierKipp = 0;
 
-    [this.torso, rock, this.head, kapuze, schirm, augeL, augeR, this.armL, this.armR,
+    [this.torso, rock, this.head, kapuze, schirm, this.haarOben, this.haarNacken,
+     augeL, augeR, this.armL, this.armR,
      buegel, this.laterne, deckel, boden, this.legL, this.legR, this.tool, this.head2,
      this.zier]
       .forEach((m) => { m.castShadow = true; this.group.add(m); });
@@ -311,6 +325,20 @@ export class Player {
 
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.facing;
+  }
+
+  /** Färbt die Figur um. `f` kommt aus aussehen.js/farbenVon(). */
+  setAussehen(f) {
+    if (!f) return;
+    this.matKutte.color.set(f.kutte);
+    this.matSaum.color.set(f.saum);
+    this.matHaut.color.set(f.haut);
+    this.matHaar.color.set(f.haar);
+    this.matGlas.color.set(f.glas);
+    this.kapuze.visible = f.kapuze;
+    this.schirm.visible = f.kapuze;
+    this.haarOben.visible = !f.kapuze;
+    this.haarNacken.visible = !f.kapuze;
   }
 
   /** Was in der Hand steckt, richtet sich nach dem, was angelegt ist. */

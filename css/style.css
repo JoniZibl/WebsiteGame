@@ -767,3 +767,104 @@ html, body {
   .balken { width: 124px; }
   .balken.ausdauer, .balken.magicka { width: 59.5px; }
 }
+
+/* ============================ Vorspann & Schöpfung ========================
+ * Das Erste, was man sieht, ist kein Regelblatt: drei Sätze über dem dunklen
+ * Land, dann der Titel. Und bevor man losgeht, steht die eigene Figur im
+ * Bild und dreht sich, während man sie zusammenstellt.
+ * ========================================================================== */
+.vorspann {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 28px; text-align: center;
+  background: rgba(30, 24, 19, .58);
+  transition: opacity .6s;
+}
+.vorspann.hidden { display: none; }
+.vorspann.weg { opacity: 0; }
+.vorspann p {
+  margin: 0; max-width: 17em;
+  font-size: clamp(19px, 5.6vw, 26px); font-weight: 800; line-height: 1.45;
+  color: #fdf6e8; letter-spacing: -.2px;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .6);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .9s ease-out, transform .9s ease-out;
+}
+.vorspann p.an { opacity: 1; transform: translateY(0); }
+.vorspann small {
+  position: absolute; bottom: calc(var(--rand-u) + 14px);
+  font-size: 11.5px; font-weight: 800; color: #fdf6e8; opacity: .42;
+}
+
+/* Die Schöpfung sitzt unten — oben gehört der Figur. */
+.overlay.unten {
+  align-items: flex-end; padding: 0;
+  background: linear-gradient(to bottom, rgba(74, 59, 48, 0) 34%, rgba(74, 59, 48, .34) 62%);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.schoepf-karte {
+  width: 100%; max-width: 520px; max-height: 64vh;
+  border-radius: var(--r-blatt) var(--r-blatt) 0 0;
+  text-align: left; padding: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: inset 0 3px 0 var(--holz-tief), 0 -10px 30px rgba(74, 59, 48, .3);
+}
+.schoepf-karte .blatt-koerper { padding-top: 10px; }
+.schoepf-karte .start-fuss { padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+
+.name-feld {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: var(--r-feld); background: var(--putz-tief);
+}
+.name-feld span { font-size: 11px; font-weight: 900; opacity: .6; text-transform: uppercase; letter-spacing: .6px; }
+.name-feld input {
+  flex: 1; min-width: 0; border: 0; background: transparent;
+  font: inherit; font-size: 17px; font-weight: 900; color: var(--tinte);
+  padding: 4px 0; outline: none;
+}
+
+.farbreihe { display: flex; flex-wrap: wrap; gap: 7px; }
+.farbe {
+  position: relative; width: 38px; height: 38px; border: 0; border-radius: 12px;
+  cursor: pointer; padding: 0;
+  box-shadow: inset 0 0 0 2px rgba(74, 59, 48, .18);
+}
+.farbe.an { box-shadow: 0 0 0 3px var(--holz-tief), inset 0 0 0 2px rgba(253, 246, 232, .7); }
+.farbe:active { transform: translateY(1.5px); }
+/* Zweifarbige Felder (Gewand: Kutte und Saum) zeigen beides */
+.farbe i { position: absolute; inset: 0; border-radius: 12px; display: block; }
+.farbe i.unten { clip-path: polygon(0 100%, 100% 100%, 100% 55%); }
+.farbe.knopf {
+  width: auto; padding: 0 14px; font: inherit; font-size: 12px; font-weight: 800;
+  background: var(--putz-tief); color: var(--tinte-hell);
+}
+.farbe.knopf.an { background: var(--holz); color: var(--putz); }
+
+.herkunft-wahl {
+  display: block; width: 100%; text-align: left; margin-bottom: 6px;
+  padding: 10px 12px; border: 0; border-radius: var(--r-feld);
+  background: var(--putz-tief); color: var(--tinte); font: inherit; cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px transparent;
+}
+.herkunft-wahl.an { background: #f8ecd0; box-shadow: inset 0 0 0 2px var(--gold); }
+.herkunft-wahl b { display: block; font-size: 13.5px; }
+.herkunft-wahl small { display: block; font-size: 11.5px; opacity: .72; font-weight: 600; margin-top: 1px; }
+.herkunft-wahl .gabe {
+  display: inline-block; margin-top: 5px; padding: 3px 8px; border-radius: 7px;
+  background: var(--putz); font-size: 10.5px; font-weight: 900; color: var(--holz-tief);
+}
+
+/* Vor dem ersten Schritt gibt es kein HUD: Vorspann, Titel und Schöpfung
+   gehören dem Bild allein. */
+body:not(.spielt) #hud,
+body:not(.spielt) #aktionen,
+body:not(.spielt) #stick,
+body:not(.spielt) #zielleiste { display: none; }
+
+.how-knopf { margin: 0 0 10px; font-size: 12.5px; }
+/* Über dem Titel soll man die Welt sehen, nicht Milchglas. */
+#start { background: rgba(74, 59, 48, .3); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.how.hidden { display: none; }
+
+/* Der Schlusstext hat Absätze — sie sollen auch welche bleiben. */
+#endeText, #deadWer { white-space: pre-line; }
