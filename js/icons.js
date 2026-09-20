@@ -9,6 +9,7 @@
 
 const F = {
   holz:   '#a8743f',
+  putzTief: '#efe0c6',
   holzTief: '#7d5227',
   putz:   '#fdf6e8',
   stahl:  '#d8dde2',
@@ -252,6 +253,37 @@ export const ICONS = {
     <circle cx="12.4" cy="17.4" r="2.1" fill="#e0654b"/>
     <circle cx="17.6" cy="13.6" r="1.5" fill="${F.gold}"/>
     <circle cx="15" cy="21" r="1.3" fill="#e0654b" opacity=".7"/>`),
+
+  /* Ein Anschlag mit Siegel — die Aufträge. */
+  schriftrolle: svg(`
+    <rect x="4.4" y="2.8" width="15.2" height="18.4" rx="2.2" fill="${F.putz}"/>
+    <rect x="4.4" y="2.8" width="15.2" height="4.2" rx="2.2" fill="${F.holz}"/>
+    <path d="M7.6 11 h8.8 M7.6 14.2 h8.8 M7.6 17.4 h5" stroke="${F.holzTief}" stroke-width="1.7" stroke-linecap="round"/>
+    <circle cx="17.4" cy="18.4" r="3.1" fill="${F.terra}"/>`),
+
+  /* Ein gefaltetes Kartenblatt. */
+  landkarte: svg(`
+    <path d="M2.6 6.2 L9 4 v14 l-6.4 2.2 Z" fill="${F.salbei}"/>
+    <path d="M9 4 l6 2.2 v14 L9 18 Z" fill="${F.putz}"/>
+    <path d="M15 6.2 L21.4 4 v14 L15 20.2 Z" fill="${F.holz}"/>
+    <path d="M6 10.4 C8 12 9.4 13.6 10.6 16.4" fill="none" stroke="${F.putz}" stroke-width="1.3" stroke-linecap="round" opacity=".8"/>
+    <circle cx="16.8" cy="11" r="1.9" fill="${F.terra}"/>`),
+
+  /* Eine Pranke — das Bestiarium. */
+  pfote: svg(`
+    <ellipse cx="12" cy="16.2" rx="5.4" ry="4.4" fill="${F.holz}"/>
+    <ellipse cx="6.4" cy="11.4" rx="2.3" ry="2.8" fill="${F.holzTief}"/>
+    <ellipse cx="10.2" cy="8" rx="2.2" ry="2.8" fill="${F.holzTief}"/>
+    <ellipse cx="14.6" cy="8" rx="2.2" ry="2.8" fill="${F.holzTief}"/>
+    <ellipse cx="18.2" cy="11.6" rx="2.2" ry="2.7" fill="${F.holzTief}"/>`),
+
+  /* Die Windrose auf dem Kartenblatt: eine Spitze nach Norden. */
+  rose: svg(`
+    <circle cx="12" cy="12" r="9.4" fill="none" stroke="${F.holz}" stroke-width="1.4" opacity=".55"/>
+    <path d="M12 2.6 L14.6 12 L12 21.4 L9.4 12 Z" fill="${F.putz}"/>
+    <path d="M12 2.6 L14.6 12 L12 12 Z" fill="${F.terra}"/>
+    <path d="M12 12 L9.4 12 L12 21.4 Z" fill="${F.holzTief}" opacity=".5"/>
+    <path d="M2.6 12 h4.4 M17 12 h4.4" stroke="${F.holz}" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>`),
 
   /* Eine Münze. */
   muenze: svg(`

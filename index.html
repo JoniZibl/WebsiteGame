@@ -20,22 +20,27 @@
   <div id="popups"></div>
 
   <div id="hud">
-    <div class="oben-links">
-      <div class="balken leben"><i></i><span id="hpText">100</span></div>
-      <div class="balken ausdauer"><i></i></div>
-      <div class="balken magicka"><i></i></div>
+    <!-- Links: wie es um einen steht. Ort oben, darunter die drei Leisten. -->
+    <div class="hud-links">
       <div class="ort"><b id="ortName">Talkunde</b><small id="ortInfo">Wiese</small></div>
+      <div class="balken leben"><i></i><span id="hpText">100</span></div>
+      <div class="leisten-paar">
+        <div class="balken ausdauer"><i></i></div>
+        <div class="balken magicka"><i></i></div>
+      </div>
     </div>
 
-    <div class="oben-rechts">
-      <div class="stufe"><span id="stufeZahl">1</span><small>Stufe</small></div>
-      <div class="xp"><i id="xpFill"></i></div>
-      <div class="gold"><i class="ic-muenze"></i><span id="goldZahl">0</span></div>
-    </div>
-
-    <div class="seiten-knoepfe">
-      <button id="qualityBtn" class="ghost-btn" title="Grafik"></button>
-      <button id="soundBtn" class="ghost-btn" title="Ton"></button>
+    <!-- Rechts: der Held selbst und die drei stillen Knöpfe -->
+    <div class="hud-rechts">
+      <div class="held-kachel">
+        <div class="stufe-ring" id="xpFill"><span id="stufeZahl">1</span></div>
+        <div class="gold"><i class="ic-muenze"></i><span id="goldZahl">0</span></div>
+      </div>
+      <div class="sys-reihe">
+        <button id="menuBtn" class="sys-btn" title="Heldenblatt"></button>
+        <button id="soundBtn" class="sys-btn" title="Ton"></button>
+        <button id="qualityBtn" class="sys-btn" title="Grafik"></button>
+      </div>
     </div>
   </div>
 
@@ -50,12 +55,16 @@
     <b id="ereignisName"></b><small id="ereignisZahl"></small>
   </div>
 
-  <button id="menuBtn" class="knopf klein" title="Held"></button>
-  <button id="wirkBtn" class="knopf klein magie" title="Zauber"></button>
-  <button id="trinkBtn" class="knopf klein trank hidden" title="trinken"><b id="trinkZahl"></b></button>
-  <button id="rollBtn" class="knopf klein rolle" title="ausweichen"></button>
-  <button id="redeBtn" class="knopf mittel hidden" title="ansprechen"></button>
-  <button id="hauBtn" class="knopf gross" title="angreifen"></button>
+  <!-- Alles, was der Daumen erreichen muss, sitzt in einem Feld unten rechts.
+       So behalten die Knöpfe ihr Verhältnis zueinander, egal wie groß der
+       Bildschirm ist. -->
+  <div id="aktionen">
+    <button id="hauBtn" class="akt gross" title="angreifen"></button>
+    <button id="wirkBtn" class="akt mittel magie" title="Zauber"></button>
+    <button id="redeBtn" class="akt mittel reden hidden" title="ansprechen"></button>
+    <button id="rollBtn" class="akt klein rolle" title="ausweichen"></button>
+    <button id="trinkBtn" class="akt klein trank hidden" title="trinken"><b id="trinkZahl"></b></button>
+  </div>
 
   <!-- Taucht auf, wenn man unter Tage festhängt -->
   <div id="festHinweis" class="fest-hinweis hidden">
@@ -68,75 +77,98 @@
   <!-- Gespräch -->
   <div id="rede" class="overlay hidden">
     <div class="karte rede-karte">
-      <div class="rede-kopf"><b id="redeName"></b><small id="redeBeruf"></small></div>
-      <p id="redeText" class="rede-text"></p>
-      <div id="redeWahl" class="rede-wahl"></div>
+      <header class="blatt-kopf">
+        <span class="kopf-text"><b id="redeName"></b><small id="redeBeruf"></small></span>
+        <button id="redeZu" class="schliessen" title="zu">&#215;</button>
+      </header>
+      <div class="blatt-koerper">
+        <p id="redeText" class="rede-text"></p>
+        <div id="redeWahl" class="rede-wahl"></div>
+      </div>
     </div>
   </div>
 
   <!-- Laden -->
   <div id="laden" class="overlay hidden">
     <div class="karte laden-karte">
-      <div class="laden-kopf"><b id="ladenName">Waren</b><span class="gold"><i class="ic-muenze"></i><span id="ladenGold">0</span></span></div>
-      <div class="menu-reiter">
+      <header class="blatt-kopf">
+        <span class="kopf-text"><b id="ladenName">Waren</b><small>Handel</small></span>
+        <span class="gold beutel-gold"><i class="ic-muenze"></i><span id="ladenGold">0</span></span>
+        <button id="ladenZu" class="schliessen" title="zu">&#215;</button>
+      </header>
+      <div class="segment">
         <button class="lreiter an" data-seite="kauf">Kaufen</button>
         <button class="lreiter" data-seite="verkauf">Verkaufen</button>
       </div>
-      <div id="ladenListe"></div>
-      <button id="ladenZu" class="primary">Fertig</button>
+      <div id="ladenListe" class="blatt-koerper"></div>
     </div>
   </div>
 
   <!-- Die Esse: Ausrüstung schärfen -->
   <div id="esse" class="overlay hidden">
     <div class="karte laden-karte">
-      <div class="laden-kopf"><b>An der Esse</b><span class="gold"><i class="ic-muenze"></i><span id="esseGold">0</span></span></div>
-      <p class="sub esse-wort" id="esseWort">Gib her, ich schau es mir an.</p>
-      <div id="esseListe"></div>
-      <button id="esseZu" class="primary">Fertig</button>
+      <header class="blatt-kopf">
+        <span class="kopf-text"><b>An der Esse</b><small id="esseWort">Gib her, ich schau es mir an.</small></span>
+        <span class="gold beutel-gold"><i class="ic-muenze"></i><span id="esseGold">0</span></span>
+        <button id="esseZu" class="schliessen" title="zu">&#215;</button>
+      </header>
+      <div id="esseListe" class="blatt-koerper"></div>
     </div>
   </div>
 
   <!-- Heldenblatt -->
   <div id="menu" class="overlay hidden">
     <div class="karte menu-karte">
-      <div class="menu-reiter">
-        <button class="reiter an" data-tab="fert">K&ouml;nnen</button>
-        <button class="reiter" data-tab="beutel">Beutel</button>
-        <button class="reiter" data-tab="quests">Aufträge</button>
-        <button class="reiter" data-tab="welt">Karte</button>
-        <button class="reiter" data-tab="wesen">Wesen</button>
+      <header class="blatt-kopf">
+        <span class="kopf-text"><b id="menuTitel">K&ouml;nnen</b><small id="menuUnter">Stufe 1</small></span>
+        <span class="gold beutel-gold"><i class="ic-muenze"></i><span id="menuGold">0</span></span>
+        <button id="menuZu" class="schliessen" title="zu">&#215;</button>
+      </header>
+      <nav class="reiter-leiste">
+        <button class="reiter an" data-tab="fert" data-sym="funke"><i></i><small>K&ouml;nnen</small></button>
+        <button class="reiter" data-tab="beutel" data-sym="beutel"><i></i><small>Beutel</small></button>
+        <button class="reiter" data-tab="quests" data-sym="schriftrolle"><i></i><small>Auftr&auml;ge</small></button>
+        <button class="reiter" data-tab="welt" data-sym="rose"><i></i><small>Karte</small></button>
+        <button class="reiter" data-tab="wesen" data-sym="pfote"><i></i><small>Wesen</small></button>
+      </nav>
+      <div class="blatt-koerper">
+        <div id="tabFert" class="tab"></div>
+        <div id="tabBeutel" class="tab hidden"></div>
+        <div id="tabQuests" class="tab hidden"></div>
+        <div id="tabWelt" class="tab hidden"></div>
+        <div id="tabWesen" class="tab hidden"></div>
       </div>
-      <div id="tabFert" class="tab"></div>
-      <div id="tabBeutel" class="tab hidden"></div>
-      <div id="tabQuests" class="tab hidden"></div>
-      <div id="tabWelt" class="tab hidden"></div>
-      <div id="tabWesen" class="tab hidden"></div>
-      <button id="menuZu" class="primary">Weiter</button>
     </div>
   </div>
 
   <div id="start" class="overlay">
-    <div class="karte">
-      <h1>Talkunde</h1>
-      <p class="sub claim">Eine Welt ohne Ende, ein Dorf zum Anfangen und mehr Gruften, als du leeren kannst.</p>
-      <ul class="how">
-        <li><b>Ziehen</b> &rarr; laufen. Weit hinausziehen &rarr; <b>rennen</b>, das kostet Ausdauer.</li>
-        <li>Die Kn&ouml;pfe rechts: zuschlagen oder schie&szlig;en, zaubern, ansprechen, Heldenblatt.</li>
-        <li>Jede Gegend tr&auml;gt ihr eigenes Getier. Die <b>Rauten</b> neben dem Ortsnamen sagen,
-            wie b&ouml;se es hier ist — eine ist harmlos, f&uuml;nf sind t&ouml;dlich.</li>
-        <li>Nachts kommt Schlimmeres heraus. In den H&auml;usern kannst du <b>schlafen</b>,
-            bis es Morgen wird.</li>
-        <li>Waffen und Zauber gibt es in vier G&uuml;ten, von <b>gemein</b> bis
-            <b>sagenhaft</b>. Spr&uuml;che lernst du aus B&uuml;chern; <b>lang</b> auf den
-            Zauberknopf gedr&uuml;ckt wechselt den Spruch.</li>
-        <li>Wer stirbt, l&auml;sst den halben Beutel liegen — dort, wo er gefallen ist.</li>
-        <li>Festgelaufen? Im Heldenblatt unter <b>Karte</b> bringt dich die
-            <b>Heimkehr</b> zum n&auml;chsten Dorf zur&uuml;ck.</li>
-        <li>Was du oft tust, wirst du gut. Jede Stufe gibt einen <b>Vorteil</b>.</li>
-      </ul>
-      <button id="resumeBtn" class="primary hidden">Weiterspielen</button>
-      <button id="startBtn" class="primary">Aufbrechen</button>
+    <div class="karte start-karte">
+      <div class="start-kopf">
+        <h1>Talkunde</h1>
+        <p class="sub claim">Eine Welt ohne Ende, ein Dorf zum Anfangen und mehr
+          Gruften, als du leeren kannst.</p>
+      </div>
+      <div class="blatt-koerper">
+        <ul class="how">
+          <li><b>Ziehen</b> l&auml;uft, weit hinausziehen <b>rennt</b> — das kostet Ausdauer.
+              Rechts: schlagen, zaubern, ausweichen, ansprechen.</li>
+          <li>Die <b>Rauten</b> neben dem Ortsnamen sagen, wie b&ouml;se eine Gegend ist —
+              eine ist harmlos, f&uuml;nf sind t&ouml;dlich. Nachts kommt Schlimmeres heraus.</li>
+          <li>Waffen und Zauber gibt es in vier G&uuml;ten, von <b>gemein</b> bis
+              <b>sagenhaft</b>. Spr&uuml;che lernst du aus B&uuml;chern; <b>lang</b> auf den
+              Zauberknopf gedr&uuml;ckt wechselt den Spruch.</li>
+          <li>Was du oft tust, wirst du gut. Jede Stufe gibt einen <b>Vorteil</b> —
+              f&uuml;nf je Fertigkeit, nachzulesen unter <b>K&ouml;nnen</b>.</li>
+          <li>In den H&auml;usern kannst du <b>schlafen</b>. Wer stirbt, l&auml;sst den halben
+              Beutel liegen — dort, wo er gefallen ist.</li>
+          <li>Festgelaufen? Unter <b>Karte</b> bringt dich die <b>Heimkehr</b>
+              zum n&auml;chsten Dorf zur&uuml;ck.</li>
+        </ul>
+      </div>
+      <div class="start-fuss">
+        <button id="resumeBtn" class="primary hidden">Weiterspielen</button>
+        <button id="startBtn" class="primary">Aufbrechen</button>
+      </div>
     </div>
   </div>
 

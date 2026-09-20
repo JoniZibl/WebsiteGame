@@ -1,16 +1,23 @@
 /* ==========================================================================
  *  Talkunde — die Oberfläche.
  *
- *  Sie soll aus derselben Werkstatt kommen wie die Welt darunter: Putz mit
- *  Holzrahmen, Terrakotta, Salbei. Also keine Glaskugeln, keine Verläufe über
- *  mehrere Farben, keine Schlagschatten ins Blaue — sondern flache Flächen mit
- *  einer dunkleren Kante darunter, wie die Balken an den Häusern.
+ *  Sie kommt aus derselben Werkstatt wie die Welt darunter: Putz mit
+ *  Holzrahmen, Terrakotta, Salbei. Keine Glaskugeln, keine Verläufe über
+ *  mehrere Farben, keine Schlagschatten ins Blaue — flache Flächen mit einer
+ *  dunkleren Kante darunter, wie die Balken an den Häusern.
+ *
+ *  Ordnung im Bild: das Spiel gehört der Mitte. Links steht, wie es um einen
+ *  steht, rechts oben, wer man ist, rechts unten alles, was der Daumen tut.
+ *  Alles andere liegt auf Blättern, die man aufschlägt und wieder zuklappt.
+ *  Ein Blatt hat immer denselben Bau — Kopf, Reiter, Körper — damit man sich
+ *  nie neu zurechtfinden muss.
  * ========================================================================== */
 :root {
   --tinte:      #4a3b30;
   --tinte-hell: #7a6555;
   --putz:       #fdf6e8;
   --putz-tief:  #efe0c6;
+  --putz-tiefer:#e3d2b3;
   --holz:       #a8743f;
   --holz-tief:  #7d5227;
   --terra:      #c9543f;
@@ -20,7 +27,21 @@
   --blau:       #5e8aa8;
   --blau-tief:  #40667f;
   --gold:       #e8a83c;
-  --schatten:   0 8px 22px rgba(74, 59, 48, .22);
+  --gold-tief:  #b07f25;
+
+  /* Ein Radius-Dreiklang: Knopf, Feld, Blatt. Mehr braucht es nicht. */
+  --r-klein: 9px;
+  --r-feld:  13px;
+  --r-blatt: 20px;
+
+  --schatten:   0 10px 26px rgba(74, 59, 48, .2);
+  --schatten-k: 0 4px 12px rgba(74, 59, 48, .16);
+
+  /* Die Ränder des Bildschirms, einmal ausgerechnet */
+  --rand-o: calc(env(safe-area-inset-top, 0px) + 12px);
+  --rand-r: calc(env(safe-area-inset-right, 0px) + 12px);
+  --rand-u: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  --rand-l: calc(env(safe-area-inset-left, 0px) + 12px);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -37,115 +58,127 @@ html, body {
 
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
-/* --------------------------------- HUD ------------------------------------ */
+/* ============================== Das Bild-HUD ==============================
+ * Beides sitzt auf einer hellen Platte: über Schnee wie über Asche bleibt die
+ * Schrift lesbar, und das Auge weiß sofort, was Anzeige ist und was Welt.
+ * ========================================================================== */
 #hud {
   position: fixed; inset: 0; pointer-events: none; z-index: 4;
-  padding: calc(env(safe-area-inset-top, 0px) + 14px) calc(env(safe-area-inset-right, 0px) + 14px)
-           calc(env(safe-area-inset-bottom, 0px) + 14px) calc(env(safe-area-inset-left, 0px) + 14px);
+  padding: var(--rand-o) var(--rand-r) var(--rand-u) var(--rand-l);
+  display: flex; align-items: flex-start; justify-content: space-between;
 }
-.oben-links { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
 
-/* Die Leisten sitzen wie Fensterrahmen: Putz innen, Holz außen. */
+
+.hud-links {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  padding: 8px 12px 10px; border-radius: var(--r-feld);
+  background: rgba(253, 246, 232, .72);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1.5px rgba(168, 116, 63, .32), var(--schatten-k);
+}
+
+.ort { line-height: 1.1; }
+.ort b { display: block; font-size: 16px; font-weight: 900; letter-spacing: -.2px; }
+.ort small { display: block; font-size: 10.5px; font-weight: 800; opacity: .62; margin-top: 1px; }
+
+/* Die Leisten: innen Putz, außen eine Haarlinie Holz. */
 .balken {
-  position: relative; width: 132px; height: 15px;
-  border-radius: 5px;
-  background: var(--putz-tief);
-  box-shadow: 0 0 0 2px var(--holz-tief), 0 2px 0 rgba(125, 82, 39, .5);
+  position: relative; width: 136px; height: 11px; border-radius: 6px;
+  background: var(--putz-tiefer);
+  box-shadow: inset 0 0 0 1.5px rgba(125, 82, 39, .45);
   overflow: hidden;
 }
 .balken i { display: block; height: 100%; width: 100%; transition: width .16s ease-out; }
 .balken.leben i { background: var(--terra); }
-.balken.ausdauer { width: 108px; height: 9px; }
-.balken.ausdauer i { background: var(--salbei); }
-.balken.magicka { width: 108px; height: 9px; }
-.balken.magicka i { background: var(--blau); }
 .balken span {
-  position: absolute; inset: 0; text-align: center; font-size: 10px; font-weight: 900;
-  line-height: 15px; color: var(--putz); letter-spacing: .3px;
+  position: absolute; inset: 0; text-align: center; font-size: 8.5px; font-weight: 900;
+  line-height: 11px; color: var(--putz); letter-spacing: .4px;
 }
+.leisten-paar { display: flex; gap: 5px; }
+.balken.ausdauer, .balken.magicka { width: 65.5px; height: 7px; }
+.balken.ausdauer i { background: var(--salbei); }
+.balken.magicka i { background: var(--blau); }
 .balken.leben.wenig i { animation: pochen .55s steps(2, end) infinite; }
 .balken.ausdauer.wenig i { animation: pusten .5s steps(2, end) infinite; }
-@keyframes pusten { 50% { background: #e8a83c; } }
+@keyframes pusten { 50% { background: var(--gold); } }
 @keyframes pochen { 50% { background: #e88b6a; } }
 
-.ort { margin-top: 6px; line-height: 1.15; }
-.ort b {
-  display: block; font-size: 19px; font-weight: 900;
-  text-shadow: 0 2px 0 rgba(253, 246, 232, .8);
-}
-.ort small { font-size: 11px; font-weight: 800; opacity: .6; }
-
 /* Gefahrzeichen: ein Rhombus je Stufe, in der Wärme der Gegend */
-.gefahr { font-size: 9px; letter-spacing: 1px; vertical-align: 1px; opacity: .95; }
-.gefahr.g1 { color: #7fae5e; }
-.gefahr.g2 { color: #b39a3f; }
-.gefahr.g3 { color: #e8a83c; }
-.gefahr.g4 { color: #d4703a; }
-.gefahr.g5 { color: #c9543f; }
-#zielleiste .gefahr { text-shadow: 0 1px 0 rgba(253, 246, 232, .9); }
-.wetter-wort { font-weight: 800; opacity: .85; }
+.gefahr { font-size: 8.5px; letter-spacing: .5px; vertical-align: 1px; }
+.gefahr.g1 { color: #6b9a4c; }
+.gefahr.g2 { color: #a88c30; }
+.gefahr.g3 { color: #d9902a; }
+.gefahr.g4 { color: #c4652f; }
+.gefahr.g5 { color: var(--terra); }
+.wetter-wort { font-weight: 800; opacity: .8; }
 
-.oben-rechts {
-  position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px);
-  right: calc(env(safe-area-inset-right, 0px) + 68px);
-  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+/* ------------------------------ Rechts oben ------------------------------- */
+.hud-rechts { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+.held-kachel {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 6px; border-radius: 26px;
+  background: rgba(253, 246, 232, .72);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1.5px rgba(168, 116, 63, .32), var(--schatten-k);
 }
-.stufe { display: flex; align-items: baseline; gap: 4px; }
-.stufe span { font-size: 25px; font-weight: 900; line-height: 1; text-shadow: 0 2px 0 rgba(253,246,232,.8); }
-.stufe small { font-size: 10px; font-weight: 800; opacity: .6; }
-.xp {
-  width: 94px; height: 7px; border-radius: 4px; background: var(--putz-tief);
-  box-shadow: 0 0 0 2px var(--holz-tief); overflow: hidden;
+/* Der Ring ist die Erfahrung: er füllt sich einmal herum, dann kommt die Stufe. */
+.stufe-ring {
+  position: relative; width: 34px; height: 34px; border-radius: 50%;
+  background: conic-gradient(var(--gold) calc(var(--xp, 0) * 1%), var(--putz-tiefer) 0);
+  display: grid; place-items: center;
 }
-.xp i { display: block; height: 100%; width: 0; background: var(--gold); transition: width .2s; }
-.gold { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 900; }
+.stufe-ring::after {
+  content: ''; position: absolute; inset: 3.5px; border-radius: 50%;
+  background: var(--putz);
+}
+.stufe-ring span {
+  position: relative; z-index: 1; font-size: 15px; font-weight: 900; line-height: 1;
+}
+.gold { display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 900; }
 .gold i { width: 15px; height: 15px; display: block; }
 
-/* Die Auftragstafel ist ein Holzschild an der Wand. */
-.seiten-knoepfe {
-  position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px);
-  right: calc(env(safe-area-inset-right, 0px) + 14px);
-  display: flex; flex-direction: column; gap: 7px; pointer-events: auto;
+.sys-reihe { display: flex; gap: 6px; pointer-events: auto; }
+.sys-btn {
+  width: 32px; height: 32px; padding: 6px; border: 0; border-radius: var(--r-klein);
+  background: rgba(253, 246, 232, .82); cursor: pointer;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1.5px rgba(168, 116, 63, .38), var(--schatten-k);
+  transition: transform .07s;
 }
-.ghost-btn {
-  width: 36px; height: 36px; padding: 7px; border: 0; border-radius: 8px;
-  background: var(--putz); cursor: pointer;
-  box-shadow: 0 0 0 2px var(--holz), 0 3px 0 var(--holz-tief);
-}
-.ghost-btn:active { transform: translateY(2px); box-shadow: 0 0 0 2px var(--holz), 0 1px 0 var(--holz-tief); }
-.ghost-btn.off { opacity: .45; }
-.ghost-btn svg { display: block; }
+.sys-btn:active { transform: translateY(1.5px); }
+.sys-btn.off { opacity: .42; }
+.sys-btn svg { display: block; width: 100%; height: 100%; }
 
 /* ------------------------------- Zielleiste -------------------------------- */
 #zielleiste {
   position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top, 0px) + 96px);
-  width: min(220px, 54vw); text-align: center; pointer-events: none;
-  transition: opacity .2s;
+  top: calc(var(--rand-o) + 74px);
+  width: min(210px, 52vw); text-align: center; pointer-events: none;
+  transition: opacity .18s;
 }
 #zielleiste.hidden { opacity: 0; }
 #zielleiste b {
-  display: block; font-size: 12px; font-weight: 900; margin-bottom: 3px;
-  text-shadow: 0 2px 0 rgba(253, 246, 232, .85);
+  display: block; font-size: 11.5px; font-weight: 900; margin-bottom: 3px;
+  text-shadow: 0 1px 0 rgba(253, 246, 232, .95), 0 0 6px rgba(253, 246, 232, .85);
+}
+#zielleiste i {
+  display: block; height: 7px; border-radius: 4px; background: var(--terra);
+  box-shadow: inset 0 0 0 1.5px rgba(125, 82, 39, .5),
+              0 0 0 2px rgba(253, 246, 232, .55);
+  transition: width .12s;
 }
 #zielleiste.gezeichnet b { color: var(--terra-tief); }
-#zielleiste.gezeichnet i { background: var(--gold); box-shadow: 0 0 0 2px var(--terra-tief); }
-#zielleiste i {
-  display: block; height: 9px; border-radius: 4px; background: var(--terra);
-  box-shadow: 0 0 0 2px var(--holz-tief); transition: width .12s;
-}
+#zielleiste.gezeichnet i { background: var(--gold); }
 
-/* --------------------------- Ereignisse ------------------------------------
- * Das Band fährt einmal ein, wenn etwas losgeht, und geht wieder. Die kleine
- * Tafel rechts bleibt, solange noch etwas steht.
- * -------------------------------------------------------------------------- */
+/* --------------------------- Bänder und Tafeln ---------------------------- */
 .banner {
-  position: fixed; z-index: 8; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 112px);
-  transform: translate(-50%, -14px); opacity: 0;
+  position: fixed; z-index: 8; left: 50%; top: calc(var(--rand-o) + 104px);
+  transform: translate(-50%, -12px); opacity: 0;
   width: min(300px, 84vw); text-align: center; pointer-events: none;
-  padding: 10px 14px 12px; border-radius: 12px;
+  padding: 11px 15px 12px; border-radius: var(--r-feld);
   background: var(--putz);
-  box-shadow: 0 0 0 3px var(--ton, var(--terra)), 0 6px 0 rgba(74, 59, 48, .22);
+  box-shadow: inset 0 0 0 2px var(--ton, var(--terra)), var(--schatten);
   transition: opacity .3s, transform .3s;
 }
 .banner.an { opacity: 1; transform: translate(-50%, 0); }
@@ -154,115 +187,97 @@ html, body {
 .banner small { display: block; font-size: 11.5px; font-weight: 800; opacity: .72; margin-top: 3px; }
 
 .ereignis {
-  position: fixed; z-index: 6; right: calc(env(safe-area-inset-right, 0px) + 14px);
-  top: calc(env(safe-area-inset-top, 0px) + 198px);
+  position: fixed; z-index: 6; right: var(--rand-r);
+  top: calc(var(--rand-o) + 108px);
   text-align: right; pointer-events: none;
-  padding: 6px 10px; border-radius: 9px;
+  padding: 6px 11px; border-radius: var(--r-klein);
   background: var(--putz);
-  box-shadow: 0 0 0 2px var(--ton, var(--terra)), 0 3px 0 rgba(74, 59, 48, .2);
+  box-shadow: inset 0 0 0 2px var(--ton, var(--terra)), var(--schatten-k);
 }
 .ereignis.hidden { display: none; }
 .ereignis b { display: block; font-size: 11.5px; font-weight: 900; color: var(--ton, var(--terra)); }
 .ereignis small { display: block; font-size: 10.5px; font-weight: 800; opacity: .7; }
 
-/* Der Rueckweg aus einer Hoehle: nur sichtbar, wenn man wirklich feststeckt */
+/* Der Rückweg aus einer Höhle: nur sichtbar, wenn man wirklich feststeckt */
 .fest-hinweis {
   position: fixed; z-index: 7; left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 196px);
-  width: min(290px, 82vw); text-align: center;
-  padding: 11px 12px 12px; border-radius: 12px;
-  background: var(--putz); color: var(--tinte);
-  box-shadow: 0 0 0 3px var(--holz-tief), 0 6px 0 rgba(74, 59, 48, .25);
+  bottom: calc(var(--rand-u) + 214px);
+  width: min(280px, 80vw); text-align: center;
+  padding: 12px; border-radius: var(--r-feld);
+  background: var(--putz);
+  box-shadow: inset 0 0 0 2px var(--holz-tief), var(--schatten);
 }
 .fest-hinweis.hidden { display: none; }
-.fest-hinweis b { display: block; font-size: 13px; font-weight: 900; margin-bottom: 8px; }
+.fest-hinweis b { display: block; font-size: 12.5px; font-weight: 900; margin-bottom: 9px; }
 .fest-hinweis button {
-  width: 100%; padding: 10px; border: 0; border-radius: 9px;
+  width: 100%; padding: 10px; border: 0; border-radius: var(--r-klein);
   background: var(--terra); color: var(--putz);
-  font: inherit; font-size: 13.5px; font-weight: 900; cursor: pointer;
-  box-shadow: 0 0 0 3px var(--holz-tief), 0 4px 0 var(--terra-tief);
-}
-.fest-hinweis button:active { transform: translateY(2px); box-shadow: 0 0 0 3px var(--holz-tief), 0 2px 0 var(--terra-tief); }
-
-.karten-knopf {
-  display: flex; align-items: center; justify-content: center; gap: 7px;
-  width: 100%; margin-top: 10px; padding: 11px; border: 0; border-radius: 10px;
-  background: var(--putz-tief); color: var(--tinte);
   font: inherit; font-size: 13px; font-weight: 900; cursor: pointer;
-  box-shadow: 0 0 0 3px var(--holz), 0 4px 0 var(--holz-tief);
+  box-shadow: 0 3px 0 var(--terra-tief);
 }
-.karten-knopf:active { transform: translateY(2px); box-shadow: 0 0 0 3px var(--holz), 0 2px 0 var(--holz-tief); }
-.karten-knopf.gefahr-knopf {
-  margin-top: 6px; background: var(--putz); color: var(--terra-tief);
-  box-shadow: 0 0 0 3px var(--terra), 0 4px 0 var(--terra-tief);
-}
-.karten-knopf.gefahr-knopf:active { box-shadow: 0 0 0 3px var(--terra), 0 2px 0 var(--terra-tief); }
-.karten-knopf .ic { width: 16px; height: 16px; display: block; }
-.karten-knopf .ic svg { display: block; width: 100%; height: 100%; }
+.fest-hinweis button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--terra-tief); }
 
-/* -------------------------------- Knöpfe -----------------------------------
- * Wie kleine bemalte Holzschilder: eine Fläche, ein Rahmen, eine Kante
- * darunter, die beim Drücken verschwindet.
- * -------------------------------------------------------------------------- */
-.knopf {
-  position: fixed; z-index: 6; border: 0; cursor: pointer;
+/* ============================== Die Knöpfe ================================
+ * Ein Feld unten rechts, und darin sitzt alles an seinem Platz: der Hieb
+ * unter dem Daumen, Zauber und Rolle daneben, Reden und Trinken darüber.
+ * ========================================================================== */
+#aktionen {
+  position: fixed; z-index: 6; right: var(--rand-r); bottom: var(--rand-u);
+  width: 176px; height: 250px; pointer-events: none;
+}
+.akt {
+  position: absolute; border: 0; padding: 0; cursor: pointer; pointer-events: auto;
   display: flex; align-items: center; justify-content: center;
-  padding: 0; transition: transform .07s, box-shadow .07s;
+  color: var(--putz);
+  transition: transform .07s, box-shadow .07s, opacity .2s;
 }
-.knopf svg { display: block; width: 100%; height: 100%; }
-.knopf:active { transform: translateY(5px); }
-.knopf.hidden { display: none; }
+.akt svg { display: block; width: 100%; height: 100%; }
+.akt.hidden { display: none; }
+.akt:active { transform: translateY(3px); }
+.akt.leer { opacity: .4; }
 
-.knopf.gross {
-  width: 82px; height: 82px; padding: 17px; border-radius: 22px;
-  right: calc(env(safe-area-inset-right, 0px) + 20px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
+.akt.gross {
+  width: 86px; height: 86px; padding: 19px; border-radius: 28px;
+  right: 4px; bottom: 6px;
   background: var(--terra);
-  box-shadow: 0 0 0 4px var(--holz-tief), 0 7px 0 var(--terra-tief), var(--schatten);
+  box-shadow: inset 0 0 0 2.5px rgba(150, 57, 42, .75), 0 5px 0 var(--terra-tief), var(--schatten);
 }
-.knopf.gross:active { box-shadow: 0 0 0 4px var(--holz-tief), 0 2px 0 var(--terra-tief); }
+.akt.gross:active { box-shadow: inset 0 0 0 2.5px rgba(150, 57, 42, .75), 0 2px 0 var(--terra-tief); }
 
-.knopf.mittel {
-  width: 62px; height: 62px; padding: 13px; border-radius: 18px;
-  right: calc(env(safe-area-inset-right, 0px) + 114px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 34px);
-  background: var(--salbei);
-  box-shadow: 0 0 0 3px var(--holz-tief), 0 6px 0 var(--salbei-tief), var(--schatten);
-}
-.knopf.mittel:active { box-shadow: 0 0 0 3px var(--holz-tief), 0 1px 0 var(--salbei-tief); }
+.akt.mittel { width: 58px; height: 58px; padding: 13px; border-radius: 20px; }
+.akt.klein  { width: 50px; height: 50px; padding: 12px; border-radius: 17px; }
 
-.knopf.klein {
-  width: 50px; height: 50px; padding: 11px; border-radius: 15px;
-  background: var(--putz);
-  box-shadow: 0 0 0 3px var(--holz), 0 5px 0 var(--holz-tief), var(--schatten);
-}
-.knopf.klein:active { box-shadow: 0 0 0 3px var(--holz), 0 1px 0 var(--holz-tief); }
-
-#menuBtn { right: calc(env(safe-area-inset-right, 0px) + 26px); bottom: calc(env(safe-area-inset-bottom, 0px) + 122px); }
-#rollBtn {
-  /* Über dem Reden-Knopf, links neben dem Zauber — dort ist als Einziges
-     noch Platz für einen Daumen. */
-  right: calc(env(safe-area-inset-right, 0px) + 156px); bottom: calc(env(safe-area-inset-bottom, 0px) + 112px);
-  background: var(--salbei);
-  box-shadow: 0 0 0 3px var(--holz-tief), 0 5px 0 var(--salbei-tief), var(--schatten);
-}
-#rollBtn:active { box-shadow: 0 0 0 3px var(--holz-tief), 0 1px 0 var(--salbei-tief); }
-#rollBtn.leer { opacity: .45; }
 #wirkBtn {
-  right: calc(env(safe-area-inset-right, 0px) + 92px); bottom: calc(env(safe-area-inset-bottom, 0px) + 110px);
+  right: 102px; bottom: 20px;
   background: var(--blau);
-  box-shadow: 0 0 0 3px var(--holz-tief), 0 5px 0 var(--blau-tief), var(--schatten);
+  box-shadow: inset 0 0 0 2.5px rgba(64, 102, 127, .8), 0 4px 0 var(--blau-tief), var(--schatten-k);
 }
-#wirkBtn:active { box-shadow: 0 0 0 3px var(--holz-tief), 0 1px 0 var(--blau-tief); }
-#wirkBtn.leer { opacity: .42; }
+#wirkBtn:active { box-shadow: inset 0 0 0 2.5px rgba(64, 102, 127, .8), 0 1px 0 var(--blau-tief); }
+
+#rollBtn {
+  right: 18px; bottom: 104px;
+  background: var(--salbei);
+  box-shadow: inset 0 0 0 2.5px rgba(93, 138, 69, .8), 0 4px 0 var(--salbei-tief), var(--schatten-k);
+}
+#rollBtn:active { box-shadow: inset 0 0 0 2.5px rgba(93, 138, 69, .8), 0 1px 0 var(--salbei-tief); }
+
+#redeBtn {
+  right: 96px; bottom: 100px;
+  background: var(--putz); color: var(--tinte);
+  box-shadow: inset 0 0 0 2.5px var(--holz), 0 4px 0 var(--holz-tief), var(--schatten-k);
+}
+#redeBtn:active { box-shadow: inset 0 0 0 2.5px var(--holz), 0 1px 0 var(--holz-tief); }
+
 #trinkBtn {
-  position: fixed; right: calc(env(safe-area-inset-right, 0px) + 92px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 176px);
+  right: 24px; bottom: 176px; width: 46px; height: 46px; padding: 11px; border-radius: 16px;
+  background: var(--putz); color: var(--tinte);
+  box-shadow: inset 0 0 0 2.5px var(--holz), 0 4px 0 var(--holz-tief), var(--schatten-k);
 }
+#trinkBtn:active { box-shadow: inset 0 0 0 2.5px var(--holz), 0 1px 0 var(--holz-tief); }
 #trinkBtn b {
-  position: absolute; right: -4px; top: -4px; min-width: 18px; height: 18px;
+  position: absolute; right: -3px; top: -3px; min-width: 17px; height: 17px;
   border-radius: 9px; background: var(--terra); color: var(--putz);
-  font-size: 11px; font-weight: 900; line-height: 18px; text-align: center;
+  font-size: 10.5px; font-weight: 900; line-height: 17px; text-align: center;
   box-shadow: 0 0 0 2px var(--putz);
 }
 #trinkBtn b:empty { display: none; }
@@ -271,280 +286,484 @@ html, body {
 #stick { position: fixed; inset: 0; pointer-events: none; opacity: 1; transition: opacity .18s; z-index: 3; }
 #stick.hidden { opacity: 0; }
 #stickBase, #stickNub { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
-#stickBase { width: 116px; height: 116px; background: rgba(253, 246, 232, .26); box-shadow: 0 0 0 3px rgba(168, 116, 63, .55); }
-#stickNub { width: 52px; height: 52px; background: var(--putz); box-shadow: 0 0 0 3px var(--holz), 0 4px 0 var(--holz-tief); }
-/* Weit hinausgezogen: der Knüppel glüht, der Ring zieht sich an — er rennt */
-#stick.rennt #stickNub { background: var(--gold); box-shadow: 0 0 0 3px var(--terra-tief), 0 0 16px rgba(232, 168, 60, .7); }
-#stick.rennt #stickBase { background: rgba(232, 168, 60, .18); box-shadow: 0 0 0 3px rgba(232, 168, 60, .75); }
+#stickBase { width: 114px; height: 114px; background: rgba(253, 246, 232, .22); box-shadow: inset 0 0 0 2px rgba(168, 116, 63, .5); }
+#stickNub { width: 50px; height: 50px; background: var(--putz); box-shadow: inset 0 0 0 2px var(--holz), 0 3px 0 rgba(125, 82, 39, .55); }
+#stick.rennt #stickNub { background: var(--gold); box-shadow: inset 0 0 0 2px var(--gold-tief), 0 0 16px rgba(232, 168, 60, .7); }
+#stick.rennt #stickBase { background: rgba(232, 168, 60, .16); box-shadow: inset 0 0 0 2px rgba(232, 168, 60, .7); }
 
-/* ------------------------------- Overlays ----------------------------------
- * Karten sind Pergament in einem Holzrahmen.
- * -------------------------------------------------------------------------- */
+/* ================================ Blätter =================================
+ * Alles, was man aufschlägt, ist gleich gebaut: Kopf mit Namen und Kreuz,
+ * darunter der Körper, der scrollt. Nichts springt, nichts sitzt woanders.
+ * ========================================================================== */
 .overlay {
   position: fixed; inset: 0; z-index: 10;
   display: flex; align-items: center; justify-content: center;
-  padding: 18px; background: rgba(93, 72, 54, .46);
-  backdrop-filter: blur(7px); transition: opacity .22s;
+  padding: 16px; background: rgba(74, 59, 48, .42);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: opacity .2s;
 }
 .overlay.hidden { opacity: 0; pointer-events: none; }
 
 .karte {
-  width: min(400px, 94vw); max-height: 88vh; overflow-y: auto; text-align: center;
-  background: var(--putz); border-radius: 16px; padding: 22px 20px 18px;
-  box-shadow: 0 0 0 5px var(--holz), 0 0 0 8px var(--holz-tief), var(--schatten);
+  width: min(420px, 94vw); max-height: 90vh; overflow-y: auto; text-align: center;
+  background: var(--putz); border-radius: var(--r-blatt); padding: 24px 20px 20px;
+  box-shadow: inset 0 0 0 3px var(--holz-tief), var(--schatten);
 }
 .karte h1 {
-  margin: 0 0 6px; font-size: 36px; font-weight: 900; letter-spacing: -1.2px;
+  margin: 0 0 6px; font-size: 34px; font-weight: 900; letter-spacing: -1.2px;
   color: var(--terra-tief);
 }
-.karte .sub { margin: 0 0 15px; opacity: .66; font-size: 14px; font-weight: 600; line-height: 1.5; }
-.karte .claim { font-size: 15px; opacity: .82; }
-.karte .big { font-size: 21px; font-weight: 800; margin: 4px 0 15px; color: var(--terra); }
+.karte .sub { margin: 0 0 15px; opacity: .66; font-size: 13.5px; font-weight: 600; line-height: 1.5; }
+.karte .claim { font-size: 14.5px; opacity: .8; }
+.karte .big { font-size: 20px; font-weight: 800; margin: 4px 0 15px; color: var(--terra); }
 
-.how { list-style: none; margin: 0 0 18px; padding: 0; text-align: left; font-size: 13.5px; }
+/* Blätter mit Kopf: Kopf und Reiter stehen, nur der Körper scrollt. */
+.menu-karte, .laden-karte, .rede-karte {
+  text-align: left; padding: 0; overflow: hidden;
+  display: flex; flex-direction: column; max-height: 88vh;
+}
+.blatt-kopf {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 13px 13px 12px 16px;
+  border-bottom: 2px solid var(--putz-tief);
+}
+.kopf-text { flex: 1; min-width: 0; }
+.kopf-text b { display: block; font-size: 18px; font-weight: 900; letter-spacing: -.2px; }
+.kopf-text small { display: block; font-size: 11px; font-weight: 800; opacity: .58; margin-top: 1px; }
+.beutel-gold { flex: none; font-size: 13.5px; }
+.schliessen {
+  flex: none; width: 32px; height: 32px; border: 0; border-radius: var(--r-klein);
+  background: var(--putz-tief); color: var(--tinte-hell);
+  font: inherit; font-size: 19px; font-weight: 900; line-height: 1; cursor: pointer;
+}
+.schliessen:active { transform: translateY(1.5px); background: var(--putz-tiefer); }
+.blatt-koerper { flex: 1; min-height: 0; overflow-y: auto; padding: 13px 14px 16px; }
+
+/* Reiter: Zeichen oben, Wort darunter, und der offene sitzt auf Putz. */
+.reiter-leiste { display: flex; gap: 3px; padding: 9px 10px 0; flex: none; }
+.reiter {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 2px 7px; border: 0; border-radius: var(--r-klein) var(--r-klein) 0 0;
+  background: transparent; color: var(--tinte-hell);
+  font: inherit; cursor: pointer;
+}
+.reiter i { display: block; width: 22px; height: 22px; opacity: .8; }
+.reiter i svg { display: block; width: 100%; height: 100%; }
+.reiter small { font-size: 9.5px; font-weight: 800; letter-spacing: .1px; }
+.reiter.an { background: var(--putz-tief); color: var(--tinte); box-shadow: inset 0 -3px 0 var(--holz); }
+.reiter.an i { opacity: 1; }
+
+/* Zwei Seiten nebeneinander: Kaufen / Verkaufen */
+.segment { display: flex; gap: 4px; padding: 10px 14px 0; flex: none; }
+.lreiter {
+  flex: 1; padding: 8px 4px; border: 0; border-radius: var(--r-klein);
+  background: var(--putz-tief); color: var(--tinte-hell);
+  font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer;
+}
+.lreiter.an { background: var(--holz); color: var(--putz); }
+
+.tab.hidden { display: none; }
+
+.primary {
+  width: 100%; padding: 13px; border: 0; border-radius: var(--r-feld);
+  background: var(--terra); color: var(--putz);
+  font: inherit; font-size: 15.5px; font-weight: 900; cursor: pointer;
+  box-shadow: 0 4px 0 var(--terra-tief);
+}
+.primary:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--terra-tief); }
+#resumeBtn.hidden { display: none; }
+#resumeBtn:not(.hidden) + #startBtn {
+  margin-top: 9px; background: var(--putz-tief); color: var(--tinte);
+  box-shadow: 0 4px 0 var(--putz-tiefer);
+}
+#resumeBtn:not(.hidden) + #startBtn:active { box-shadow: 0 1px 0 var(--putz-tiefer); }
+
+/* Das Startblatt: Kopf und Knöpfe stehen, nur die Regeln scrollen. */
+.start-karte {
+  text-align: center; padding: 0; overflow: hidden;
+  display: flex; flex-direction: column; max-height: 88vh;
+}
+.start-kopf { flex: none; padding: 22px 20px 6px; }
+.start-kopf h1 { margin-bottom: 4px; }
+.start-kopf .sub { margin-bottom: 10px; }
+.start-karte .blatt-koerper { padding: 0 18px 4px; }
+.start-fuss {
+  flex: none; padding: 12px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  border-top: 2px solid var(--putz-tief);
+}
+
+.how { list-style: none; margin: 0 0 6px; padding: 0; text-align: left; font-size: 12.5px; }
 .how li {
-  padding: 9px 12px; margin-bottom: 6px; border-radius: 8px;
+  padding: 8px 11px; margin-bottom: 5px; border-radius: var(--r-klein);
   background: var(--putz-tief); box-shadow: inset 3px 0 0 var(--holz);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .how b { color: var(--terra-tief); }
 
-.primary {
-  width: 100%; padding: 13px; border: 0; border-radius: 11px;
-  background: var(--terra); color: var(--putz);
-  font: inherit; font-size: 16px; font-weight: 900; cursor: pointer;
-  box-shadow: 0 0 0 3px var(--holz-tief), 0 5px 0 var(--terra-tief);
-}
-.primary:active { transform: translateY(3px); box-shadow: 0 0 0 3px var(--holz-tief), 0 1px 0 var(--terra-tief); }
-#resumeBtn.hidden { display: none; }
-#resumeBtn + #startBtn {
-  margin-top: 10px; background: var(--putz-tief); color: var(--tinte);
-  box-shadow: 0 0 0 3px var(--holz), 0 5px 0 var(--holz-tief);
-}
-#resumeBtn + #startBtn:active { box-shadow: 0 0 0 3px var(--holz), 0 1px 0 var(--holz-tief); }
-
 /* ------------------------------- Gespräch ---------------------------------- */
-.rede-karte { text-align: left; }
-.rede-kopf {
-  display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px;
-  padding-bottom: 9px; border-bottom: 3px solid var(--putz-tief);
-}
-.rede-kopf b { font-size: 22px; font-weight: 900; }
-.rede-kopf small { font-size: 12px; opacity: .6; font-weight: 800; }
 .rede-text {
-  margin: 0 0 14px; font-size: 15px; line-height: 1.55; white-space: pre-line;
-  padding: 12px 14px; border-radius: 8px;
+  margin: 0 0 13px; font-size: 14.5px; line-height: 1.55; white-space: pre-line;
+  padding: 12px 14px; border-radius: var(--r-klein);
   background: var(--putz-tief); box-shadow: inset 3px 0 0 var(--holz);
 }
-.rede-wahl { display: flex; flex-direction: column; gap: 7px; }
+.rede-wahl { display: flex; flex-direction: column; gap: 6px; }
+/* Die Antworten sind ruhig gehalten — der rote Balken links führt das Auge,
+   vier schreiende Knöpfe untereinander führen nur zu nichts. */
 .wahl {
-  width: 100%; padding: 11px 13px; border: 0; border-radius: 9px;
+  width: 100%; padding: 11px 13px; border: 0; border-radius: var(--r-klein);
   background: var(--putz); color: var(--tinte);
-  font: inherit; font-size: 14px; font-weight: 800; text-align: left; cursor: pointer;
-  box-shadow: 0 0 0 2px var(--terra), 0 3px 0 var(--terra-tief);
+  font: inherit; font-size: 13.5px; font-weight: 800; text-align: left; cursor: pointer;
+  box-shadow: inset 3px 0 0 var(--terra), inset 0 0 0 1.5px rgba(168, 116, 63, .35),
+              0 3px 0 var(--putz-tiefer);
 }
-.wahl:active { transform: translateY(2px); box-shadow: 0 0 0 2px var(--terra), 0 1px 0 var(--terra-tief); }
+.wahl:active { transform: translateY(2px);
+  box-shadow: inset 3px 0 0 var(--terra), inset 0 0 0 1.5px rgba(168, 116, 63, .35),
+              0 1px 0 var(--putz-tiefer); }
 .wahl.aus {
-  opacity: .5; box-shadow: 0 0 0 2px rgba(122, 101, 85, .45); cursor: default;
+  opacity: .55; box-shadow: inset 3px 0 0 rgba(122, 101, 85, .4); cursor: default;
   background: var(--putz-tief);
 }
 .wahl.aus:active { transform: none; }
-.wahl small { display: block; font-weight: 600; font-size: 12px; opacity: .72; margin-top: 3px; }
+.wahl small { display: block; font-weight: 600; font-size: 11.5px; opacity: .72; margin-top: 3px; }
 
-/* ----------------------------- Heldenblatt --------------------------------- */
-.menu-karte { text-align: left; }
-.menu-reiter { display: flex; gap: 4px; margin-bottom: 13px; }
-.reiter, .lreiter {
-  flex: 1; min-width: 0; padding: 9px 2px; border: 0; border-radius: 8px 8px 3px 3px;
-  background: var(--putz-tief); color: var(--tinte-hell);
-  font: inherit; font-size: 11.5px; font-weight: 800; cursor: pointer;
-  box-shadow: 0 0 0 2px var(--holz);
+/* ============================ Können & Vorteile =========================== */
+.punkte-hinweis { font-size: 11.5px; font-weight: 800; opacity: .68; margin: 2px 0 10px; }
+.punkte-hinweis.wichtig {
+  opacity: 1; color: var(--holz-tief); background: #f8ecd0; padding: 8px 11px;
+  border-radius: var(--r-klein); box-shadow: inset 3px 0 0 var(--gold);
 }
-.lreiter { font-size: 12.5px; padding: 9px 3px; }
 
-/* --------------------------------- Die Esse -------------------------------- */
-.esse-wort { font-size: 12px; font-weight: 800; opacity: .7; margin: 0 0 10px; }
-.esse-zeile {
-  display: block; width: 100%; text-align: left;
-  padding: 10px 12px; margin-bottom: 7px; border: 0; border-radius: 9px;
-  background: var(--putz-tief); color: var(--tinte); font: inherit; cursor: pointer;
-  box-shadow: inset 3px 0 0 var(--holz);
+.abschnitt {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 10.5px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--tinte-hell); opacity: .7; margin: 14px 0 7px;
 }
-.esse-zeile.aus { opacity: .55; cursor: default; }
-.esse-zeile b { display: block; font-size: 13.5px; }
-.esse-zeile small { display: block; font-size: 11px; font-weight: 800; opacity: .72; margin-top: 3px; }
-.esse-zeile .fehlt { color: var(--terra); }
-.esse-zeile .hat { color: var(--salbei-tief); }
-.esse-stufen { letter-spacing: 2px; color: var(--gold); font-size: 11px; }
+.abschnitt::after { content: ''; flex: 1; height: 2px; background: var(--putz-tief); border-radius: 1px; }
+.abschnitt:first-child { margin-top: 0; }
 
-/* ------------------------------ Bestiarium --------------------------------- */
-.wesen-zeile {
-  display: flex; align-items: flex-start; gap: 9px;
-  padding: 9px 11px; margin-bottom: 6px; border-radius: 8px;
-  background: var(--putz-tief); box-shadow: inset 3px 0 0 var(--holz);
+/* Eine Fertigkeit ist eine Lade: Kopf antippen, Vorteile klappen auf. */
+.fert-karte {
+  border-radius: var(--r-feld); background: var(--putz-tief);
+  margin-bottom: 7px; overflow: hidden;
 }
-.wesen-zeile.fremd { opacity: .5; }
-.wesen-fleck {
-  flex: none; width: 26px; height: 26px; border-radius: 7px; margin-top: 2px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 900; color: var(--tinte-hell);
-}
-.wesen-text { display: block; }
-.wesen-text b { display: block; font-size: 13.5px; }
-.wesen-text small { display: block; font-size: 11px; font-weight: 800; opacity: .7; line-height: 1.5; }
-.reiter.an, .lreiter.an {
-  background: var(--holz); color: var(--putz);
-  box-shadow: 0 0 0 2px var(--holz-tief);
-}
-.tab { margin-bottom: 13px; }
-.tab.hidden { display: none; }
-
-.fert-zeile {
-  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
-  border-radius: 8px; background: var(--putz-tief); margin-bottom: 4px;
-}
-.fert-zeile .ic { width: 24px; height: 24px; flex: 0 0 24px; }
-.fert-zeile .ic svg { display: block; }
-.fert-zeile .txt { flex: 1; }
-.fert-zeile .txt b { font-size: 14px; }
-.fert-zeile .txt small { display: block; font-size: 11px; opacity: .62; font-weight: 700; }
-.fert-zeile .stufe-zahl { font-size: 18px; font-weight: 900; color: var(--holz-tief); }
-
-.vorteil {
-  width: 100%; margin: 0 0 5px; padding: 9px 11px; border: 0; border-radius: 8px;
-  background: var(--putz); box-shadow: 0 0 0 2px var(--gold), 0 3px 0 #b07f25;
+.fert-kopf {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border: 0; background: transparent;
   color: var(--tinte); font: inherit; text-align: left; cursor: pointer;
 }
-.vorteil:active { transform: translateY(2px); box-shadow: 0 0 0 2px var(--gold), 0 1px 0 #b07f25; }
-.vorteil.aus {
-  opacity: .45; background: var(--putz-tief); cursor: default;
-  box-shadow: 0 0 0 2px rgba(122, 101, 85, .35);
+.fert-kopf .ic { width: 22px; height: 22px; flex: 0 0 22px; }
+.fert-kopf .ic svg { display: block; width: 100%; height: 100%; }
+.fert-kopf .txt { flex: 1; min-width: 0; }
+.fert-kopf .txt b { display: block; font-size: 13.5px; }
+.fert-kopf .txt small { display: block; font-size: 10.5px; opacity: .6; font-weight: 700; }
+.stufe-zahl {
+  flex: none; min-width: 26px; height: 26px; border-radius: var(--r-klein);
+  background: var(--putz); color: var(--holz-tief);
+  font-size: 14px; font-weight: 900; line-height: 26px; text-align: center;
 }
+.fert-karte.offen .stufe-zahl { background: var(--holz); color: var(--putz); }
+.fert-punkt {
+  flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(232, 168, 60, .25);
+}
+.fert-balken {
+  height: 4px; margin: 0 12px 9px; border-radius: 2px; background: var(--putz-tiefer);
+  overflow: hidden;
+}
+.fert-balken i { display: block; height: 100%; background: var(--holz); }
+/* Die Vorteile hängen an einer Schnur: links die Perle, rechts der Text.
+   Gefüllt heißt hast du, golden heißt kannst du, hohl heißt noch nicht. */
+.vorteil-liste { position: relative; padding: 2px 10px 10px 32px; display: none; }
+.fert-karte.offen .vorteil-liste { display: block; }
+/* Die Zauberlade braucht keine Schnur — dort hängt nichts aneinander. */
+.fert-karte.zauber-lade .vorteil-liste::before { display: none; }
+.vorteil-liste::before {
+  content: ''; position: absolute; left: 20px; top: 12px; bottom: 20px; width: 2px;
+  border-radius: 1px; background: var(--putz-tiefer);
+}
+
+.vorteil {
+  position: relative; width: 100%; margin: 0 0 5px; padding: 9px 11px;
+  border: 0; border-radius: var(--r-klein);
+  background: var(--putz); color: var(--tinte);
+  font: inherit; text-align: left; cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px rgba(168, 116, 63, .28);
+}
+.vorteil::before {
+  content: ''; position: absolute; left: -16px; top: 50%; margin-top: -5px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--putz-tiefer); box-shadow: 0 0 0 2px var(--putz-tief);
+}
+.vorteil:active { transform: translateY(1.5px); }
+.vorteil.frei { box-shadow: inset 0 0 0 2px var(--gold), 0 3px 0 rgba(176, 127, 37, .45); }
+.vorteil.frei::before { background: var(--gold); box-shadow: 0 0 0 2px var(--putz-tief), 0 0 0 4px rgba(232, 168, 60, .3); }
+.vorteil.aus { opacity: .6; background: rgba(253, 246, 232, .5); cursor: default;
+               box-shadow: inset 0 0 0 1.5px rgba(122, 101, 85, .14); }
 .vorteil.aus:active { transform: none; }
-.vorteil.hat { box-shadow: 0 0 0 2px var(--salbei), 0 3px 0 var(--salbei-tief); }
-.vorteil b { font-size: 13.5px; }
-.vorteil small { display: block; font-size: 11.5px; opacity: .72; font-weight: 600; }
-.punkte-hinweis { font-size: 12px; font-weight: 800; opacity: .7; margin: 4px 0 10px; }
+.vorteil.hat { background: #eaf3e0; box-shadow: inset 0 0 0 1.5px rgba(93, 138, 69, .5); }
+.vorteil.hat::before { background: var(--salbei); box-shadow: 0 0 0 2px var(--putz-tief); }
+.vorteil b { display: block; font-size: 13px; }
+.vorteil small { display: block; font-size: 11px; opacity: .72; font-weight: 600; margin-top: 1px; }
+.vorteil .sperre { font-weight: 800; opacity: .8; }
 
-/* Die Zauberliste: wie ein Vorteil, aber mit dem Zeichen des Spruchs davor */
-.zauber-zeile { display: flex; align-items: center; gap: 10px; }
-.zauber-zeile .ic { width: 22px; height: 22px; flex: 0 0 22px; }
-.zauber-zeile .ic svg { display: block; }
-.zauber-zeile .txt { flex: 1; }
+/* Die Zauberliste: Zeichen, Name, was er kostet. */
+.zauber-zeile { display: flex; align-items: center; gap: 10px; margin-left: -22px; }
+.zauber-zeile::before { display: none; }
+.zauber-zeile .ic { width: 21px; height: 21px; flex: 0 0 21px; }
+.zauber-zeile .ic svg { display: block; width: 100%; height: 100%; }
+.zauber-zeile .txt { flex: 1; min-width: 0; }
+.zauber-zeile .kosten {
+  flex: none; font-size: 11px; font-weight: 900; color: var(--blau-tief);
+  background: #e4eef4; padding: 3px 7px; border-radius: 7px;
+}
 
+/* ============================== Aufträge ================================== */
 .q-zeile {
-  padding: 10px 12px; margin-bottom: 7px; border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 6px; border-radius: var(--r-klein);
   background: var(--putz-tief); box-shadow: inset 3px 0 0 var(--holz);
 }
-.q-zeile b { font-size: 13.5px; }
+.q-zeile b { font-size: 13px; }
 .q-zeile p { margin: 4px 0 5px; font-size: 12px; line-height: 1.45; opacity: .78; }
-.q-zeile small { font-size: 11.5px; font-weight: 800; opacity: .68; }
-.q-zeile.fertig { box-shadow: inset 3px 0 0 var(--gold); }
-.q-zeile.haupt { background: #f6e6c4; box-shadow: inset 3px 0 0 var(--gold); }
+.q-zeile small { font-size: 11px; font-weight: 800; opacity: .68; }
+.q-zeile.fertig { box-shadow: inset 3px 0 0 var(--salbei); }
+.q-zeile.haupt { background: #f8ecd0; box-shadow: inset 3px 0 0 var(--gold); }
 .q-zeile.verfolgt { box-shadow: inset 3px 0 0 var(--terra), 0 0 0 2px var(--terra); }
-
-.q-fuss {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin-top: 7px;
-}
+.q-fuss { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 7px; }
 .q-fuss small { flex: 1; min-width: 0; }
-
 .q-verfolgen {
   flex: 0 0 auto; padding: 6px 11px; border: 0; border-radius: 7px;
   background: var(--putz); color: var(--tinte-hell);
-  font: inherit; font-size: 11.5px; font-weight: 800; cursor: pointer;
-  box-shadow: 0 0 0 2px var(--holz);
+  font: inherit; font-size: 11px; font-weight: 800; cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px rgba(168, 116, 63, .5);
 }
-.q-verfolgen.an { background: var(--terra); color: var(--putz); box-shadow: 0 0 0 2px var(--terra-tief); }
+.q-verfolgen.an { background: var(--terra); color: var(--putz); box-shadow: none; }
 .q-verfolgen:active { transform: translateY(1px); }
 
+/* ================================ Karte =================================== */
+.karten-kopfzeile {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;
+}
+.weite-wahl { display: flex; gap: 3px; }
+.weite-wahl button {
+  padding: 5px 10px; border: 0; border-radius: 7px;
+  background: var(--putz-tief); color: var(--tinte-hell);
+  font: inherit; font-size: 11px; font-weight: 800; cursor: pointer;
+}
+.weite-wahl button.an { background: var(--holz); color: var(--putz); }
+
 .karte-feld {
-  position: relative; width: 100%; aspect-ratio: 1; border-radius: 10px;
-  background: #e5d8bd; overflow: hidden; box-shadow: 0 0 0 3px var(--holz);
+  position: relative; width: 100%; aspect-ratio: 1; border-radius: var(--r-feld);
+  background: #e5d8bd; overflow: hidden;
+  box-shadow: inset 0 0 0 2px var(--holz), inset 0 0 44px rgba(93, 72, 54, .22);
 }
-.karte-bild {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  display: block; opacity: .95;
+.karte-bild { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* Die Rose sitzt in der Ecke wie auf einem alten Blatt */
+.karte-rose {
+  position: absolute; right: 8px; top: 7px; width: 30px; height: 30px;
+  opacity: .9; pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(74, 59, 48, .35));
 }
+.karte-rose svg { display: block; width: 100%; height: 100%; }
+
 .punkt {
   position: absolute; transform: translate(-50%, -50%);
-  width: 11px; height: 11px; border-radius: 3px;
-  box-shadow: 0 0 0 2px rgba(253, 246, 232, .9);
+  width: 10px; height: 10px; border-radius: 3px;
+  box-shadow: 0 0 0 2px rgba(253, 246, 232, .92);
 }
-.punkt.dorf  { background: var(--terra); box-shadow: 0 0 0 2px var(--putz); }
-/* Auf dem gemalten Kartenblatt braucht jeder Punkt einen hellen Rand,
-   sonst verschwindet er im Gelände. */
-.punkt.ort   { background: #7d6f5e; border-radius: 50%; width: 9px; height: 9px;
-               box-shadow: 0 0 0 2px var(--putz); }
-.punkt.ort.turm    { background: #6b6154; border-radius: 2px; height: 13px; width: 7px; }
+.punkt.dorf  { background: var(--terra); }
+.punkt.ort   { background: #7d6f5e; border-radius: 50%; width: 8px; height: 8px; }
+.punkt.ort.turm    { background: #6b6154; border-radius: 2px; height: 12px; width: 6px; }
 .punkt.ort.schrein { background: var(--gold); }
 .punkt.ort.lager   { background: #8c7a5c; }
-.punkt.gruft { background: var(--tinte); border-radius: 50%; width: 9px; height: 9px;
-               box-shadow: 0 0 0 2px var(--putz); }
-.punkt.ziel  { background: var(--gold); border-radius: 50%; width: 13px; height: 13px;
-               box-shadow: 0 0 0 2px var(--putz); animation: pochen 1s ease-in-out infinite; }
+.punkt.gruft { background: var(--tinte); border-radius: 50%; width: 8px; height: 8px; }
+.punkt.ziel  { background: var(--gold); border-radius: 50%; width: 12px; height: 12px;
+               animation: pochen 1s ease-in-out infinite; }
 .punkt.du    { background: var(--blau); border-radius: 50%; width: 10px; height: 10px;
                box-shadow: 0 0 0 3px var(--putz); z-index: 2; }
 .karte-legende {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 3px 5px;
-  font-size: 10.5px; font-weight: 800; opacity: .68; margin-top: 8px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px;
+  font-size: 10.5px; font-weight: 800; opacity: .7; margin: 9px 0 0;
 }
-.karte-legende .legende-weite { flex-basis: 100%; opacity: .75; margin-top: 2px; }
+.karte-legende span.wort { display: inline-flex; align-items: center; gap: 4px; }
+.karte-legende .legende-weite { flex-basis: 100%; opacity: .75; }
 .karte-legende .punkt { position: static; transform: none; }
 
-.ic-muenze { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-left: 3px; }
-.ic-muenze svg { display: block; }
-.gold .ic-muenze { width: 15px; height: 15px; margin-left: 0; }
+.karten-knopf {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; margin-top: 10px; padding: 11px; border: 0; border-radius: var(--r-feld);
+  background: var(--putz-tief); color: var(--tinte);
+  font: inherit; font-size: 13px; font-weight: 900; cursor: pointer;
+  box-shadow: 0 3px 0 var(--putz-tiefer);
+}
+.karten-knopf:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--putz-tiefer); }
+.karten-knopf.gefahr-knopf {
+  margin-top: 7px; background: var(--putz); color: var(--terra-tief);
+  box-shadow: inset 0 0 0 2px var(--terra);
+}
+.karten-knopf .ic { width: 16px; height: 16px; display: block; }
+.karten-knopf .ic svg { display: block; width: 100%; height: 100%; }
 
-/* ------------------------------ Beutel & Laden ----------------------------- */
-.rue-reihe { display: flex; gap: 6px; margin-bottom: 11px; }
+/* =============================== Bestiarium =============================== */
+.wesen-zeile {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 9px 11px; margin-bottom: 5px; border-radius: var(--r-klein);
+  background: var(--putz-tief); box-shadow: inset 3px 0 0 var(--holz);
+}
+
+.wesen-fleck {
+  flex: none; width: 26px; height: 26px; border-radius: 8px; margin-top: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 900; color: var(--tinte-hell);
+}
+.wesen-text { display: block; }
+.wesen-text b { display: block; font-size: 13px; }
+.wesen-text small { display: block; font-size: 10.5px; font-weight: 800; opacity: .7; line-height: 1.5; }
+
+/* ================================ Beutel ==================================
+ * Ein Inventar, wie man es kennt: oben, was am Körper hängt, darunter ein
+ * Gitter aus Fächern. Angetipptes steht im Blatt darüber — mit allem, was
+ * man wissen will, und genau einem Knopf.
+ * ========================================================================== */
+.rue-reihe { display: flex; gap: 6px; margin-bottom: 9px; }
 .rue-platz {
-  flex: 1; padding: 9px 5px; border: 0; border-radius: 8px;
-  background: var(--putz-tief); box-shadow: 0 0 0 2px var(--holz);
+  flex: 1; min-width: 0; padding: 8px 4px 7px; border: 0; border-radius: var(--r-feld);
+  background: var(--putz-tief); box-shadow: inset 0 0 0 2px var(--rand, transparent);
   color: var(--tinte); font: inherit; cursor: pointer; text-align: center;
 }
-.rue-platz.voll { background: #e8f0dc; box-shadow: 0 0 0 2px var(--salbei), 0 3px 0 var(--salbei-tief); }
-.rue-platz .ic { display: block; width: 24px; height: 24px; margin: 0 auto; }
-.rue-platz .ic svg { display: block; }
-.rue-platz.leer .ic { opacity: .3; }
-.rue-platz small { display: block; font-size: 10.5px; font-weight: 800; opacity: .7; margin-top: 3px; }
+.rue-platz .ic { display: block; width: 26px; height: 26px; margin: 0 auto 3px; }
+.rue-platz .ic svg { display: block; width: 100%; height: 100%; }
+.rue-platz.leer .ic { opacity: .28; }
+.rue-platz small { display: block; font-size: 10px; font-weight: 800; opacity: .75;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rue-platz:active { transform: translateY(1.5px); }
 
-.ding-zeile {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 9px 11px; margin-bottom: 5px; border: 0; border-radius: 8px;
-  background: var(--putz-tief); color: var(--tinte); font: inherit; text-align: left;
+.werte-reihe { display: flex; gap: 6px; margin-bottom: 11px; }
+.wert-kachel {
+  flex: 1; padding: 7px 4px; border-radius: var(--r-klein); background: var(--putz-tief);
+  text-align: center;
 }
-.ding-zeile .ic { width: 25px; height: 25px; flex: 0 0 25px; }
-.ding-zeile .ic svg { display: block; }
-.ding-zeile .txt { flex: 1; min-width: 0; }
-.ding-zeile .txt b { display: block; font-size: 13.5px; }
-.ding-zeile .txt small { display: block; font-size: 11px; opacity: .66; font-weight: 700; line-height: 1.35; }
+.wert-kachel b { display: block; font-size: 15px; font-weight: 900; line-height: 1.1; }
+.wert-kachel small { display: block; font-size: 9.5px; font-weight: 800; opacity: .6; margin-top: 2px; }
+
+/* Das Blatt über dem Gitter: was gerade angetippt ist. */
+.ding-blatt {
+  display: flex; align-items: flex-start; gap: 11px; min-height: 58px;
+  padding: 11px 12px; margin-bottom: 10px; border-radius: var(--r-feld);
+  background: var(--putz-tief); box-shadow: inset 3px 0 0 var(--rand, var(--holz));
+}
+.ding-blatt .ic { flex: none; width: 34px; height: 34px; }
+.ding-blatt .ic svg { display: block; width: 100%; height: 100%; }
+.ding-blatt .txt { flex: 1; min-width: 0; }
+.ding-blatt .txt b { display: block; font-size: 14.5px; }
+.ding-blatt .guete { font-size: 10px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
+.ding-blatt .wirkt { display: block; font-size: 11.5px; font-weight: 800; opacity: .8; margin-top: 3px; }
+.ding-blatt .wort { display: block; font-size: 11px; font-style: italic; opacity: .6; margin-top: 3px; line-height: 1.4; }
+.ding-blatt.leer { align-items: center; justify-content: center; text-align: center;
+                   box-shadow: none; background: var(--putz-tief); }
+.ding-blatt.leer small { font-size: 11.5px; font-weight: 800; opacity: .55; }
+.blatt-fuss { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
+.blatt-fuss .preis-chip {
+  margin-left: auto; font-size: 11.5px; font-weight: 900; color: var(--holz-tief);
+  display: inline-flex; align-items: center; gap: 3px;
+}
+
 .ding-tun {
-  border: 0; border-radius: 7px; padding: 7px 11px; cursor: pointer;
-  background: var(--terra); color: var(--putz); font: inherit; font-size: 12px; font-weight: 800;
+  border: 0; border-radius: var(--r-klein); padding: 8px 14px; cursor: pointer;
+  background: var(--terra); color: var(--putz); font: inherit; font-size: 12.5px; font-weight: 900;
   box-shadow: 0 3px 0 var(--terra-tief);
 }
 .ding-tun:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--terra-tief); }
+.ding-tun.zweit { background: var(--putz); color: var(--tinte-hell); box-shadow: inset 0 0 0 1.5px rgba(168,116,63,.5); }
 .ding-tun.still { background: transparent; color: var(--holz-tief); box-shadow: none; cursor: default; }
 .ding-tun.still:active { transform: none; }
 
-.laden-karte { text-align: left; }
-.laden-kopf {
-  display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 11px;
-  padding-bottom: 9px; border-bottom: 3px solid var(--putz-tief);
+.beutel-filter { display: flex; gap: 4px; margin-bottom: 9px; flex-wrap: wrap; }
+.filter-chip {
+  padding: 5px 11px; border: 0; border-radius: 20px;
+  background: var(--putz-tief); color: var(--tinte-hell);
+  font: inherit; font-size: 11px; font-weight: 800; cursor: pointer;
 }
-.laden-kopf b { font-size: 21px; font-weight: 900; }
-.laden-zeile { cursor: pointer; box-shadow: 0 0 0 2px transparent; }
+.filter-chip.an { background: var(--holz); color: var(--putz); }
+
+.beutel-gitter { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.fach {
+  position: relative; aspect-ratio: 1; border: 0; border-radius: var(--r-klein);
+  background: var(--putz-tief); cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+  box-shadow: inset 0 0 0 2px var(--rand, transparent);
+}
+.fach .ic { width: 62%; height: 62%; }
+.fach .ic svg { display: block; width: 100%; height: 100%; }
+.fach .zahl {
+  position: absolute; right: 3px; bottom: 1px;
+  font-size: 10px; font-weight: 900; color: var(--tinte);
+  text-shadow: 0 1px 0 var(--putz), 0 -1px 0 var(--putz), 1px 0 0 var(--putz), -1px 0 0 var(--putz);
+}
+.fach.an { box-shadow: inset 0 0 0 2px var(--rand, var(--holz)), 0 0 0 2px var(--holz-tief); }
+.fach:active { transform: translateY(1.5px); }
+.fach.leer { background: rgba(239, 224, 198, .45); cursor: default; }
+.fach.leer:active { transform: none; }
+
+/* Das Feld der Unbekannten im Bestiarium: viele kleine stumme Fächer. */
+.beutel-gitter.fremd-gitter { grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.fremd-gitter .fremd-fach {
+  aspect-ratio: 1; border-radius: 8px;
+  font-size: 12px; font-weight: 900; color: var(--tinte-hell); opacity: .5;
+}
+
+/* ============================== Laden & Esse ============================== */
+.ding-zeile {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 11px; margin-bottom: 5px; border: 0; border-radius: var(--r-klein);
+  background: var(--putz-tief); color: var(--tinte); font: inherit; text-align: left;
+}
+.ding-zeile .ic { width: 25px; height: 25px; flex: 0 0 25px; }
+.ding-zeile .ic svg { display: block; width: 100%; height: 100%; }
+.ding-zeile .txt { flex: 1; min-width: 0; }
+.ding-zeile .txt b { display: block; font-size: 13px; }
+.ding-zeile .txt small { display: block; font-size: 10.5px; opacity: .66; font-weight: 700; line-height: 1.35; }
+.laden-zeile { cursor: pointer; }
 .laden-zeile:active { transform: scale(.985); }
 .laden-zeile.aus { opacity: .44; cursor: default; }
-.laden-zeile .preis { font-size: 13px; font-weight: 900; white-space: nowrap; color: var(--holz-tief); }
-#ladenListe { max-height: 46vh; overflow-y: auto; margin-bottom: 11px; }
+.laden-zeile .preis {
+  flex: none; font-size: 12.5px; font-weight: 900; white-space: nowrap; color: var(--holz-tief);
+  display: inline-flex; align-items: center; gap: 2px;
+}
+
+.esse-zeile {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 12px; margin-bottom: 6px; border: 0; border-radius: var(--r-klein);
+  background: var(--putz-tief); color: var(--tinte); font: inherit; cursor: pointer;
+  box-shadow: inset 3px 0 0 var(--holz);
+}
+.esse-zeile.aus { opacity: .58; cursor: default; }
+.esse-zeile b { display: block; font-size: 13px; }
+.esse-zeile small { display: block; font-size: 10.5px; font-weight: 800; opacity: .74; margin-top: 3px; }
+.esse-zeile .fehlt { color: var(--terra); }
+.esse-zeile .hat { color: var(--salbei-tief); }
+.esse-stufen { letter-spacing: 2px; color: var(--gold); font-size: 10.5px; }
+
+.ic-muenze { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; }
+.ic-muenze svg { display: block; width: 100%; height: 100%; }
+.gold .ic-muenze { width: 15px; height: 15px; }
+.ic { display: inline-block; }
+.ic svg { display: block; width: 100%; height: 100%; }
 
 /* ----------------------------- Einblendungen ------------------------------- */
 #popups { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 .pop {
   position: absolute; left: 0; top: 0; opacity: 0;
-  font-weight: 900; font-size: 19px; letter-spacing: -.5px;
+  font-weight: 900; font-size: 18px; letter-spacing: -.4px;
   text-shadow: 0 2px 0 rgba(253, 246, 232, .9);
   will-change: transform, opacity;
+}
+
+/* Schmale Geräte: die Knöpfe rücken etwas zusammen. */
+@media (max-width: 380px) {
+  #aktionen { width: 164px; height: 238px; }
+  .akt.gross { width: 80px; height: 80px; padding: 17px; }
+  #wirkBtn { right: 94px; }
+  #redeBtn { right: 90px; bottom: 96px; }
+  .balken { width: 124px; }
+  .balken.ausdauer, .balken.magicka { width: 59.5px; }
 }

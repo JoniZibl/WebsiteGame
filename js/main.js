@@ -138,12 +138,15 @@ const state = {
   hieb: 0,            // Nachladen des Schlags
   zauber: 0,
   schutz: 0,          // wie lange die Steinhaut noch trägt
+  rausch: 0,          // Blutrausch nach einem Tötungsschlag
+  hiebe: 0,           // gezählte Treffer — jeder fünfte ist der Meisterhieb
   ort: 'Wildnis',
   imDungeon: null,    // die Gruft, in der wir stecken
   gespraech: null,
   camPos: new THREE.Vector3(),
   fallFrom: null,
   rennt: false,       // Sprint: zieht am Atem
+  gelaufen: 0,        // Schritte bis zur nächsten Übung im Wandern
   gegend: null,       // in welcher Gegend wir zuletzt standen
   beutel: null,       // was am Sterbeort liegen geblieben ist
   imHaus: null,       // in wessen vier Wänden wir gerade stehen
@@ -212,6 +215,11 @@ symbol(el('qualityBtn'), 'glanz');
 symbol(el('redeBtn'), 'rede');
 symbol(el('rollBtn'), 'rolle');
 for (const m of document.querySelectorAll('.ic-muenze')) m.innerHTML = ICONS.muenze;
+// Jeder Reiter trägt sein Zeichen über dem Wort
+for (const r of document.querySelectorAll('.reiter[data-sym]')) {
+  const i = r.querySelector('i');
+  if (i) i.innerHTML = ICONS[r.dataset.sym] || '';
+}
 
 let hudTimer = 0;
 let letztesZiel = null;
@@ -243,11 +251,11 @@ function updateHUD() {
   ui.ausBalken.classList.toggle('wenig', h.ausdauer < 20);
   ui.mag.style.width = `${Math.max(0, h.magicka / magMax * 100)}%`;
   ui.stufe.textContent = h.stufe;
-  ui.xp.style.width = `${Math.min(100, h.xp / h.xpZiel * 100)}%`;
+  ui.xp.style.setProperty('--xp', Math.min(100, h.xp / h.xpZiel * 100).toFixed(1));
   ui.gold.textContent = h.gold;
   zauberKnopfPflegen();
-  ui.wirk.classList.toggle('leer', h.magicka < aktiverZauber().kosten);
-  el('rollBtn').classList.toggle('leer', h.ausdauer < 16);
+  ui.wirk.classList.toggle('leer', h.magicka < zauberkosten(aktiverZauber()));
+  el('rollBtn').classList.toggle('leer', h.ausdauer < (h.vorteile.has('zaehe3') ? 8 : 16));
   trinkKnopfPflegen();
 
   // Was im Beutel liegt, erledigt Lieferaufträge von selbst
@@ -318,10 +326,18 @@ function spielerNimmtSchaden(menge, von) {
     return;
   }
   const h = held();
-  const abgewehrt = menge * Math.min(0.6, fert.werte.ruestung(h));
+  const abgewehrt = menge * Math.min(fert.werte.panzerdeckel(h), fert.werte.ruestung(h));
   // Die Steinhaut kommt obendrauf — sie ist der Grund, warum man sie wirkt
   const echt = Math.max(1, Math.round((menge - abgewehrt) * (state.schutz > 0 ? 0.5 : 1)));
   h.hp -= echt;
+  // Letzter Wille: einmal am Tag bleibt genau ein Funke Leben übrig
+  if (h.hp <= 0 && h.vorteile.has('zaehe8') && h.willeTag !== state.tag) {
+    h.willeTag = state.tag;
+    h.hp = 1;
+    juice.ring({ x: player.pos.x, y: player.pos.y + 0.8, z: player.pos.z }, 4, '#e8a83c', 0.8);
+    juice.shake(0.7);
+    meldung('Letzter Wille', '#e8a83c', 2.8);
+  }
   fert.uebung(h, 'zaehe', 1);
   juice.shake(0.55);
   juice.freeze(0.04);
@@ -334,6 +350,7 @@ function spielerNimmtSchaden(menge, von) {
 function feindGefallen(f) {
   const h = held();
   h.getoetet++;
+  if (h.vorteile.has('klinge6')) state.rausch = 5;
   h.erlegt = h.erlegt || {};
   h.erlegt[f.id] = (h.erlegt[f.id] || 0) + 1;
   h.gesehen = h.gesehen || new Set();
@@ -352,7 +369,9 @@ function feindGefallen(f) {
     juice.ring({ x: f.pos.x, y: f.pos.y + 0.8, z: f.pos.z }, 4.2, '#e8a83c', 0.7);
   }
   if ((f.art.beute && rand() < 0.55) || (f.gezeichnet && f.art.beute)) {
-    dinge.nehmen(h, f.art.beute);
+    // Sammler nimmt manchmal beides mit
+    dinge.nehmen(h, f.art.beute, h.vorteile.has('spuren3') && rand() < 0.25 ? 2 : 1);
+    fert.uebung(h, 'spuren', 1);        // Ausnehmen ist auch Spürarbeit
     juice.popup({ x: f.pos.x, y: f.pos.y + 1.4, z: f.pos.z },
       DINGE[f.art.beute].name, '#7fae5e');
   }
@@ -414,7 +433,7 @@ function zielHilfe(weite = 22, kegel = 0.9) {
 function schiessen(waffe) {
   const h = held();
   if (state.hieb > 0 || h.ausdauer < 10) return;
-  state.hieb = 0.62;
+  state.hieb = 0.62 * (h.vorteile.has('klinge3') ? 0.8 : 1);
   h.ausdauer -= 10;
   player.swing = 0.3;
   audio.shoot();
@@ -422,7 +441,7 @@ function schiessen(waffe) {
   const ziel = zielHilfe();
   const rx = ziel ? ziel.x : Math.sin(player.facing);
   const rz = ziel ? ziel.z : Math.cos(player.facing);
-  const schaden = Math.round(fert.werte.schaden(h) * (0.85 + Math.random() * 0.3));
+  const schaden = Math.round(fert.werte.schaden(h) * (0.85 + Math.random() * 0.3) * kampfgeist());
   geschosse.schiessen(waffe.fern, player.pos.x + rx * 0.7, player.pos.y + 1.1,
     player.pos.z + rz * 0.7, rx, rz, schaden, 'spieler', ziel ? ziel.d : 26);
   fert.uebung(h, 'klinge', 1);
@@ -472,6 +491,11 @@ function schritteHoeren() {
   }
 }
 
+/** Was der Blutrausch gerade obendrauf legt. */
+function kampfgeist() {
+  return state.rausch > 0 ? 1.3 : 1;
+}
+
 /** Die Richtung vom Spieler zu einem Ziel — für den Rückstoß. */
 function richtungZu(f) {
   const dx = f.pos.x - player.pos.x, dz = f.pos.z - player.pos.z;
@@ -482,9 +506,10 @@ function richtungZu(f) {
 /* Ausweichen kostet Ausdauer — sonst rollte man einfach durch jeden Kampf. */
 function ausweichen() {
   const h = held();
-  if (!state.running || state.dead || h.ausdauer < 16) return;
+  const kosten = h.vorteile.has('zaehe3') ? 8 : 16;
+  if (!state.running || state.dead || h.ausdauer < kosten) return;
   if (!player.rollen(input.read())) return;
-  h.ausdauer -= 16;
+  h.ausdauer -= kosten;
   audio.step();
   juice.ring({ x: player.pos.x, y: player.pos.y + 0.3, z: player.pos.z }, 1.8, '#fdf6e8', 0.3);
   updateHUD();
@@ -495,7 +520,7 @@ function zuschlagen() {
   const waffe = h.rue.waffe ? DINGE[h.rue.waffe] : null;
   if (waffe && waffe.fern) { schiessen(waffe); return; }
   if (state.hieb > 0 || h.ausdauer < 12) return;
-  state.hieb = 0.44;
+  state.hieb = 0.44 * (h.vorteile.has('klinge3') ? 0.8 : 1);
   h.ausdauer -= 12;
   player.swing = 0.28;
   audio.hit();
@@ -503,12 +528,17 @@ function zuschlagen() {
   const ziel = feinde.ziel(player.pos, player.facing, 2.7);
   if (!ziel) { juice.shake(0.1); return; }
 
-  const schaden = Math.round(fert.werte.schaden(h) * (0.85 + Math.random() * 0.3));
+  // Meisterhieb zählt mit statt zu würfeln — so weiß man, wann er kommt
+  state.hiebe++;
+  const meister = h.vorteile.has('klinge8') && state.hiebe % 5 === 0;
+  let schaden = Math.round(fert.werte.schaden(h) * (0.85 + Math.random() * 0.3) * kampfgeist());
+  if (meister) schaden *= 2;
   feinde.schlagen(ziel, schaden, richtungZu(ziel));
   fert.uebung(h, 'klinge', 1);
-  juice.shake(0.28);
-  juice.freeze(0.03);
-  juice.popup({ x: ziel.pos.x, y: ziel.pos.y + 1.6, z: ziel.pos.z }, `${schaden}`, '#fdf6e8');
+  juice.shake(meister ? 0.5 : 0.28);
+  juice.freeze(meister ? 0.06 : 0.03);
+  juice.popup({ x: ziel.pos.x, y: ziel.pos.y + 1.6, z: ziel.pos.z },
+    meister ? `${schaden}!` : `${schaden}`, meister ? '#e8a83c' : '#fdf6e8');
 
   if (h.vorteile.has('klinge4')) {
     const zweit = feinde.ziel(player.pos, player.facing + 0.9, 2.7);
@@ -532,6 +562,11 @@ function aktiverZauber() {
   return ZAUBER[h.aktiverZauber];
 }
 
+/** Was ein Spruch diesen Helden kostet — Sparsam schlägt hier durch. */
+function zauberkosten(z) {
+  return Math.round(z.kosten * (held().vorteile.has('magie3') ? 0.8 : 1));
+}
+
 function zauberKnopfPflegen() {
   const z = aktiverZauber();
   const b = el('wirkBtn');
@@ -539,7 +574,7 @@ function zauberKnopfPflegen() {
     b.dataset.zauber = z.sym;
     symbol(b, z.sym);
   }
-  b.title = `${z.name} — ${z.kosten} Magicka`;
+  b.title = `${z.name} — ${zauberkosten(z)} Magicka`;
 }
 
 function zauberWaehlen(id, still = false) {
@@ -598,9 +633,11 @@ function zaubern() {
   const h = held();
   const z = aktiverZauber();
   if (state.zauber > 0) return;
-  if (h.magicka < z.kosten) { juice.shake(0.08); return; }
-  state.zauber = z.wirkung === 'geschoss' ? 0.5 : 0.75;
-  h.magicka -= z.kosten;
+  const kosten = zauberkosten(z);
+  if (h.magicka < kosten) { juice.shake(0.08); return; }
+  state.zauber = (z.wirkung === 'geschoss' ? 0.5 : 0.75)
+    * (h.vorteile.has('magie6') ? 0.6 : 1);
+  h.magicka -= kosten;
   player.swing = 0.3;
   audio.spit();
 
@@ -1040,7 +1077,8 @@ function gruftenPflegen(px, pz) {
 function truheOeffnen(t) {
   const h = held();
   const saat = (t.gruft.saat ^ (t.id.length * 7919) ^ t.pos.x ^ (t.pos.z << 8)) >>> 0;
-  const inhalt = dinge.truhenInhalt(saat, t.gruft.stufe, t.gross);
+  const inhalt = dinge.truhenInhalt(saat,
+    t.gruft.stufe + (h.vorteile.has('spuren8') ? 1 : 0), t.gross);
   const gold = Math.round(inhalt.gold * fert.werte.beute(h));
   h.gold += gold;
   for (const id of inhalt.stuecke) dinge.nehmen(h, id);
@@ -1690,7 +1728,7 @@ function ladenZeichnen() {
     }
     for (const id of ids.sort((a, b) => DINGE[b].wert - DINGE[a].wert)) {
       const d = DINGE[id];
-      const preis = dinge.verkaufswert(id);
+      const preis = verkaufFuer(id);
       const z = document.createElement('button');
       z.className = 'ding-zeile laden-zeile';
       z.innerHTML = sym(d.sym)
@@ -1709,17 +1747,24 @@ function ladenZeichnen() {
   }
 }
 
+/** Was ein Händler zahlt — der Feilscher holt mehr heraus. */
+function verkaufFuer(id) {
+  const grund = dinge.verkaufswert(id);
+  return held().vorteile.has('spuren6')
+    ? Math.max(1, Math.round(grund / 0.45 * 0.65)) : grund;
+}
+
 /** Der Name eines Stücks in der Farbe seiner Güte — im Beutel wie im Laden. */
 function dingName(d, zusatz = '') {
-  const f = d.guete ? dinge.SELTENHEIT[d.guete].farbe : null;
+  const f = gueteFarbe(d);
   return `<b${f ? ` style="color:${f}"` : ''}>${d.name}${zusatz}</b>`;
 }
 
-function wirkungText(d) {
+/** Nur das, was ein Stück tut — ohne Güte, ohne Spruch. */
+function wirkungsliste(d) {
   const teile = [];
-  if (d.guete) teile.push(dinge.SELTENHEIT[d.guete].name);
   if (d.lehrt && ZAUBER[d.lehrt]) {
-    teile.push(`lehrt ${ZAUBER[d.lehrt].name}`, `Magie ${ZAUBER[d.lehrt].braucht}`);
+    teile.push(`lehrt ${ZAUBER[d.lehrt].name}`, `ab Magie ${ZAUBER[d.lehrt].braucht}`);
   }
   if (d.schaden) teile.push(`+${d.schaden} Schaden`);
   if (d.panzer) teile.push(`+${Math.round(d.panzer * 100)}% Rüstung`);
@@ -1728,7 +1773,16 @@ function wirkungText(d) {
   if (d.tempo) teile.push(`+${Math.round(d.tempo * 100)}% Tempo`);
   if (d.heilt) teile.push(`heilt ${d.heilt}`);
   if (d.magie) teile.push(`+${d.magie} Magicka`);
-  return teile.length ? teile.join(' · ') : d.text;
+  if (d.reichweite) teile.push('größere Reichweite');
+  return teile.join(' · ');
+}
+
+/** Dasselbe für die Listen im Laden: Güte voran, sonst der Spruch. */
+function wirkungText(d) {
+  const w = wirkungsliste(d);
+  const guete = d.guete ? dinge.SELTENHEIT[d.guete].name : '';
+  if (!w) return guete ? `${guete} · ${d.text}` : d.text;
+  return guete ? `${guete} · ${w}` : w;
 }
 
 /* --------------------------------- Die Esse --------------------------------
@@ -1801,10 +1855,25 @@ function esseZeichnen() {
 }
 
 /* ------------------------------ Heldenblatt -------------------------------- */
+const MENU_KOPF = {
+  fert:   ['Können', 'Fertigkeiten und Vorteile'],
+  beutel: ['Beutel', 'was du trägst und was du dabei hast'],
+  quests: ['Aufträge', 'was noch offen ist'],
+  welt:   ['Karte', 'wo du bist und was ringsum liegt'],
+  wesen:  ['Wesen', 'was dir schon begegnet ist'],
+};
+
 function menuZeichnen(tab = 'fert') {
+  const h = held();
   for (const b of document.querySelectorAll('.reiter')) {
     b.classList.toggle('an', b.dataset.tab === tab);
   }
+  const [titel, unter] = MENU_KOPF[tab] || MENU_KOPF.fert;
+  el('menuTitel').textContent = titel;
+  el('menuUnter').textContent = tab === 'fert'
+    ? `Stufe ${h.stufe}${h.punkte > 0 ? ` · ${h.punkte} Punkt${h.punkte > 1 ? 'e' : ''} frei` : ''}`
+    : unter;
+  el('menuGold').textContent = h.gold;
   for (const [id, name] of [['tabFert', 'fert'], ['tabBeutel', 'beutel'],
                             ['tabQuests', 'quests'], ['tabWelt', 'welt'],
                             ['tabWesen', 'wesen']]) {
@@ -1818,68 +1887,198 @@ function menuZeichnen(tab = 'fert') {
 }
 
 /* --------------------------------- Beutel ---------------------------------- */
+/* --------------------------------- Beutel ----------------------------------
+ * Ein Inventar, wie man es kennt: oben drei Plätze für das, was am Körper
+ * hängt, darunter die Werte, dann ein Gitter aus Fächern. Angetipptes steht
+ * im Blatt darüber — mit Güte, Wirkung, Spruch und genau einem Knopf. So
+ * bleibt die Liste kurz und die Entscheidung groß.
+ * -------------------------------------------------------------------------- */
+const BEUTEL_FILTER = [
+  { id: 'alles',  name: 'Alles',      passt: () => true },
+  { id: 'ruest',  name: 'Ausrüstung', passt: (d) => dinge.TRAGBAR.includes(d.art) },
+  { id: 'nutz',   name: 'Tränke',     passt: (d) => d.art === 'trank' || d.art === 'lehre' },
+  { id: 'beute',  name: 'Beute',      passt: (d) => d.art === 'beute' },
+];
+let beutelFilter = 'alles';
+let beutelWahl = null;
+
+/* Gemeines bekommt keine Farbe — sonst sähe die Hälfte des Beutels aus wie
+   ausgegraut. Erst ab „selten" lohnt sich ein Rand. */
+const gueteFarbe = (d) =>
+  (d && d.guete && d.guete !== 'gemein' ? dinge.SELTENHEIT[d.guete].farbe : null);
+
+const ARTWORT = {
+  waffe: 'Waffe', ruestung: 'Rüstung', schmuck: 'Schmuck',
+  trank: 'Trank', lehre: 'Zauberbuch', beute: 'Beute',
+};
+
 function beutelZeichnen() {
   const h = held();
   const feld = el('tabBeutel');
   feld.replaceChildren();
 
-  // Was am Körper hängt
+  /* ---- Was am Körper hängt ---- */
   const kopf = document.createElement('div');
   kopf.className = 'rue-reihe';
   for (const art of dinge.TRAGBAR) {
     const id = h.rue[art];
+    const d = id ? DINGE[id] : null;
     const platz = document.createElement('button');
     platz.className = 'rue-platz' + (id ? ' voll' : ' leer');
+    const farbe = gueteFarbe(d);
+    if (farbe) platz.style.setProperty('--rand', farbe);
     const sorte = art === 'waffe' ? 'schwert' : art === 'ruestung' ? 'schild' : 'ring';
-    const gf = id && DINGE[id].guete ? dinge.SELTENHEIT[DINGE[id].guete].farbe : null;
-    platz.innerHTML = id
-      ? `${sym(DINGE[id].sym)}<small${gf ? ` style="color:${gf}"` : ''}>${DINGE[id].name}</small>`
-      : `${sym(sorte)}<small>${art === 'waffe' ? 'Waffe' : art === 'ruestung' ? 'Rüstung' : 'Schmuck'}</small>`;
-    if (id) platz.addEventListener('click', () => { dinge.ausziehen(h, art); audio.step(); beutelZeichnen(); updateHUD(); });
+    platz.innerHTML = d
+      ? `${sym(d.sym)}<small style="color:${farbe || 'inherit'}">${d.name}</small>`
+      : `${sym(sorte)}<small>${ARTWORT[art]}</small>`;
+    platz.addEventListener('click', () => {
+      if (id) { beutelWahl = id; beutelZeichnen(); }
+    });
     kopf.append(platz);
   }
   feld.append(kopf);
 
-  const werte = document.createElement('p');
-  werte.className = 'punkte-hinweis';
-  werte.textContent = `Schaden ${Math.round(fert.werte.schaden(h))}`
-    + ` · Rüstung ${Math.round(Math.min(0.6, fert.werte.ruestung(h)) * 100)}%`
-    + ` · Leben ${fert.werte.lebenMax(h)}`;
+  /* ---- Die drei Zahlen, die zählen ---- */
+  const werte = document.createElement('div');
+  werte.className = 'werte-reihe';
+  const deckel = Math.round(Math.min(fert.werte.panzerdeckel(h), fert.werte.ruestung(h)) * 100);
+  for (const [zahl, wort] of [
+    [Math.round(fert.werte.schaden(h)), 'Schaden'],
+    [`${deckel}%`, 'Rüstung'],
+    [fert.werte.lebenMax(h), 'Leben'],
+  ]) {
+    const k = document.createElement('div');
+    k.className = 'wert-kachel';
+    k.innerHTML = `<b>${zahl}</b><small>${wort}</small>`;
+    werte.append(k);
+  }
   feld.append(werte);
 
-  const ids = Object.keys(h.beutel).sort((a, b) => DINGE[b].wert - DINGE[a].wert);
+  /* ---- Das Blatt: was gerade angetippt ist ---- */
+  const ids = Object.keys(h.beutel).sort((a, b) => {
+    const A = DINGE[a], B = DINGE[b];
+    const g = (x) => ['sagenhaft', 'episch', 'selten', 'gemein'].indexOf(x.guete ?? 'zz');
+    if (A.art !== B.art) return ARTFOLGE.indexOf(A.art) - ARTFOLGE.indexOf(B.art);
+    if (g(A) !== g(B)) return g(A) - g(B);
+    return B.wert - A.wert;
+  });
+  if (beutelWahl && !h.beutel[beutelWahl] && h.rue.waffe !== beutelWahl
+      && h.rue.ruestung !== beutelWahl && h.rue.schmuck !== beutelWahl) beutelWahl = null;
+  feld.append(dingBlatt(beutelWahl));
+
+  /* ---- Die Auswahl ---- */
+  const filter = document.createElement('div');
+  filter.className = 'beutel-filter';
+  for (const f of BEUTEL_FILTER) {
+    const c = document.createElement('button');
+    c.className = 'filter-chip' + (beutelFilter === f.id ? ' an' : '');
+    c.textContent = f.name;
+    c.addEventListener('click', () => { beutelFilter = f.id; beutelZeichnen(); });
+    filter.append(c);
+  }
+  feld.append(filter);
+
+  /* ---- Das Gitter ---- */
+  const regel = BEUTEL_FILTER.find((f) => f.id === beutelFilter) || BEUTEL_FILTER[0];
+  const zeigen = ids.filter((id) => regel.passt(DINGE[id]));
+  const gitter = document.createElement('div');
+  gitter.className = 'beutel-gitter';
+  for (const id of zeigen) {
+    const d = DINGE[id];
+    const fach = document.createElement('button');
+    fach.className = 'fach' + (beutelWahl === id ? ' an' : '');
+    const farbe = gueteFarbe(d);
+    if (farbe) fach.style.setProperty('--rand', farbe);
+    fach.innerHTML = sym(d.sym)
+      + (h.beutel[id] > 1 ? `<span class="zahl">${h.beutel[id]}</span>` : '');
+    fach.title = d.name;
+    fach.addEventListener('click', () => {
+      beutelWahl = beutelWahl === id ? null : id;
+      audio.step();
+      beutelZeichnen();
+    });
+    gitter.append(fach);
+  }
+  // Der Beutel sieht auch leer wie ein Beutel aus: mindestens zwei Reihen
+  for (let i = zeigen.length; i < Math.max(10, Math.ceil((zeigen.length + 1) / 5) * 5); i++) {
+    const leer = document.createElement('div');
+    leer.className = 'fach leer';
+    gitter.append(leer);
+  }
+  feld.append(gitter);
+
   if (!ids.length) {
     const p = document.createElement('p');
     p.className = 'punkte-hinweis';
+    p.style.marginTop = '10px';
     p.textContent = 'Der Beutel ist leer. Gruften sind voll.';
     feld.append(p);
-    return;
   }
-  for (const id of ids) {
-    const d = DINGE[id];
-    const z = document.createElement('div');
-    z.className = 'ding-zeile';
-    z.innerHTML = sym(d.sym)
-      + `<span class="txt">${dingName(d, h.beutel[id] > 1 ? ` ×${h.beutel[id]}` : '')}`
-      + `<small>${wirkungText(d)}</small></span>`;
-    const tun = document.createElement('button');
-    tun.className = 'ding-tun';
-    if (dinge.TRAGBAR.includes(d.art)) {
-      tun.textContent = 'anlegen';
-      tun.addEventListener('click', () => { dinge.anlegen(h, id); audio.gem(2); beutelZeichnen(); updateHUD(); });
-    } else if (d.art === 'lehre') {
-      tun.textContent = 'lesen';
-      tun.addEventListener('click', () => { zauberLernen(id); beutelZeichnen(); });
-    } else if (d.art === 'trank') {
-      tun.textContent = 'trinken';
-      tun.addEventListener('click', () => { trinkenGezielt(id); beutelZeichnen(); });
-    } else {
-      tun.innerHTML = `${dinge.verkaufswert(id)}<i class="ic-muenze">${ICONS.muenze}</i>`;
-      tun.classList.add('still');
-    }
-    z.append(tun);
-    feld.append(z);
+}
+
+const ARTFOLGE = ['waffe', 'ruestung', 'schmuck', 'trank', 'lehre', 'beute'];
+
+/** Das Blatt über dem Gitter — alles über ein Stück und ein Knopf dazu. */
+function dingBlatt(id) {
+  const h = held();
+  const blatt = document.createElement('div');
+  blatt.className = 'ding-blatt';
+  if (!id || !DINGE[id]) {
+    blatt.classList.add('leer');
+    blatt.innerHTML = '<small>Tippe ein Fach an, dann steht hier, was es ist.</small>';
+    return blatt;
   }
+  const d = DINGE[id];
+  const farbe = gueteFarbe(d);
+  if (farbe) blatt.style.setProperty('--rand', farbe);
+  const getragen = Object.values(h.rue).includes(id);
+
+  const txt = document.createElement('span');
+  txt.className = 'txt';
+  const kopfzeile = `<b style="color:${farbe || 'inherit'}">${d.name}</b>`
+    + `<span class="guete" style="color:${farbe || 'var(--tinte-hell)'}">`
+    + `${d.guete ? dinge.SELTENHEIT[d.guete].name : ''}`
+    + `${d.guete ? ' · ' : ''}${ARTWORT[d.art] || ''}${getragen ? ' · getragen' : ''}</span>`;
+  const wirkt = wirkungsliste(d);
+  txt.innerHTML = kopfzeile
+    + (wirkt ? `<span class="wirkt">${wirkt}</span>` : '')
+    + `<span class="wort">${d.text}</span>`;
+
+  const fuss = document.createElement('div');
+  fuss.className = 'blatt-fuss';
+  const tun = document.createElement('button');
+  tun.className = 'ding-tun';
+  if (getragen) {
+    tun.textContent = 'ablegen';
+    const art = Object.keys(h.rue).find((a) => h.rue[a] === id);
+    tun.addEventListener('click', () => {
+      dinge.ausziehen(h, art); audio.step(); beutelZeichnen(); updateHUD();
+    });
+  } else if (dinge.TRAGBAR.includes(d.art)) {
+    tun.textContent = 'anlegen';
+    tun.addEventListener('click', () => {
+      dinge.anlegen(h, id); audio.gem(2); beutelZeichnen(); updateHUD();
+    });
+  } else if (d.art === 'lehre') {
+    tun.textContent = 'lesen';
+    tun.addEventListener('click', () => { zauberLernen(id); beutelZeichnen(); });
+  } else if (d.art === 'trank') {
+    tun.textContent = 'trinken';
+    tun.addEventListener('click', () => { trinkenGezielt(id); beutelZeichnen(); });
+  } else {
+    tun.textContent = 'zum Verkauf';
+    tun.classList.add('still');
+  }
+  fuss.append(tun);
+  const preis = document.createElement('span');
+  preis.className = 'preis-chip';
+  preis.innerHTML = `${verkaufFuer(id)}<i class="ic-muenze">${ICONS.muenze}</i> beim Händler`;
+  fuss.append(preis);
+  txt.append(fuss);
+
+  blatt.innerHTML = sym(d.sym);
+  blatt.append(txt);
+  return blatt;
 }
 
 function trinkenGezielt(id) {
@@ -1892,59 +2091,123 @@ function trinkenGezielt(id) {
   updateHUD();
 }
 
+/* --------------------------------- Können ----------------------------------
+ * Fünf Fertigkeiten, jede eine Lade: der Kopf zeigt Stufe und Fortschritt,
+ * aufgeklappt hängt die Perlenschnur ihrer Vorteile darin. Nur eine Lade ist
+ * offen — so bleibt die Seite kurz, auch wenn fünfundzwanzig Vorteile darin
+ * stecken. Was man sich gerade nehmen kann, leuchtet golden.
+ * -------------------------------------------------------------------------- */
+let fertOffen = null;
+
 function fertZeichnen() {
   const h = held();
   const feld = el('tabFert');
   feld.replaceChildren();
 
+  // Wo etwas zu holen ist, geht die Lade von selbst auf
+  const frei = (id) => fert.vorteileVon(id).some(
+    (v) => !h.vorteile.has(v.id) && h.punkte > 0 && h.fert[id] >= v.stufe);
+  if (fertOffen === null) {
+    fertOffen = Object.keys(fert.FERTIGKEITEN).find(frei) || '';
+  }
+
   const hinweis = document.createElement('p');
-  hinweis.className = 'punkte-hinweis';
+  hinweis.className = 'punkte-hinweis' + (h.punkte > 0 ? ' wichtig' : '');
   hinweis.textContent = h.punkte > 0
-    ? `${h.punkte} Punkt${h.punkte > 1 ? 'e' : ''} zu vergeben`
-    : 'Fertigkeiten steigen dadurch, dass du sie benutzt.';
+    ? `${h.punkte} Punkt${h.punkte > 1 ? 'e' : ''} zu vergeben — jede Stufe bringt einen.`
+    : 'Fertigkeiten steigen dadurch, dass du sie benutzt. Jede Stufe gibt einen Punkt.';
   feld.append(hinweis);
 
   zauberliste(feld);
 
   for (const [id, f] of Object.entries(fert.FERTIGKEITEN)) {
-    const z = document.createElement('div');
-    z.className = 'fert-zeile';
-    z.innerHTML = sym(f.sym)
-      + `<span class="txt"><b>${f.name}</b><small>${f.hinweis}</small></span>`
-      + `<span class="stufe-zahl">${h.fert[id]}</span>`;
-    feld.append(z);
+    const offen = fertOffen === id;
+    const karte = document.createElement('div');
+    karte.className = 'fert-karte' + (offen ? ' offen' : '');
 
-    for (const v of fert.VORTEILE.filter((x) => x.fert === id)) {
+    const kopf = document.createElement('button');
+    kopf.className = 'fert-kopf';
+    const alle = fert.vorteileVon(id);
+    const wieviel = alle.filter((v) => h.vorteile.has(v.id)).length;
+    kopf.innerHTML = sym(f.sym)
+      + `<span class="txt"><b>${f.name}</b>`
+      + `<small>${f.hinweis} · ${wieviel}/${alle.length} Vorteile</small></span>`
+      + (frei(id) ? '<span class="fert-punkt"></span>' : '')
+      + `<span class="stufe-zahl">${h.fert[id]}</span>`;
+    kopf.addEventListener('click', () => {
+      fertOffen = offen ? '' : id;
+      audio.step();
+      fertZeichnen();
+    });
+    karte.append(kopf);
+
+    // Wie weit die nächste Stufe noch weg ist
+    const ziel = fert.stufenziel(h.fert[id]);
+    const stand = Math.min(1, ((h.fertXp && h.fertXp[id]) || 0) / ziel);
+    const bal = document.createElement('div');
+    bal.className = 'fert-balken';
+    bal.innerHTML = `<i style="width:${(stand * 100).toFixed(0)}%"></i>`;
+    karte.append(bal);
+
+    const liste = document.createElement('div');
+    liste.className = 'vorteil-liste';
+    for (const v of alle) {
       const hat = h.vorteile.has(v.id);
-      const kann = !hat && h.punkte > 0 && h.fert[id] >= v.stufe;
+      const reicht = h.fert[id] >= v.stufe;
+      const kann = !hat && reicht && h.punkte > 0;
       const b = document.createElement('button');
-      b.className = 'vorteil' + (hat ? ' hat' : kann ? '' : ' aus');
-      b.innerHTML = `<b>${hat ? '✓ ' : ''}${v.name}</b><small>${v.text}`
-        + `${hat ? '' : ` — ab ${f.name} ${v.stufe}`}</small>`;
+      b.className = 'vorteil' + (hat ? ' hat' : kann ? ' frei' : ' aus');
+      b.innerHTML = `<b>${v.name}</b><small>${v.text}`
+        + (hat ? '' : ` <span class="sperre">— ab ${f.name} ${v.stufe}</span>`)
+        + '</small>';
       if (kann) {
         b.addEventListener('click', () => {
-          if (fert.vorteilNehmen(h, v.id)) { audio.gem(3); fertZeichnen(); updateHUD(); }
+          if (fert.vorteilNehmen(h, v.id)) {
+            audio.gem(3);
+            juice.ring({ x: player.pos.x, y: player.pos.y + 1, z: player.pos.z },
+              2.6, '#e8a83c', 0.6);
+            menuZeichnen('fert'); updateHUD();
+          }
         });
       }
-      feld.append(b);
+      liste.append(b);
     }
+    karte.append(liste);
+    feld.append(karte);
   }
 }
 
-/* Was er sprechen kann, steht unter den Fertigkeiten — antippen legt den
+/* Was er sprechen kann, steht über den Fertigkeiten — antippen legt den
    Spruch auf den Knopf. Was er noch nicht kann, steht blass daneben: so
    weiß man, wonach man in den Truhen sucht. */
 function zauberliste(feld) {
   const h = held();
   const kann = gelernte(h);
+  const offen = fertOffen === 'zauber';
 
-  const kopf = document.createElement('div');
-  kopf.className = 'fert-zeile';
-  kopf.innerHTML = sym('funke')
-    + `<span class="txt"><b>Zauber</b><small>Antippen legt ihn auf den Knopf · `
-    + `lang auf den Knopf drücken blättert weiter</small></span>`
-    + `<span class="stufe-zahl">${kann.length}</span>`;
-  feld.append(kopf);
+  const karte = document.createElement('div');
+  karte.className = 'fert-karte zauber-lade' + (offen ? ' offen' : '');
+  const kopf = document.createElement('button');
+  kopf.className = 'fert-kopf';
+  kopf.innerHTML = sym(aktiverZauber().sym)
+    + `<span class="txt"><b>Zauber</b>`
+    + `<small>auf dem Knopf: ${aktiverZauber().name}</small></span>`
+    + `<span class="stufe-zahl">${kann.length}/${ZAUBER_IDS.length}</span>`;
+  kopf.addEventListener('click', () => {
+    fertOffen = offen ? '' : 'zauber';
+    audio.step();
+    fertZeichnen();
+  });
+  karte.append(kopf);
+
+  const liste = document.createElement('div');
+  liste.className = 'vorteil-liste';
+  const wort = document.createElement('p');
+  wort.className = 'punkte-hinweis';
+  wort.style.margin = '0 0 7px';
+  wort.textContent = 'Antippen legt den Spruch auf den Knopf. Lang auf den Knopf gedrückt '
+    + 'blättert mitten im Kampf weiter.';
+  liste.append(wort);
 
   for (const id of ZAUBER_IDS) {
     const z = ZAUBER[id];
@@ -1952,16 +2215,20 @@ function zauberliste(feld) {
     const dran = hat && h.aktiverZauber === id;
     const b = document.createElement('button');
     b.className = 'vorteil zauber-zeile' + (dran ? ' hat' : hat ? '' : ' aus');
+    const farbe = dinge.SELTENHEIT[z.guete].farbe;
     b.innerHTML = `${sym(z.sym)}<span class="txt">`
-      + `<b style="color:${dinge.SELTENHEIT[z.guete].farbe}">${dran ? '✓ ' : ''}${z.name}</b>`
-      + `<small>${hat ? `${z.kurz} · ${z.kosten} Magicka`
+      + `<b style="color:${farbe}">${dran ? '✓ ' : ''}${z.name}</b>`
+      + `<small>${hat ? z.kurz
         : `${dinge.SELTENHEIT[z.guete].name} · noch nicht gelernt — ab Magie ${z.braucht}`}`
-      + `</small></span>`;
+      + '</small></span>'
+      + (hat ? `<span class="kosten">${zauberkosten(z)}</span>` : '');
     if (hat && !dran) {
       b.addEventListener('click', () => { zauberWaehlen(id); fertZeichnen(); });
     }
-    feld.append(b);
+    liste.append(b);
   }
+  karte.append(liste);
+  feld.append(karte);
 }
 
 function questsZeichnen() {
@@ -1972,7 +2239,15 @@ function questsZeichnen() {
   const k = story.aktuell(st);
   const v = verfolgtes();
 
+  const ueberschrift = (wort) => {
+    const p = document.createElement('p');
+    p.className = 'abschnitt';
+    p.textContent = wort;
+    feld.append(p);
+  };
+
   if (k) {
+    ueberschrift('Der lange Weg');
     const fertig = st.gestartet && story.kapitelFertig(st);
     const dran = v && v.art === 'haupt';
     const z = document.createElement('div');
@@ -2006,6 +2281,7 @@ function questsZeichnen() {
   }
 
   const offen = state.buch.offen;
+  ueberschrift('Was die Leute wollen');
   if (!offen.length) {
     const p = document.createElement('p');
     p.className = 'punkte-hinweis';
@@ -2038,7 +2314,9 @@ function questsZeichnen() {
     z.append(fuss);
     feld.append(z);
   }
-  for (const q of state.buch.erledigt.slice(-3)) {
+  const alt3 = state.buch.erledigt.slice(-3);
+  if (alt3.length) ueberschrift('Erledigt');
+  for (const q of alt3) {
     const z = document.createElement('div');
     z.className = 'q-zeile';
     z.innerHTML = `<b style="opacity:.5">✓ ${q.titel}</b>`;
@@ -2052,12 +2330,39 @@ function questsZeichnen() {
   feld.append(hilfen);
 }
 
+/* --------------------------------- Karte -----------------------------------
+ * Ein gemaltes Blatt in einem Holzrahmen: die Gegenden als Farbflächen, die
+ * Zeichen darauf als Punkte, oben rechts die Rose. Zwei Weiten — nah, um den
+ * Weg ins nächste Dorf zu finden, fern, um zu sehen, was es sonst noch gibt.
+ * -------------------------------------------------------------------------- */
+const KARTENWEITEN = [{ name: 'nah', r: 300 }, { name: 'weit', r: 620 }];
+let kartenWeite = 0;
+
 function karteZeichnen() {
   const feld = el('tabWelt');
   feld.replaceChildren();
+
+  const kopf = document.createElement('div');
+  kopf.className = 'karten-kopfzeile';
+  const wo = document.createElement('small');
+  wo.className = 'punkte-hinweis';
+  wo.style.margin = '0';
+  wo.textContent = `${Math.round(player.pos.x)} · ${Math.round(player.pos.z)}`;
+  const wahl = document.createElement('div');
+  wahl.className = 'weite-wahl';
+  KARTENWEITEN.forEach((w, i) => {
+    const b = document.createElement('button');
+    b.className = kartenWeite === i ? 'an' : '';
+    b.textContent = w.name;
+    b.addEventListener('click', () => { kartenWeite = i; karteZeichnen(); });
+    wahl.append(b);
+  });
+  kopf.append(wo, wahl);
+  feld.append(kopf);
+
   const box = document.createElement('div');
   box.className = 'karte-feld';
-  const R = 420;
+  const R = KARTENWEITEN[kartenWeite].r;
   const px = player.pos.x, pz = player.pos.z;
   box.append(kartenBlatt(px, pz, R));
   const setz = (x, z, klasse) => {
@@ -2075,14 +2380,20 @@ function karteZeichnen() {
   const ziel = zielPunkt();
   if (ziel) setz(ziel.x, ziel.z, 'ziel');
   setz(px, pz, 'du');
+
+  const rose = document.createElement('span');
+  rose.className = 'karte-rose';
+  rose.innerHTML = ICONS.rose;
+  box.append(rose);
   feld.append(box);
+
   const leg = document.createElement('p');
   leg.className = 'karte-legende';
-  leg.innerHTML = '<span class="punkt dorf"></span> Dorf'
-    + ' <span class="punkt gruft"></span> Gruft'
-    + ' <span class="punkt ort turm"></span> Landmarke'
-    + ' <span class="punkt ziel"></span> Ziel'
-    + ' <span class="punkt du"></span> du'
+  leg.innerHTML = '<span class="wort"><span class="punkt dorf"></span>Dorf</span>'
+    + '<span class="wort"><span class="punkt gruft"></span>Gruft</span>'
+    + '<span class="wort"><span class="punkt ort turm"></span>Landmarke</span>'
+    + '<span class="wort"><span class="punkt ziel"></span>Ziel</span>'
+    + '<span class="wort"><span class="punkt du"></span>du</span>'
     + `<span class="legende-weite">Umkreis ${R * 2} Schritt</span>`;
   feld.append(leg);
 
@@ -2137,49 +2448,75 @@ function bestiariumZeichnen() {
   const feld = el('tabWesen');
   feld.replaceChildren();
 
-  const kopf = document.createElement('p');
-  kopf.className = 'punkte-hinweis';
   const alle = Object.keys(ARTEN);
-  kopf.textContent = `${h.gesehen.size} von ${alle.length} Wesen gesehen`;
-  feld.append(kopf);
-
   const sortiert = alle.slice().sort((a, b) =>
     (ARTEN[a].stufe || 1) - (ARTEN[b].stufe || 1) || ARTEN[a].name.localeCompare(ARTEN[b].name));
+  const kennt = sortiert.filter((id) => h.gesehen.has(id));
+  const fremd = sortiert.filter((id) => !h.gesehen.has(id));
 
-  for (const id of sortiert) {
+  const kopf = document.createElement('p');
+  kopf.className = 'punkte-hinweis';
+  kopf.textContent = `${kennt.length} von ${alle.length} Wesen gesehen`;
+  feld.append(kopf);
+
+  if (!kennt.length) {
+    const p = document.createElement('p');
+    p.className = 'punkte-hinweis wichtig';
+    p.textContent = 'Noch nichts gesehen. Was dir vor die Augen kommt, steht danach hier — '
+      + 'mit Gefahr, Haltung, Heimat und dem, was es zurücklässt.';
+    feld.append(p);
+  }
+
+  for (const id of kennt) {
     const art = ARTEN[id];
-    const kennt = h.gesehen.has(id);
     const z = document.createElement('div');
-    z.className = 'wesen-zeile' + (kennt ? '' : ' fremd');
+    z.className = 'wesen-zeile';
 
     const bild = document.createElement('span');
     bild.className = 'wesen-fleck';
-    bild.style.background = kennt ? art.fell : 'var(--putz-tief)';
-    bild.style.boxShadow = `0 0 0 2px ${kennt ? art.dunkel : 'var(--holz)'}`;
-    bild.textContent = kennt ? '' : '?';
+    bild.style.background = art.fell;
+    bild.style.boxShadow = `0 0 0 2px ${art.dunkel}`;
     z.append(bild);
 
+    const st = art.stufe || 1;
+    const erlegt = (h.erlegt && h.erlegt[id]) || 0;
+    const wo = heimatVon(id);
+    const beute = art.beute && DINGE[art.beute] ? DINGE[art.beute].name : null;
     const txt = document.createElement('span');
     txt.className = 'wesen-text';
-    if (!kennt) {
-      txt.innerHTML = '<b>Unbekannt</b><small>noch nie gesehen</small>';
-    } else {
-      const st = art.stufe || 1;
-      const erlegt = (h.erlegt && h.erlegt[id]) || 0;
-      const wo = heimatVon(id);
-      const beute = art.beute && DINGE[art.beute] ? DINGE[art.beute].name : null;
-      txt.innerHTML = `<b>${art.name} <span class="gefahr g${st}">${'◆'.repeat(st)}</span></b>`
-        + `<small>${HALTUNG[art.gesinnung] || 'wild'}`
-        + (art.fern ? ' · schießt' : '')
-        + (art.nurNachts ? ' · nur nachts' : '') + '</small>'
-        + `<small>${wo.length ? wo.join(', ') : 'in den Gruften'}</small>`
-        + `<small>${beute ? `lässt ${beute} zurück` : 'lässt nichts zurück'}`
-        + (erlegt ? ` · ${erlegt} erlegt` : '') + '</small>';
-    }
+    txt.innerHTML = `<b>${art.name} <span class="gefahr g${st}">${'◆'.repeat(st)}</span></b>`
+      + `<small>${HALTUNG[art.gesinnung] || 'wild'}`
+      + (art.fern ? ' · schießt' : '')
+      + (art.nurNachts ? ' · nur nachts' : '') + '</small>'
+      + `<small>${wo.length ? wo.join(', ') : 'in den Gruften'}</small>`
+      + `<small>${beute ? `lässt ${beute} zurück` : 'lässt nichts zurück'}`
+      + (erlegt ? ` · ${erlegt} erlegt` : '') + '</small>';
     z.append(txt);
     feld.append(z);
   }
+
+  /* Dreißig Zeilen „Unbekannt" wären dreißigmal dieselbe Auskunft. Was man
+     noch nicht kennt, steht deshalb als Reihe stummer Fächer da — man sieht
+     auf einen Blick, wie viel die Welt noch zurückhält. */
+  if (fremd.length) {
+    const ueber = document.createElement('p');
+    ueber.className = 'abschnitt';
+    ueber.textContent = `Noch nicht begegnet · ${fremd.length}`;
+    feld.append(ueber);
+
+    const gitter = document.createElement('div');
+    gitter.className = 'beutel-gitter fremd-gitter';
+    for (const id of fremd) {
+      const f = document.createElement('div');
+      f.className = 'fach leer fremd-fach';
+      f.textContent = '?';
+      f.title = `Gefahr ${ARTEN[id].stufe || 1}`;
+      gitter.append(f);
+    }
+    feld.append(gitter);
+  }
 }
+
 
 /* ---------------------------- Das Kartenblatt ------------------------------
  * Punkte allein sagen nichts darüber, wo man ist. Hier wird die Gegend selbst
@@ -2576,7 +2913,12 @@ function frame() {
     } else if (willRennen && !state.erschoepft && h.ausdauer > 20) {
       state.rennt = true;
     }
-    player.tempo = fert.werte.tempo(h) * (state.rennt ? 1.6 : 1);
+    player.tempo = fert.werte.tempo(h)
+      * (state.rennt ? (h.vorteile.has('wandern6') ? 1.85 : 1.6) : 1);
+    // Wandern lernt man beim Wandern. Rennen zählt doppelt.
+    const weg = Math.hypot(player.vel.x, player.vel.z) * dt;
+    state.gelaufen += weg * (state.rennt ? 2 : 1);
+    if (state.gelaufen > 26) { state.gelaufen = 0; fert.uebung(h, 'wandern', 1); }
     player.rennt = state.rennt;
     player.update(dt, move, world);
     // Häuser und Stämme sind Modelle, keine Blöcke — hier erst werden sie fest
@@ -2637,6 +2979,7 @@ function frame() {
     if (state.time < vorher) state.tag++;    // ein Tag ist herum, die Läden füllen auf
     if (state.hieb > 0) state.hieb -= dt;
     if (state.zauber > 0) state.zauber -= dt;
+    if (state.rausch > 0) state.rausch -= dt;
     if (state.schutz > 0) {
       state.schutz -= dt;
       // Solange sie traegt, staubt es grau um die Fuesse
@@ -2647,9 +2990,11 @@ function frame() {
     }
 
     // Ausdauer und Magicka füllen sich von allein — das Rennen zehrt daran
+    const zehrt = h.vorteile.has('wandern8') ? 8 : 14;
+    const atem = 16 * (h.vorteile.has('wandern3') ? 1.5 : 1);
     h.ausdauer = state.rennt
-      ? Math.max(0, h.ausdauer - 14 * dt)
-      : Math.min(h.ausdauerMax, h.ausdauer + 16 * dt);
+      ? Math.max(0, h.ausdauer - zehrt * dt)
+      : Math.min(h.ausdauerMax, h.ausdauer + atem * dt);
     const magTempo = h.vorteile.has('magie4') ? 6 : 3.4;
     h.magicka = Math.min(fert.werte.magickaMax(h), h.magicka + magTempo * dt);
     // Nach dem Kampf heilt es langsam, wenn nichts in der Nähe ist
@@ -2823,6 +3168,7 @@ for (const b of document.querySelectorAll('.reiter')) {
   b.addEventListener('click', () => menuZeichnen(b.dataset.tab));
 }
 el('rede').addEventListener('click', (e) => { if (e.target === el('rede')) redeSchliessen(); });
+el('redeZu').addEventListener('click', redeSchliessen);
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
@@ -3073,6 +3419,7 @@ function neuesSpiel() {
   state.time = 0.3;
   state.dead = false;
   state.schutz = 0;
+  state.rausch = 0;
   state.imDungeon = null;
   state.fallFrom = null;
   beutelAufloesen();
@@ -3112,6 +3459,7 @@ function weiterSpielen(d) {
   state.tag = d.tag ?? 0;
   state.dead = false;
   state.schutz = 0;
+  state.rausch = 0;
   state.imDungeon = null;
   state.fallFrom = null;
   juice.reset();
@@ -3158,6 +3506,7 @@ el('againBtn').addEventListener('click', () => {
   h.magicka = fert.werte.magickaMax(h);
   state.dead = false;
   state.schutz = 0;
+  state.rausch = 0;
   state.imDungeon = null;
   feinde.clear();
   const s = startplatz();
@@ -3198,8 +3547,9 @@ window.__game = {
   applyDaytime, sun, hemi, nachtGrad,
   camDistWert: () => camDist, camRohWert: () => camRoh,
   esseOeffnen, esseZeichnen, dinge, fert, auftragFuer, kontextFuer, leute,
+  updateHUD, dingBlatt, fertZeichnen, verkaufFuer,
   ZAUBER, ZAUBER_IDS, gelernte, aktiverZauber, zauberWaehlen, zauberBlaettern,
-  zauberLernen, fertZeichnen,
+  zauberLernen,
 };
 
 resize();
