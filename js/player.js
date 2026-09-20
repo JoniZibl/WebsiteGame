@@ -117,9 +117,6 @@ export class Player {
     this.swing = 0;
     this.huepft = 0;
     this.tempo = 1;
-    this.rolle = 0;        // wie lange die Rolle noch läuft
-    this.unverwundbar = 0; // und wie lange sie noch trägt
-    this.rollRichtung = { x: 0, z: 1 };
     this.bogen = false;
     this.rennt = false;
     this.schritt = 0;   // Phase der Beinarbeit, läuft mit dem Tempo mit
@@ -151,41 +148,18 @@ export class Player {
     return false;
   }
 
-  /* Die Rolle: ein kurzer Satz zur Seite, währenddessen geht nichts durch.
-     Sie ist der Grund, warum ein Kampf mehr ist als Schläge zählen — wer den
-     richtigen Moment trifft, nimmt keinen Schaden. */
-  rollen(move) {
-    if (this.rolle > 0 || !this.onGround) return false;
-    const l = Math.hypot(move.x, move.y);
-    if (l > 0.2) this.rollRichtung = { x: move.x / l, z: move.y / l };
-    else this.rollRichtung = { x: Math.sin(this.facing), z: Math.cos(this.facing) };
-    this.rolle = 0.42;
-    this.unverwundbar = 0.34;
-    this.facing = Math.atan2(this.rollRichtung.x, this.rollRichtung.z);
-    return true;
-  }
-
   update(dt, move, world) {
     this.t += dt;
     if (this.swing > 0) this.swing -= dt;
-    if (this.rolle > 0) this.rolle -= dt;
-    if (this.unverwundbar > 0) this.unverwundbar -= dt;
 
     const feet = world.get(Math.floor(this.pos.x), Math.floor(this.pos.y + 0.2), Math.floor(this.pos.z));
     this.inWater = feet === B.wasser;
 
-    if (this.rolle > 0) {
-      // Während der Rolle zählt nur der Schwung, nicht der Knüppel
-      const schwung = 13 * Math.max(0.35, this.rolle / 0.42);
-      this.vel.x = this.rollRichtung.x * schwung;
-      this.vel.z = this.rollRichtung.z * schwung;
-    } else {
-      const speed = (this.inWater ? 3.4 : 5.4) * (this.tempo || 1) * move.strength;
-      const wishX = move.x * speed;
-      const wishZ = move.y * speed;
-      this.vel.x += (wishX - this.vel.x) * Math.min(1, dt * 14);
-      this.vel.z += (wishZ - this.vel.z) * Math.min(1, dt * 14);
-    }
+    const speed = (this.inWater ? 3.4 : 5.4) * (this.tempo || 1) * move.strength;
+    const wishX = move.x * speed;
+    const wishZ = move.y * speed;
+    this.vel.x += (wishX - this.vel.x) * Math.min(1, dt * 14);
+    this.vel.z += (wishZ - this.vel.z) * Math.min(1, dt * 14);
 
     // Schwerkraft, im Wasser gebremst
     this.vel.y -= (this.inWater ? GRAVITY * 0.28 : GRAVITY) * dt;
@@ -235,7 +209,7 @@ export class Player {
     }
     if (this.pos.y < 1) { this.pos.y = 1; this.onGround = true; this.vel.y = 0; }
 
-    if (this.rolle <= 0 && move.active && move.strength > 0.05) {
+    if (move.active && move.strength > 0.05) {
       this.facing = Math.atan2(move.x, move.y);
     }
 
@@ -249,7 +223,7 @@ export class Player {
        hängen Ton und Staub — vorher lief die Figur lautlos wie ein Papierbild
        über die Wiese. */
     this.fussAuf = null;
-    if (sp > 0.6 && this.onGround && this.rolle <= 0) {
+    if (sp > 0.6 && this.onGround) {
       const halb = Math.floor(this.schritt / Math.PI);
       if (halb !== this.letzterSchritt) {
         this.letzterSchritt = halb;
@@ -270,14 +244,6 @@ export class Player {
     if (this.huepft > 0) this.huepft -= dt;
 
     // Beim Hüpfen ziehen sich die Beine an, statt weiterzulaufen
-    if (this.rolle > 0) {
-      const k = this.rolle / 0.42;
-      this.legL.rotation.x = -1.5 * k;
-      this.legR.rotation.x = -1.2 * k;
-      this.group.rotation.x = -Math.sin(k * Math.PI) * 0.9;
-    } else if (this.group.rotation.x) {
-      this.group.rotation.x = 0;
-    }
     if (this.huepft > 0 || !this.onGround) {
       const k = Math.min(1, Math.max(0, this.huepft / 0.36));
       this.legL.rotation.x = -0.75 * k;
@@ -317,7 +283,7 @@ export class Player {
     const wippe = walking ? Math.abs(Math.sin(this.schritt)) * (this.rennt ? 0.07 : 0.045) : 0;
     const knick = this.landung > 0 ? (this.landung / 0.22) : 0;
 
-    this.torso.rotation.x = this.rolle > 0 ? 0 : lehnen;
+    this.torso.rotation.x = lehnen;
     this.torso.position.y = 0.92 + wippe - knick * 0.12;
     this.head.position.y = 1.5 + wippe * 0.8 - knick * 0.16;
     this.head.rotation.x = -lehnen * 0.4 + Math.sin(this.schritt * 0.5) * 0.02;

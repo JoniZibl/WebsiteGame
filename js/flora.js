@@ -46,6 +46,10 @@ const _pos = new THREE.Vector3();
 const _skal = new THREE.Vector3();
 const _achse = new THREE.Vector3(0, 1, 0);
 
+/* Ein Gewächs wird über das Feld benannt, auf dem es steht — die halben
+   Schritte in g.x und g.z sind nur die Mitte des Blocks. */
+const schluessel = (g) => Math.floor(g.x) + ',' + Math.floor(g.z);
+
 export class Flora {
   constructor(scene, radius = 4) {
     this.scene = scene;
@@ -53,6 +57,11 @@ export class Flora {
     this.chunks = new Map();      // "cx,cz" -> Liste von Gewächsen
     this.netze = {};
     this.letzterChunk = null;
+    /* Was der Spieler umgelegt hat. Der Bewuchs selbst steht in der
+       Rechenvorschrift und käme beim nächsten Vorbeikommen einfach wieder —
+       also merkt sich das Spiel die Stümpfe und lässt genau die weg. Es sind
+       nur die Felder, an denen wirklich jemand gestanden und gehackt hat. */
+    this.gefaellt = new Set();
     /* Wie voll es stehen darf. Eins heißt: so dicht wie gedacht. Der
        Leistungswächter zieht das herunter, wenn ein Gerät nicht mehr
        mitkommt — lieber ein lichterer Wald als ein hakendes Bild. */
@@ -144,6 +153,7 @@ export class Flora {
 
     for (const { dx, dz } of felder) {
       for (const g of this.chunkGewaechse(ccx + dx, ccz + dz)) {
+        if (this.gefaellt.size && this.gefaellt.has(schluessel(g))) continue;
         const netz = this.netze[g.art];
         const i = zaehler[g.art];
         if (i >= HOECHSTZAHL[g.art] * this.duenn) continue;
@@ -162,6 +172,31 @@ export class Flora {
       netz.instanceMatrix.needsUpdate = true;
       netz.computeBoundingSphere?.();
     }
+  }
+
+  /** Was hier wächst und dick genug ist, um es zu fällen — oder null. */
+  naechstes(x, z, weite = 2.6) {
+    if (!this.nah) return null;
+    let best = null, bestD = weite * weite;
+    for (const g of this.nah) {
+      const dx = x - g.x, dz = z - g.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD) { bestD = d2; best = g; }
+    }
+    return best;
+  }
+
+  /** Legt ein Gewächs um. Es bleibt weg, bis ein neues Spiel beginnt. */
+  faellen(g) {
+    this.gefaellt.add(schluessel(g));
+    this.letzterChunk = null;          // im nächsten Bild steht es nicht mehr da
+  }
+
+  /** Für den Spielstand: die Stümpfe hinein und wieder heraus. */
+  stuempfe() { return [...this.gefaellt]; }
+  stuempfeSetzen(liste) {
+    this.gefaellt = new Set(liste || []);
+    this.letzterChunk = null;
   }
 
   /** Lichtet den Bewuchs aus und stellt ihn im nächsten Bild neu auf. */
@@ -189,6 +224,7 @@ export class Flora {
 
   clear() {
     this.chunks.clear();
+    this.gefaellt.clear();
     this.letzterChunk = null;
     for (const netz of Object.values(this.netze)) netz.count = 0;
   }

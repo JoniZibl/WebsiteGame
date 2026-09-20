@@ -219,7 +219,7 @@ html, body {
 
 /* ============================== Die Knöpfe ================================
  * Ein Feld unten rechts, und darin sitzt alles an seinem Platz: der Hieb
- * unter dem Daumen, Zauber und Rolle daneben, Reden und Trinken darüber.
+ * unter dem Daumen, Zauber und Axt daneben, Reden und Trinken darüber.
  * ========================================================================== */
 #aktionen {
   position: fixed; z-index: 6; right: var(--rand-r); bottom: var(--rand-u);
@@ -254,12 +254,15 @@ html, body {
 }
 #wirkBtn:active { box-shadow: inset 0 0 0 2.5px rgba(64, 102, 127, .8), 0 1px 0 var(--blau-tief); }
 
-#rollBtn {
+/* Die Axt füllt sich mit jedem Hieb von unten nach oben — so sieht man, wie
+   weit der Baum ist, ohne dass irgendwo ein Balken dazukommt. */
+#abbauBtn {
   right: 18px; bottom: 104px;
-  background: var(--salbei);
+  background:
+    linear-gradient(to top, var(--gold) calc(var(--ab, 0) * 1%), var(--salbei) 0);
   box-shadow: inset 0 0 0 2.5px rgba(93, 138, 69, .8), 0 4px 0 var(--salbei-tief), var(--schatten-k);
 }
-#rollBtn:active { box-shadow: inset 0 0 0 2.5px rgba(93, 138, 69, .8), 0 1px 0 var(--salbei-tief); }
+#abbauBtn:active { box-shadow: inset 0 0 0 2.5px rgba(93, 138, 69, .8), 0 1px 0 var(--salbei-tief); }
 
 #redeBtn {
   right: 96px; bottom: 100px;
@@ -575,6 +578,10 @@ html, body {
 .punkt.ort.turm    { background: #6b6154; border-radius: 2px; height: 12px; width: 6px; }
 .punkt.ort.schrein { background: var(--gold); }
 .punkt.ort.lager   { background: #8c7a5c; }
+/* Das eigene Lager: ein Karo, damit es sich von allem anderen unterscheidet */
+.punkt.mein  { background: var(--salbei); width: 9px; height: 9px; border-radius: 2px;
+               transform: translate(-50%, -50%) rotate(45deg);
+               box-shadow: 0 0 0 2px var(--putz); }
 .punkt.gruft { background: var(--tinte); border-radius: 50%; width: 8px; height: 8px; }
 .punkt.ziel  { background: var(--gold); border-radius: 50%; width: 12px; height: 12px;
                animation: pochen 1s ease-in-out infinite; }
@@ -587,6 +594,41 @@ html, body {
 .karte-legende span.wort { display: inline-flex; align-items: center; gap: 4px; }
 .karte-legende .legende-weite { flex-basis: 100%; opacity: .75; }
 .karte-legende .punkt { position: static; transform: none; }
+
+/* ================================ Lager ===================================
+ * Oben der Vorrat, darunter die Bauliste. Was man sich leisten kann, sieht
+ * aus wie ein Knopf; was fehlt, steht grau daneben und nennt den Preis.
+ * ========================================================================== */
+.vorrat {
+  display: flex; gap: 6px; margin-bottom: 10px;
+}
+.vorrat span {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px; border-radius: var(--r-klein); background: var(--putz-tief);
+}
+.vorrat .ic { width: 20px; height: 20px; display: block; }
+.vorrat b { font-size: 15px; line-height: 1; }
+.vorrat small { font-size: 9.5px; font-weight: 800; opacity: .62; }
+
+.bau-zeile {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+  padding: 10px 12px; margin-bottom: 6px; border: 0; border-radius: var(--r-klein);
+  background: var(--putz-tief); color: var(--tinte);
+  font: inherit; cursor: pointer;
+  box-shadow: inset 3px 0 0 var(--salbei);
+}
+.bau-zeile:active { transform: translateY(2px); }
+.bau-zeile.fehlt { opacity: .55; box-shadow: inset 3px 0 0 var(--putz-tiefer); cursor: default; }
+.bau-zeile.fehlt:active { transform: none; }
+.bau-bild { flex: none; width: 26px; height: 26px; margin-top: 2px; }
+.bau-bild .ic { display: block; width: 100%; height: 100%; }
+.bau-text { flex: 1; min-width: 0; }
+.bau-text b { font-size: 13px; }
+.bau-text small { font-size: 11px; font-weight: 800; opacity: .66; margin-left: 6px; }
+.bau-text p { margin: 4px 0 6px; font-size: 12px; line-height: 1.45; opacity: .78; }
+.bau-preis { font-size: 11.5px; font-weight: 800; }
+.bau-preis .hat { color: var(--salbei-tief); }
+.bau-preis .offen { color: var(--terra); }
 
 .karten-knopf {
   display: flex; align-items: center; justify-content: center; gap: 8px;

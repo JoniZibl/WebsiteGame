@@ -33,12 +33,6 @@ export const ICONS = {
     <rect x="10.7" y="16.4" width="2.6" height="4.2" fill="${F.holzTief}"/>
     <circle cx="12" cy="21" r="1.7" fill="${F.gold}"/>`),
 
-  /* Zwei Bogenspuren und ein Abdruck: ein Satz zur Seite. */
-  rolle: svg(`
-    <path d="M4 15 C7 9 12 7 18 8" fill="none" stroke="${F.putz}" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M6 20 C9 14 14 12 20 13" fill="none" stroke="${F.putz}" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
-    <circle cx="18" cy="8" r="3.2" fill="${F.putz}"/>`),
-
   /* Ein gespannter Bogen mit Pfeil auf der Sehne. */
   bogen: svg(`
     <path d="M7 3 C14 7 14 17 7 21" fill="none" stroke="${F.holz}" stroke-width="2.4" stroke-linecap="round"/>
@@ -171,6 +165,31 @@ export const ICONS = {
     <path d="M13 3.6 C18.4 5 21 8.4 20.6 12.6 C18.6 11 15.8 10.4 13 10.6 Z" fill="${F.stahl}"/>
     <path d="M13 3.6 C16.2 4.5 18.4 6.2 19.6 8.4 C17.6 7.4 15.2 6.9 13 6.8 Z" fill="${F.stahlTief}"/>
     <rect x="9.6" y="9.6" width="3.6" height="2" rx="0.8" fill="${F.holzTief}"/>`),
+
+  /* Zwei Scheite übereinander, von der Stirnseite gesehen: ein Klafter Holz. */
+  holz: svg(`
+    <rect x="3" y="13" width="18" height="8.4" rx="4.2" fill="${F.holz}"/>
+    <circle cx="7.2" cy="17.2" r="4.2" fill="${F.putzTief}"/>
+    <circle cx="7.2" cy="17.2" r="2.2" fill="${F.holzTief}"/>
+    <rect x="5.6" y="2.6" width="16.4" height="8" rx="4" fill="${F.holzTief}"/>
+    <circle cx="9.6" cy="6.6" r="4" fill="${F.putzTief}"/>
+    <circle cx="9.6" cy="6.6" r="2.1" fill="${F.holz}"/>`),
+
+  /* Zwei Brocken Stein, kantig gebrochen. */
+  brocken: svg(`
+    <path d="M3.2 14.4 L7.4 10.6 L13.4 11.4 L15 16.6 L10.4 20.4 L4.2 19 Z" fill="${F.stahlTief}"/>
+    <path d="M7.4 10.6 L13.4 11.4 L10.4 14.4 Z" fill="${F.stahl}"/>
+    <path d="M13.6 4.2 L18.8 3.4 L21.2 7.6 L18.4 11.2 L14 10.4 L12.6 6.8 Z" fill="${F.stahl}"/>
+    <path d="M13.6 4.2 L18.8 3.4 L16.4 7 Z" fill="${F.stahlTief}"/>`),
+
+  /* Ein Zelt neben dem Feuer: das Lager. */
+  lager: svg(`
+    <path d="M9 3.8 L16.6 18.2 L1.4 18.2 Z" fill="${F.holz}"/>
+    <path d="M9 3.8 L9 18.2 L1.4 18.2 Z" fill="${F.holzTief}"/>
+    <rect x="1" y="18" width="16" height="2.2" rx="1" fill="${F.holzTief}"/>
+    <path d="M20 11.4 L22.6 16.4 L17.4 16.4 Z" fill="${F.gold}"/>
+    <path d="M20 13.6 L21.6 16.4 L18.4 16.4 Z" fill="${F.terra}"/>
+    <rect x="16.4" y="16.2" width="7.2" height="2" rx="1" fill="${F.holzTief}"/>`),
 
   /* Ein Speer: langer Schaft, schmale Spitze, Wicklung. */
   speer: svg(`

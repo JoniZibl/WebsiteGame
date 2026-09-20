@@ -187,6 +187,18 @@ export const DINGE = {
                    lehrt: 'ascheregen',   wert: 1800, rang: 4, guete: 'sagenhaft',
                    text: 'Es färbt die Finger und lässt sich nicht abwaschen.' },
 
+  /* ------------------------------- Baustoffe ------------------------------
+   * Nichts davon liegt in einer Truhe. Holz und Stein holt man sich selbst —
+   * mit dem Abbauknopf am Baum, am Findling oder an der Felswand. Sie sind
+   * der Grund, warum man unterwegs stehen bleibt, statt nur durchzulaufen.
+   * ---------------------------------------------------------------------- */
+  holz:        { name: 'Holz',           art: 'stoff', sym: 'holz', wert: 4, rang: 0,
+                 baustoff: true,
+                 text: 'Ein Klafter, grob gespalten. Das Lager fängt hiermit an.' },
+  stein:       { name: 'Stein',          art: 'stoff', sym: 'brocken', wert: 5, rang: 0,
+                 baustoff: true,
+                 text: 'Schwer, kantig, brauchbar. Mehr muss ein Stein nicht sein.' },
+
   /* -------------------------------- Krempel ------------------------------ */
   wolfsfell:   { name: 'Wolfsfell',      art: 'beute', sym: 'fell', wert: 14, rang: 0,
                  text: 'Der Kürschner nimmt es.' },
@@ -242,6 +254,7 @@ export const verkaufswert = (id) => Math.max(1, Math.round(DINGE[id].wert * 0.45
 const NACH_RANG = {};
 for (const [id, d] of Object.entries(DINGE)) {
   if (d.wild) continue;        // Getierbeute gibt es nur beim Getier
+  if (d.baustoff) continue;    // Holz und Stein holt man sich selbst
   (NACH_RANG[d.rang] ||= []).push(id);
 }
 

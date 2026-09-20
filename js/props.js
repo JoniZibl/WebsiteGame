@@ -483,6 +483,27 @@ export function schreinBauen() {
   return flattenGroup(g);
 }
 
+/* Ein Schleifstein fürs eigene Lager: ein Rad im Gestell, daneben der
+   Wassertrog. Es ist das einzige Stück Werkstatt, das man mitnehmen kann. */
+export function schleifsteinBauen() {
+  const g = new THREE.Group();
+  for (const sx of [-1, 1]) {
+    add(g, box(0.26, 0.9, 0.26), FARBEN.balkenTief, sx * 0.62, 0.45, 0);
+    add(g, box(0.3, 0.26, 0.9), FARBEN.balken, sx * 0.62, 0.13, 0);
+  }
+  add(g, box(1.5, 0.2, 0.26), FARBEN.balken, 0, 0.94, 0);
+  const rad = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.3, 10),
+    mat(FARBEN.stein));
+  rad.rotation.z = Math.PI / 2;
+  rad.position.set(0, 0.86, 0);
+  rad.castShadow = true;
+  g.add(rad);
+  add(g, box(0.12, 0.12, 0.44), FARBEN.dunkel, 0, 0.86, 0.3);
+  add(g, box(0.7, 0.3, 0.6), FARBEN.balkenTief, 0.05, 0.16, 0.78);
+  add(g, box(0.56, 0.08, 0.46), FARBEN.fenster, 0.05, 0.3, 0.78);
+  return flattenGroup(g);
+}
+
 /** Der Beutel, den man am Sterbeort liegen lässt. */
 export function beutelBauen() {
   const g = new THREE.Group();

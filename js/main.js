@@ -17,6 +17,7 @@ import { Geschosse } from './geschoss.js';
 import { wesenWaehlen, gefahrVon, GEFAHRWORT, BEWOHNER } from './wesen.js';
 import * as gruft from './dungeon.js';
 import * as orte from './orte.js';
+import * as lager from './lager.js';
 import * as fert from './skills.js';
 import { Auftragsbuch, auftragFuer } from './quest.js';
 import * as dinge from './items.js';
@@ -138,6 +139,9 @@ const state = {
   cut: HEIGHT + 4,
   under: 0,
   hieb: 0,            // Nachladen des Schlags
+  hack: 0,            // Pause zwischen zwei Axthieben
+  abbau: null,        // woran gerade gearbeitet wird und wie weit
+  lager: [],          // was man sich selbst hingestellt hat
   zauber: 0,
   schutz: 0,          // wie lange die Steinhaut noch trägt
   rausch: 0,          // Blutrausch nach einem Tötungsschlag
@@ -204,7 +208,7 @@ const ui = {
   ortName: el('ortName'), ortInfo: el('ortInfo'),
   stufe: el('stufeZahl'), xp: el('xpFill'), gold: el('goldZahl'),
   ziel: el('zielleiste'), zielName: el('zielName'), zielHp: el('zielHp'),
-  rede: el('redeBtn'), wirk: el('wirkBtn'),
+  rede: el('redeBtn'), wirk: el('wirkBtn'), abbau: el('abbauBtn'),
 };
 
 /* Die Symbole einmal hineinsetzen. Alles, was sich je nach Lage ändert,
@@ -217,7 +221,7 @@ symbol(el('wirkBtn'), 'funke');     // wird von zauberKnopfPflegen() ersetzt
 symbol(el('menuBtn'), 'beutel');
 symbol(el('qualityBtn'), 'glanz');
 symbol(el('redeBtn'), 'rede');
-symbol(el('rollBtn'), 'rolle');
+symbol(el('abbauBtn'), 'axt');
 for (const m of document.querySelectorAll('.ic-muenze')) m.innerHTML = ICONS.muenze;
 // Jeder Reiter trägt sein Zeichen über dem Wort
 for (const r of document.querySelectorAll('.reiter[data-sym]')) {
@@ -259,7 +263,6 @@ function updateHUD() {
   ui.gold.textContent = h.gold;
   zauberKnopfPflegen();
   ui.wirk.classList.toggle('leer', h.magicka < zauberkosten(aktiverZauber()));
-  el('rollBtn').classList.toggle('leer', h.ausdauer < (h.vorteile.has('zaehe3') ? 8 : 16));
   trinkKnopfPflegen();
 
   // Was im Beutel liegt, erledigt Lieferaufträge von selbst
@@ -324,12 +327,6 @@ function meldung(text, farbe = '#4a3b30', hoch = 2.4) {
 /* --------------------------------- Kampf ---------------------------------- */
 function spielerNimmtSchaden(menge, von) {
   if (state.dead || !state.running) return;
-  // Mitten in der Rolle geht nichts durch — das ist ihr ganzer Sinn
-  if (player.unverwundbar > 0) {
-    juice.popup({ x: player.pos.x, y: player.pos.y + 2.2, z: player.pos.z },
-      'ausgewichen', '#7fae5e');
-    return;
-  }
   const h = held();
   const abgewehrt = menge * Math.min(fert.werte.panzerdeckel(h), fert.werte.ruestung(h));
   // Die Steinhaut kommt obendrauf — sie ist der Grund, warum man sie wirkt
@@ -507,18 +504,6 @@ function richtungZu(f) {
   const dx = f.pos.x - player.pos.x, dz = f.pos.z - player.pos.z;
   const d = Math.hypot(dx, dz) || 1;
   return { x: dx / d, z: dz / d };
-}
-
-/* Ausweichen kostet Ausdauer — sonst rollte man einfach durch jeden Kampf. */
-function ausweichen() {
-  const h = held();
-  const kosten = h.vorteile.has('zaehe3') ? 8 : 16;
-  if (!state.running || state.dead || h.ausdauer < kosten) return;
-  if (!player.rollen(input.read())) return;
-  h.ausdauer -= kosten;
-  audio.step();
-  juice.ring({ x: player.pos.x, y: player.pos.y + 0.3, z: player.pos.z }, 1.8, '#fdf6e8', 0.3);
-  updateHUD();
 }
 
 function zuschlagen() {
@@ -999,13 +984,283 @@ function orteSchieben(x, z, rand = 0.34) {
   return null;
 }
 
-/** Wie weit ist das nächste Lagerfeuer? Für das Knistern. */
+
+/* ================================ Das Lager =================================
+ * Bisher gehörte einem in dieser Welt nichts: die Dörfer standen schon, die
+ * Gruften waren schon gefüllt. Ein Lager ist das erste Stück Welt, das man
+ * selbst hinstellt — und der Grund, unterwegs an einem Baum stehen zu bleiben,
+ * statt nur vorbeizulaufen.
+ *
+ * Gebaut wird zwei Schritte vor einem, abgebaut mit demselben Knopf, mit dem
+ * man den Baum gefällt hat. Was steht, steht im Spielstand; in der Szene hängt
+ * immer nur, was in der Nähe liegt.
+ * ========================================================================== */
+const lagerMuster = {};
+const lagerAktiv = new Map();      // Schlüssel -> { obj, teil }
+
+function lagerMusterVon(art) {
+  if (!lagerMuster[art]) lagerMuster[art] = lager.BAUTEILE[art].bauer();
+  return lagerMuster[art];
+}
+
+function lagerPflegen(px, pz) {
+  const gewollt = new Set();
+  for (const t of state.lager) {
+    if (Math.abs(t.x - px) > 150 || Math.abs(t.z - pz) > 150) continue;
+    gewollt.add(t.id);
+    if (lagerAktiv.has(t.id)) continue;
+    const obj = lagerMusterVon(t.art).clone();
+    obj.position.set(t.x, t.y, t.z);
+    obj.rotation.y = t.dreh || 0;
+    scene.add(obj);
+    lagerAktiv.set(t.id, { obj, teil: t });
+  }
+  for (const [id, e] of [...lagerAktiv]) {
+    if (gewollt.has(id)) continue;
+    scene.remove(e.obj);
+    lagerAktiv.delete(id);
+  }
+}
+
+/** Was vom eigenen Lager gerade in Reichweite steht — oder nichts. */
+function lagerInReichweite() {
+  let best = null, bestD = 1e9;
+  for (const t of state.lager) {
+    if (Math.abs(t.x - player.pos.x) > 6 || Math.abs(t.z - player.pos.z) > 6) continue;
+    const a = lager.artVon(t.art);
+    if (!a) continue;
+    const d = Math.hypot(player.pos.x - t.x, player.pos.z - t.z);
+    if (d > a.nah || Math.abs(player.pos.y - t.y) > 3) continue;
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best;
+}
+
+/** Zelt, Feuer und Zaun sind Modelle — hier erst werden sie fest. */
+function lagerSchieben(x, z, rand = 0.3) {
+  for (const t of state.lager) {
+    if (Math.abs(x - t.x) > 4 || Math.abs(z - t.z) > 4) continue;
+    const a = lager.artVon(t.art);
+    if (!a || !a.fest) continue;
+    const dx = x - t.x, dz = z - t.z;
+    const d = Math.hypot(dx, dz);
+    const r = a.fest + rand;
+    if (d >= r) continue;
+    if (d < 1e-6) return { x: t.x + r + 0.02, z: t.z };
+    return { x: t.x + (dx / d) * (r + 0.02), z: t.z + (dz / d) * (r + 0.02) };
+  }
+  return null;
+}
+
+/* Vor die Füße, nicht auf die Füße: sonst steht man im eigenen Zelt. */
+function bauplatz() {
+  const x = player.pos.x + Math.sin(player.facing) * 2.3;
+  const z = player.pos.z + Math.cos(player.facing) * 2.3;
+  return { x, z, y: surfaceAt(Math.round(x), Math.round(z)) + 1 };
+}
+
+function lagerBauen(art) {
+  const a = lager.artVon(art);
+  const h = held();
+  if (!a || !state.running || state.dead) return false;
+  if (!lager.reicht(h.beutel, art)) {
+    meldung('Dafür fehlt dir noch Stoff', '#c9543f', 2.6);
+    return false;
+  }
+  const platz = bauplatz();
+  const absage = (wort) => { meldung(wort, '#c9543f', 2.6); audio.step(); return false; };
+  if (platz.y <= SEA + 1) return absage('Im Wasser steht nichts');
+  if (Math.abs(platz.y - player.pos.y) > 2.5) return absage('Der Hang ist zu steil');
+  if (state.imDungeon) return absage('Nicht hier unten');
+  if (dorfBei(Math.round(platz.x), Math.round(platz.z))) return absage('Im Dorf steht schon genug');
+  for (const t of state.lager) {
+    if (Math.hypot(t.x - platz.x, t.z - platz.z) < 1.7) return absage('Da steht schon etwas');
+  }
+
+  for (const [stoff, n] of Object.entries(a.kosten)) dinge.ablegen(h, stoff, n);
+  state.lager.push({
+    id: lager.schluessel(platz.x, platz.z), art,
+    x: platz.x, y: platz.y, z: platz.z,
+    dreh: player.facing + Math.PI,       // die Front schaut einen an
+  });
+  lagerPflegen(player.pos.x, player.pos.z);
+  audio.gem(2);
+  juice.ring({ x: platz.x, y: platz.y + 0.3, z: platz.z }, 2.6, '#e8a83c');
+  juice.staub({ x: platz.x, y: platz.y, z: platz.z }, 1.1, '#cbb896');
+  meldung(`${a.name} steht`, '#7fae5e', 3.0);
+  fert.uebung(h, 'spuren', 2);
+  fert.xpGeben(h, 20);
+  updateHUD();
+  writeSave();
+  return true;
+}
+
+function lagerAbreissen(t) {
+  const a = lager.artVon(t.art);
+  const h = held();
+  const i = state.lager.indexOf(t);
+  if (i < 0) return;
+  state.lager.splice(i, 1);
+  const e = lagerAktiv.get(t.id);
+  if (e) { scene.remove(e.obj); lagerAktiv.delete(t.id); }
+  const raus = lager.rueckgabe(t.art);
+  for (const [stoff, n] of Object.entries(raus)) dinge.nehmen(h, stoff, n);
+  audio.step(1, 'holz');
+  juice.staub({ x: t.x, y: t.y + 0.3, z: t.z }, 1.3, '#cbb896');
+  const wort = Object.entries(raus)
+    .map(([stoff, n]) => `${n} ${DINGE[stoff].name}`).join(', ');
+  meldung(`${a.name} abgebaut — ${wort} zurück`, '#7d5227', 3.0);
+  updateHUD();
+  writeSave();
+}
+
+/* ================================= Abbauen ==================================
+ * Ein Knopf für alles, was man aus der Welt herausholt: Bäume, Findlinge,
+ * Felswände, Glimmadern — und das eigene Lager, wenn es am falschen Fleck
+ * steht. Jeder Druck ist ein Hieb; nach ein paar Hieben fällt es.
+ * ========================================================================== */
+const ABBAUARTEN = {
+  baum:  { hiebe: 4, stoff: 'holz',  menge: [2, 4], farbe: '#b5794a', ton: 'holz',  xp: 8 },
+  fels:  { hiebe: 4, stoff: 'stein', menge: [2, 3], farbe: '#b9aa98', ton: 'stein', xp: 8 },
+  block: { hiebe: 3, stoff: 'stein', menge: [1, 2], farbe: '#b9aa98', ton: 'stein', xp: 6 },
+  glimm: { hiebe: 3, farbe: '#f5c451', ton: 'stein' },
+  lager: { hiebe: 2, farbe: '#cbb896', ton: 'holz' },
+};
+
+const STEINIG = new Set([B.stein, B.kies, B.rotfels]);
+
+/* Gestein bricht man aus einer Wand, nicht unter den eigenen Füßen. Sonst
+   stünde man auf der Wiese und könnte die halbe Welt abtragen, ohne je einen
+   Berg gesehen zu haben. */
+function steinInReichweite() {
+  const px = Math.floor(player.pos.x), py = Math.floor(player.pos.y),
+        pz = Math.floor(player.pos.z);
+  for (let dy = 0; dy <= 1; dy++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dz) continue;
+        if (STEINIG.has(world.get(px + dx, py + dy, pz + dz))) {
+          return { x: px + dx, y: py + dy, z: pz + dz };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Woran man hier arbeiten könnte. Das eigene Lager hat Vorrang. */
+function abbauZiel() {
+  if (!state.running || state.dead || state.gespraech) return null;
+  const eigen = lagerInReichweite();
+  if (eigen) {
+    return { art: 'lager', schl: 'L' + eigen.id, teil: eigen,
+             x: eigen.x, y: eigen.y, z: eigen.z, name: lager.artVon(eigen.art).name };
+  }
+  const ader = glimmInReichweite();
+  if (ader) {
+    return { art: 'glimm', schl: `G${ader.x},${ader.y},${ader.z}`, ort: ader,
+             x: ader.x + 0.5, y: ader.y + 0.5, z: ader.z + 0.5, name: 'Glimmader' };
+  }
+  const g = flora.naechstes(player.pos.x, player.pos.z, 2.7);
+  if (g && Math.abs(player.pos.y - g.y) < 4) {
+    const art = g.art === 'fels' ? 'fels' : 'baum';
+    return { art, schl: `P${Math.floor(g.x)},${Math.floor(g.z)}`, pflanze: g,
+             x: g.x, y: g.y, z: g.z, name: art === 'fels' ? 'Findling' : 'Baum' };
+  }
+  const st = steinInReichweite();
+  if (st) {
+    return { art: 'block', schl: `B${st.x},${st.y},${st.z}`, ort: st,
+             x: st.x + 0.5, y: st.y + 0.5, z: st.z + 0.5, name: 'Fels' };
+  }
+  return null;
+}
+
+let abbauJetzt = null;      // was der Knopf gerade meint
+
+function abbauen() {
+  const h = held();
+  /* Frisch nachgesehen, nicht aus dem letzten Bild geholt: zwischen zwei
+     Bildern kann man einen Schritt weiter stehen, und der Hieb soll das
+     treffen, wovor man jetzt steht. Teuer ist es nicht — zwischen zwei Hieben
+     liegt eine Drittelsekunde. */
+  if (state.hack > 0) return;
+  const ziel = abbauZiel();
+  if (!ziel) return;
+  /* Ein Hieb kostet wenig — weniger, als in derselben Zeit zurückkommt. Holz
+     holen soll eine ruhige Beschäftigung sein und nicht mit dem Kampf um
+     denselben Atem streiten. Wer schon außer Puste ist, merkt es trotzdem. */
+  if (h.ausdauer < 3) { meldung('Keine Puste mehr', '#7d5227', 2.4); return; }
+
+  const k = ABBAUARTEN[ziel.art];
+  state.hack = 0.3;
+  h.ausdauer -= 3;
+  player.swing = 0.28;
+  player.facing = Math.atan2(ziel.x - player.pos.x, ziel.z - player.pos.z);
+  if (!state.abbau || state.abbau.schl !== ziel.schl) {
+    state.abbau = { schl: ziel.schl, hiebe: 0 };
+  }
+  state.abbau.hiebe++;
+  audio.step(1.2, k.ton);
+  juice.staub({ x: ziel.x, y: ziel.y + 0.5, z: ziel.z }, 0.7, k.farbe);
+  juice.shake(0.1);
+  if (state.abbau.hiebe < k.hiebe) { updateHUD(); return; }
+
+  state.abbau = null;
+  if (ziel.art === 'lager') { lagerAbreissen(ziel.teil); return; }
+  if (ziel.art === 'glimm') { glimmBrechen(ziel.ort); return; }
+
+  let menge = k.menge[0] + Math.floor(Math.random() * (k.menge[1] - k.menge[0] + 1));
+  // „Sammler" gilt auch für das, was man sich selbst schlägt
+  if (h.vorteile.has('spuren3') && Math.random() < 0.25) menge *= 2;
+  dinge.nehmen(h, k.stoff, menge);
+  if (ziel.pflanze) flora.faellen(ziel.pflanze);
+  else world.set(ziel.ort.x, ziel.ort.y, ziel.ort.z, AIR);
+
+  fert.uebung(h, 'spuren', 2);
+  fert.xpGeben(h, k.xp);
+  audio.gem(1);
+  juice.ring({ x: ziel.x, y: ziel.y + 0.2, z: ziel.z }, 2.0, k.farbe);
+  juice.popup({ x: ziel.x, y: ziel.y + 1.4, z: ziel.z },
+    `+${menge} ${DINGE[k.stoff].name}`, '#7fae5e');
+  updateHUD();
+  writeSave();
+}
+
+/* Der Knopf zeigt, woran man arbeitet, und füllt sich mit jedem Hieb. Er
+   bleibt nach dem letzten Ja noch einen Moment stehen — sonst flackerte er an
+   der Reichweitengrenze, genau wie der Reden-Knopf es früher tat. */
+let abbauHalten = 0;
+let letzterAbbau = null;
+
+function abbauKnopfPflegen(dt) {
+  const z = abbauJetzt;
+  if (z) { letzterAbbau = z; abbauHalten = 0.4; } else if (abbauHalten > 0) abbauHalten -= dt;
+  const zeigen = z || (abbauHalten > 0 ? letzterAbbau : null);
+  ui.abbau.classList.toggle('hidden', !zeigen);
+  if (!zeigen) { letzterAbbau = null; return; }
+  if (zeigen.name !== ui.abbau.dataset.was) {
+    ui.abbau.dataset.was = zeigen.name;
+    ui.abbau.title = zeigen.name;
+  }
+  const k = ABBAUARTEN[zeigen.art];
+  const hiebe = state.abbau && state.abbau.schl === zeigen.schl ? state.abbau.hiebe : 0;
+  ui.abbau.style.setProperty('--ab', Math.round((hiebe / k.hiebe) * 100));
+}
+
+/** Wie weit ist das nächste Feuer? Für das Knistern. */
 function feuerNaehe() {
   let best = null;
-  for (const e of orteAktiv.values()) {
-    if (e.ort.art !== 'lager') continue;
-    const d = Math.hypot(player.pos.x - e.ort.x, player.pos.z - e.ort.z);
+  const messen = (x, z) => {
+    const d = Math.hypot(player.pos.x - x, player.pos.z - z);
     if (best === null || d < best) best = d;
+  };
+  for (const e of orteAktiv.values()) {
+    if (e.ort.art === 'lager') messen(e.ort.x, e.ort.z);
+  }
+  // Das eigene Feuer knistert genauso wie ein fremdes
+  for (const t of state.lager) {
+    const a = lager.artVon(t.art);
+    if (a && a.feuer) messen(t.x, t.z);
   }
   return best;
 }
@@ -1160,6 +1415,14 @@ function was() {
   if (bett) return { art: 'bett', ziel: bett };
   const n = leute.naechster(p, 3.4);
   if (n) return { art: 'npc', ziel: n };
+  /* Das eigene Lager: am Feuer und im Zelt rastet man, am Schleifstein
+     arbeitet man. Abgebaut wird es mit dem Abbauknopf, nicht hier. */
+  const meins = lagerInReichweite();
+  if (meins) {
+    const a = lager.artVon(meins.art);
+    if (a && a.rast) return { art: 'rast', ziel: meins };
+    if (a && a.esse) return { art: 'esse', ziel: meins };
+  }
   for (const t of truhen) {
     if (Math.hypot(t.pos.x - p.x, t.pos.z - p.z) < 2.4 && Math.abs(t.pos.y - p.y) < 2.5) {
       return { art: 'truhe', ziel: t };
@@ -1170,8 +1433,6 @@ function was() {
   }
   const schrein = schreinInReichweite();
   if (schrein) return { art: 'schrein', ziel: schrein };
-  const ader = glimmInReichweite();
-  if (ader) return { art: 'glimm', ziel: ader };
   const weiter = bettInReichweite(2.2);
   if (weiter) return { art: 'bett', ziel: weiter };
   return null;
@@ -1214,9 +1475,9 @@ function handeln() {
   const w = was() || (tatHalten > 0 ? letzteTat : null);
   if (!w) return;
   if (w.art === 'truhe') { truheOeffnen(w.ziel); return; }
-  if (w.art === 'glimm') { glimmBrechen(w.ziel); return; }
   if (w.art === 'tor') { gruftBetreten(w.ziel.gruft); return; }
-  if (w.art === 'bett') { schlafen(); return; }
+  if (w.art === 'bett' || w.art === 'rast') { schlafen(); return; }
+  if (w.art === 'esse') { esseOeffnen(); return; }
   if (w.art === 'schrein') { schreinAnrufen(w.ziel); return; }
   if (w.art === 'npc') {
     if (w.ziel.chronist) chronistOeffnen(w.ziel);
@@ -2035,6 +2296,7 @@ const MENU_KOPF = {
   fert:   ['Können', 'Fertigkeiten und Vorteile'],
   beutel: ['Beutel', 'was du trägst und was du dabei hast'],
   quests: ['Aufträge', 'was noch offen ist'],
+  lager:  ['Lager', 'was du dir selbst hinstellst'],
   welt:   ['Karte', 'wo du bist und was ringsum liegt'],
   wesen:  ['Wesen', 'was dir schon begegnet ist'],
 };
@@ -2052,13 +2314,14 @@ function menuZeichnen(tab = 'fert') {
     : unter;
   el('menuGold').textContent = h.gold;
   for (const [id, name] of [['tabFert', 'fert'], ['tabBeutel', 'beutel'],
-                            ['tabQuests', 'quests'], ['tabWelt', 'welt'],
-                            ['tabWesen', 'wesen']]) {
+                            ['tabQuests', 'quests'], ['tabLager', 'lager'],
+                            ['tabWelt', 'welt'], ['tabWesen', 'wesen']]) {
     el(id).classList.toggle('hidden', tab !== name);
   }
   if (tab === 'fert') fertZeichnen();
   if (tab === 'beutel') beutelZeichnen();
   if (tab === 'quests') questsZeichnen();
+  if (tab === 'lager') lagerZeichnen();
   if (tab === 'welt') karteZeichnen();
   if (tab === 'wesen') bestiariumZeichnen();
 }
@@ -2075,6 +2338,7 @@ const BEUTEL_FILTER = [
   { id: 'ruest',  name: 'Ausrüstung', passt: (d) => dinge.TRAGBAR.includes(d.art) },
   { id: 'nutz',   name: 'Tränke',     passt: (d) => d.art === 'trank' || d.art === 'lehre' },
   { id: 'beute',  name: 'Beute',      passt: (d) => d.art === 'beute' },
+  { id: 'stoff',  name: 'Baustoff',   passt: (d) => d.art === 'stoff' },
 ];
 let beutelFilter = 'alles';
 let beutelWahl = null;
@@ -2086,7 +2350,7 @@ const gueteFarbe = (d) =>
 
 const ARTWORT = {
   waffe: 'Waffe', ruestung: 'Rüstung', schmuck: 'Schmuck',
-  trank: 'Trank', lehre: 'Zauberbuch', beute: 'Beute',
+  trank: 'Trank', lehre: 'Zauberbuch', beute: 'Beute', stoff: 'Baustoff',
 };
 
 function beutelZeichnen() {
@@ -2193,7 +2457,7 @@ function beutelZeichnen() {
   }
 }
 
-const ARTFOLGE = ['waffe', 'ruestung', 'schmuck', 'trank', 'lehre', 'beute'];
+const ARTFOLGE = ['waffe', 'ruestung', 'schmuck', 'trank', 'lehre', 'stoff', 'beute'];
 
 /** Das Blatt über dem Gitter — alles über ein Stück und ein Knopf dazu. */
 function dingBlatt(id) {
@@ -2242,6 +2506,9 @@ function dingBlatt(id) {
   } else if (d.art === 'trank') {
     tun.textContent = 'trinken';
     tun.addEventListener('click', () => { trinkenGezielt(id); beutelZeichnen(); });
+  } else if (d.baustoff) {
+    tun.textContent = 'fürs Lager';
+    tun.classList.add('still');
   } else {
     tun.textContent = 'zum Verkauf';
     tun.classList.add('still');
@@ -2514,6 +2781,67 @@ function questsZeichnen() {
   feld.append(hilfen);
 }
 
+/* --------------------------------- Lager -----------------------------------
+ * Eine Liste, kein Raster: fünf Teile, jedes mit Preis und einem Satz dazu.
+ * Was man sich leisten kann, ist anklickbar — der Rest steht grau daneben und
+ * sagt einem, was noch fehlt. Gebaut wird draußen, zwei Schritte vor einem.
+ * -------------------------------------------------------------------------- */
+const STOFFWORT = (id, n) => `${n} ${DINGE[id].name}`;
+
+function lagerZeichnen() {
+  const h = held();
+  const feld = el('tabLager');
+  feld.replaceChildren();
+
+  // Oben der Vorrat — die drei Zahlen, um die es hier geht
+  const vorrat = document.createElement('div');
+  vorrat.className = 'vorrat';
+  for (const id of ['holz', 'stein', 'glimmstein']) {
+    const k = document.createElement('span');
+    k.innerHTML = `${sym(DINGE[id].sym)}<b>${h.beutel[id] || 0}</b>`
+      + `<small>${DINGE[id].name}</small>`;
+    vorrat.append(k);
+  }
+  feld.append(vorrat);
+
+  const hinweis = document.createElement('p');
+  hinweis.className = 'punkte-hinweis';
+  hinweis.textContent = state.lager.length
+    ? `${state.lager.length} Teil${state.lager.length > 1 ? 'e' : ''} stehen draußen. `
+      + 'Mit der Axt nimmst du sie wieder auseinander.'
+    : 'Holz schlägst du an Bäumen, Stein an Findlingen und Felswänden — '
+      + 'mit der Axt unten rechts.';
+  feld.append(hinweis);
+
+  for (const id of lager.LISTE) {
+    const a = lager.BAUTEILE[id];
+    const kann = lager.reicht(h.beutel, id);
+    const zeile = document.createElement('button');
+    zeile.className = 'bau-zeile' + (kann ? '' : ' fehlt');
+    const preis = Object.entries(a.kosten)
+      .map(([stoff, n]) => `<span class="${(h.beutel[stoff] || 0) >= n ? 'hat' : 'offen'}">`
+        + `${STOFFWORT(stoff, n)}</span>`).join(' · ');
+    zeile.innerHTML = `<span class="bau-bild">${sym(a.sym)}</span>`
+      + `<span class="bau-text"><b>${a.name}</b><small>${a.kurz}</small>`
+      + `<p>${a.text}</p><span class="bau-preis">${preis}</span></span>`;
+    zeile.addEventListener('click', () => {
+      if (!kann) { audio.step(); return; }
+      if (lagerBauen(id)) {
+        el('menu').classList.add('hidden');     // hinsehen, was da entstanden ist
+      }
+      lagerZeichnen();
+    });
+    feld.append(zeile);
+  }
+
+  const wo = document.createElement('p');
+  wo.className = 'punkte-hinweis';
+  wo.style.marginTop = '10px';
+  wo.textContent = 'Gebaut wird zwei Schritte vor dir — nicht im Dorf, nicht im '
+    + 'Wasser und nicht unter Tage.';
+  feld.append(wo);
+}
+
 /* --------------------------------- Karte -----------------------------------
  * Ein gemaltes Blatt in einem Holzrahmen: die Gegenden als Farbflächen, die
  * Zeichen darauf als Punkte, oben rechts die Rose. Zwei Weiten — nah, um den
@@ -2561,6 +2889,7 @@ function karteZeichnen() {
   for (const d of doerferUm(px, pz, R)) setz(d.x, d.z, 'dorf');
   for (const g of gruft.grueftUm(px, pz, R)) setz(g.x, g.z, `gruft ${g.art || 'gruft'}`);
   for (const o of orte.orteUm(px, pz, R)) setz(o.x, o.z, `ort ${o.art}`);
+  for (const t of state.lager) setz(t.x, t.z, 'mein');
   const ziel = zielPunkt();
   if (ziel) setz(ziel.x, ziel.z, 'ziel');
   setz(px, pz, 'du');
@@ -2579,6 +2908,7 @@ function karteZeichnen() {
     + '<span class="wort"><span class="punkt gruft moor"></span>Moor</span>'
     + '<span class="wort"><span class="punkt gruft glut"></span>Glut</span>'
     + '<span class="wort"><span class="punkt ort turm"></span>Landmarke</span>'
+    + '<span class="wort"><span class="punkt mein"></span>dein Lager</span>'
     + '<span class="wort"><span class="punkt ziel"></span>Ziel</span>'
     + '<span class="wort"><span class="punkt du"></span>du</span>'
     + `<span class="legende-weite">Umkreis ${R * 2} Schritt</span>`;
@@ -3127,6 +3457,7 @@ function frame() {
     schritteHoeren();
     const raus = doerfer.wegSchieben(player.pos.x, player.pos.z)
       || orteSchieben(player.pos.x, player.pos.z)
+      || lagerSchieben(player.pos.x, player.pos.z)
       || flora.wegSchieben(player.pos.x, player.pos.z);
     if (raus) { player.pos.x = raus.x; player.pos.z = raus.z; }
     world.update(player.pos.x, player.pos.z, 1);
@@ -3144,6 +3475,7 @@ function frame() {
     state.imHaus = doerfer.daecherPflegen(player.pos.x, player.pos.z);
     gruftenPflegen(player.pos.x, player.pos.z);
     ortePflegen(player.pos.x, player.pos.z);
+    lagerPflegen(player.pos.x, player.pos.z);
     feinde.update(dt, world, player.pos, !state.dead);
     geschosse.update(dt, world, feinde, player.pos, {
       trefferFeind: (f, schaden, g) => {
@@ -3187,6 +3519,7 @@ function frame() {
     state.time = (state.time + dt / DAY) % 1;
     if (state.time < vorher) state.tag++;    // ein Tag ist herum, die Läden füllen auf
     if (state.hieb > 0) state.hieb -= dt;
+    if (state.hack > 0) state.hack -= dt;
     if (state.zauber > 0) state.zauber -= dt;
     if (state.rausch > 0) state.rausch -= dt;
     if (state.schutz > 0) {
@@ -3217,7 +3550,9 @@ function frame() {
     if (player.onGround) {
       if (state.fallFrom !== null) {
         const sturz = state.fallFrom - player.pos.y;
-        if (sturz > 5) spielerNimmtSchaden(Math.round((sturz - 5) * 6), null);
+        // „Fester Stand" nimmt dem Sturz die Hälfte — das ist jetzt sein Zweck
+        const weich = h.vorteile.has('zaehe3') ? 0.5 : 1;
+        if (sturz > 5) spielerNimmtSchaden(Math.round((sturz - 5) * 6 * weich), null);
         state.fallFrom = null;
       }
     } else {
@@ -3318,11 +3653,14 @@ function frame() {
     if (zeigeTat && zeigeTat.art !== ui.rede.dataset.art) {
       ui.rede.dataset.art = zeigeTat.art;
       symbol(ui.rede, zeigeTat.art === 'npc' ? 'rede' : zeigeTat.art === 'truhe' ? 'truhe'
-        : zeigeTat.art === 'glimm' ? 'kristall' : zeigeTat.art === 'waechter' ? 'kerze'
-        : zeigeTat.art === 'bett' ? 'kerze' : zeigeTat.art === 'schrein' ? 'glanz' : 'tor');
+        : zeigeTat.art === 'waechter' ? 'kerze' : zeigeTat.art === 'esse' ? 'schwert'
+        : zeigeTat.art === 'bett' || zeigeTat.art === 'rast' ? 'kerze'
+        : zeigeTat.art === 'schrein' ? 'glanz' : 'tor');
     }
     if (!zeigeTat) letzteTat = null;
 
+    abbauJetzt = abbauZiel();
+    abbauKnopfPflegen(dt);
     pfeilPflegen(dt);
     rautePflegen(dt);
 
@@ -3416,9 +3754,9 @@ function tippen(knopf, tun, halten = false) {
 
 // Auf dem Hieb darf der Daumen liegen bleiben — er schlägt dann weiter
 tippen(el('hauBtn'), zuschlagen, true);
+tippen(el('abbauBtn'), abbauen, true);
 tippen(el('redeBtn'), handeln);
 tippen(el('trinkBtn'), trinken);
-tippen(el('rollBtn'), ausweichen);
 
 /* Der Zauberknopf hat zwei Bedeutungen: kurz tippen wirkt, lang drücken
    blättert zum nächsten Spruch. Gewirkt wird deshalb beim Loslassen — aber
@@ -3474,8 +3812,8 @@ window.addEventListener('keydown', (e) => {
   if (k === 'k') zaubern();
   if (k === 'l') zauberBlaettern();
   if (k === 'e') handeln();
+  if (k === 'f') abbauen();
   if (k === 'h') trinken();
-  if (k === 'f') ausweichen();
   if (k === 'i') { menuZeichnen('fert'); el('menu').classList.toggle('hidden'); }
   if (k === 'r') heimkehr();
   if (k === 'escape') { esseSchliessen(); redeSchliessen(); ladenSchliessen(); el('menu').classList.add('hidden'); }
@@ -3641,6 +3979,9 @@ function writeSave(auchTot = false) {
               verfolgtNr: state.buch.verfolgtNr },
     geschichte: state.geschichte,
     beutel: state.beutel,
+    lager: state.lager,
+    // Die Stümpfe: sonst stünde jeder gefällte Baum beim Zurückkommen wieder da
+    stuempfe: flora.stuempfe(),
   });
 }
 
@@ -3666,6 +4007,8 @@ function weltLeeren() {
   if (beutelObj) { scene.remove(beutelObj); beutelObj = null; }
   for (const e of orteAktiv.values()) scene.remove(e.gruppe);
   orteAktiv.clear();
+  for (const e of lagerAktiv.values()) scene.remove(e.obj);
+  lagerAktiv.clear();
 }
 
 function startplatz() {
@@ -3808,6 +4151,8 @@ function neuesSpiel(wahl = null) {
   state.rausch = 0;
   state.imDungeon = null;
   state.fallFrom = null;
+  state.lager = [];
+  state.abbau = null;
   beutelAufloesen();
   juice.reset();
 
@@ -3889,6 +4234,9 @@ function weiterSpielen(d) {
   juice.reset();
 
   state.beutel = d.beutel || null;
+  state.lager = Array.isArray(d.lager) ? d.lager : [];
+  state.abbau = null;
+  flora.stuempfeSetzen(d.stuempfe);
     state.geschichte = Object.assign(story.neueGeschichte(), d.geschichte || {});
   welteinrichtung(startplatz().dorf);
   if (d.geschichte) {
@@ -4148,7 +4496,7 @@ window.__game = {
   heimkehr, karteZeichnen, menuZeichnen,
   ARTEN, wesenWaehlen, gefahrVon, doerferUm, dorfArt, bauplan,
   orte, orteAktiv, truhen, was, handeln, kartenBild, neuesSpiel, wetter,
-  ereignisse, rudelSetzen, ausweichen, spielerNimmtSchaden, geschosse,
+  ereignisse, rudelSetzen, spielerNimmtSchaden, geschosse,
   applyDaytime, sun, hemi, nachtGrad,
   camDistWert: () => camDist, camRohWert: () => camRoh,
   sparstufeWert: () => sparstufe,
@@ -4157,6 +4505,8 @@ window.__game = {
   ZAUBER, ZAUBER_IDS, gelernte, aktiverZauber, zauberWaehlen, zauberBlaettern,
   schnellStart, schoepfungOeffnen, herkunftVon, farbenVon,
   zauberLernen,
+  lager, lagerBauen, lagerAbreissen, lagerZeichnen, lagerInReichweite,
+  abbauen, abbauZiel: () => abbauJetzt, abbauStand: () => state.abbau,
 };
 
 /* ------------------------------ Hochfahren --------------------------------
