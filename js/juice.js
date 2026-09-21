@@ -42,6 +42,21 @@ export class Juice {
       return { mesh: m, t: 0, life: 0, size: 1, vx: 0, vz: 0 };
     });
 
+    /* Stein und Erz stecken in der Chunk-Geometrie — ein einzelner Würfel
+       daraus lässt sich nicht bewegen. Also legt sich für den Moment des
+       Hiebs ein zweiter, etwas größerer Würfel darüber, der zuckt und
+       verblasst. Von außen sieht es aus, als hätte der Block gewackelt. */
+    const stossGeo = new THREE.BoxGeometry(1.04, 1.04, 1.04);
+    this.stoesse = Array.from({ length: 6 }, () => {
+      const m = new THREE.Mesh(stossGeo, new THREE.MeshBasicMaterial({
+        color: '#b9ad97', transparent: true, opacity: 0, depthWrite: false,
+      }));
+      m.visible = false;
+      m.renderOrder = 2;
+      scene.add(m);
+      return { mesh: m, t: 0, life: 0, x: 0, y: 0, z: 0, vx: 0, vz: 0 };
+    });
+
     // Aufsteigende Zahlen als HTML — scharf, billig, funktioniert überall
     this.layer = document.getElementById('popups');
     this.pops = Array.from({ length: 14 }, () => {
@@ -78,6 +93,21 @@ export class Juice {
     t.vz = (Math.random() - 0.5) * 0.7;
     t.mesh.material.color.set(farbe);
     t.mesh.position.set(pos.x, (pos.y ?? 0) + 0.12, pos.z);
+    t.mesh.visible = true;
+  }
+
+  /** Ein Block bekommt einen Schubs: kurzes Zucken in Schlagrichtung. */
+  stoss(pos, farbe = '#b9ad97', rx = 0, rz = 0) {
+    const t = this.stoesse.find((x) => x.life <= 0)
+      || this.stoesse.reduce((a, b) => (a.t > b.t ? a : b));
+    t.life = 0.26;
+    t.t = 0;
+    const l = Math.hypot(rx, rz);
+    t.vx = l > 0 ? rx / l : 0;
+    t.vz = l > 0 ? rz / l : 0;
+    t.x = pos.x; t.y = pos.y ?? 0; t.z = pos.z;
+    t.mesh.material.color.set(farbe);
+    t.mesh.position.set(t.x, t.y, t.z);
     t.mesh.visible = true;
   }
 
@@ -146,6 +176,20 @@ export class Juice {
       t.mesh.material.opacity = (1 - k) * 0.5;
     }
 
+    for (const t of this.stoesse) {
+      if (t.life <= 0) continue;
+      t.t += dt;
+      const k = Math.min(1, t.t / t.life);
+      if (k >= 1) { t.life = 0; t.mesh.visible = false; continue; }
+      /* Erst weg vom Schlag, dann zurück — und dabei immer durchsichtiger,
+         damit der echte Block darunter nicht plötzlich die Farbe wechselt. */
+      const weg = Math.sin(k * Math.PI) * 0.13;
+      t.mesh.position.set(t.x + t.vx * weg, t.y, t.z + t.vz * weg);
+      const s3 = 1 + Math.sin(k * Math.PI) * 0.05;
+      t.mesh.scale.setScalar(s3);
+      t.mesh.material.opacity = Math.sin(k * Math.PI) * 0.55;
+    }
+
     for (const p of this.pops) {
       if (p.life <= 0) continue;
       p.t += dt;
@@ -172,6 +216,7 @@ export class Juice {
     this.shakeAmount = 0;
     this.stop = 0;
     this.rings.forEach((r) => { r.life = 0; r.mesh.visible = false; });
+    this.stoesse.forEach((t) => { t.life = 0; t.mesh.visible = false; });
     this.pops.forEach((p) => { p.life = 0; p.el.style.opacity = '0'; });
   }
 }

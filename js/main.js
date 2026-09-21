@@ -1383,6 +1383,13 @@ function abbauen() {
   audio.step(1.2, k.ton);
   juice.staub({ x: ziel.x, y: ziel.y + 0.5, z: ziel.z }, 0.7, ziel.farbe || k.farbe);
   juice.shake(0.1);
+  /* Damit der Knopfdruck ein Schlag wird: das Getroffene gibt nach. Bäume
+     und Felsen stehen als eigene Instanz und lassen sich wirklich neigen,
+     Stein und Erz stecken in der Chunk-Geometrie und bekommen stattdessen
+     einen Würfel übergelegt, der zuckt. Beides weg vom Spieler. */
+  const rx = ziel.x - player.pos.x, rz = ziel.z - player.pos.z;
+  if (ziel.pflanze) flora.wackeln(ziel.pflanze, rx, rz, ziel.art === 'fels' ? 0.55 : 1);
+  else if (ziel.ort) juice.stoss({ x: ziel.x, y: ziel.y, z: ziel.z }, ziel.farbe || k.farbe, rx, rz);
   if (state.abbau.hiebe < noetig) { updateHUD(); return; }
 
   state.abbau = null;
@@ -3751,6 +3758,7 @@ function frame() {
     world.update(player.pos.x, player.pos.z, 1);
     doerfer.update(player.pos.x, player.pos.z);
     flora.update(player.pos.x, player.pos.z);
+    flora.beleben(raw);          // angeschlagene Bäume schwingen aus
     /* Alles, was aus dem Saatkorn gerechnet und dann gemerkt wird, vergisst
        hier, was weit hinter einem liegt. Ohne das wächst der Speicher mit
        jeder Minute Laufen weiter, und irgendwann räumt der Browser mitten im

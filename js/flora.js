@@ -45,6 +45,15 @@ const _q = new THREE.Quaternion();
 const _pos = new THREE.Vector3();
 const _skal = new THREE.Vector3();
 const _achse = new THREE.Vector3(0, 1, 0);
+const _kipp = new THREE.Quaternion();
+const _kippachse = new THREE.Vector3();
+
+/* Ein Hieb soll sich wie ein Hieb anfühlen: der Baum gibt kurz nach und
+   schwingt aus. Lange genug, um es zu sehen, kurz genug, um beim nächsten
+   Schlag schon wieder still zu stehen. */
+const WACKELZEIT = 0.34;
+const WACKELWEIT = 0.085;      // Ausschlag im Bogenmaß, etwa fünf Grad
+const WACKELSCHNELL = 30;      // wie hastig es hin und her geht
 
 /* Ein Gewächs wird über das Feld benannt, auf dem es steht — die halben
    Schritte in g.x und g.z sind nur die Mitte des Blocks. */
@@ -66,6 +75,12 @@ export class Flora {
        Leistungswächter zieht das herunter, wenn ein Gerät nicht mehr
        mitkommt — lieber ein lichterer Wald als ein hakendes Bild. */
     this.duenn = 1;
+    /* Wer gerade schwingt. Die Nummer einer Instanz gilt nur für einen
+       Aufbau — wird der Bewuchs neu gestellt, sitzt unter derselben Nummer
+       ein anderer Baum. Darum trägt jeder Wackler den Zählerstand mit und
+       wird ungültig, sobald der sich ändert. */
+    this.wackler = [];
+    this.stand = 0;
 
     for (const [art, bauer] of Object.entries(BAUER)) {
       const { geometry, material } = props.bauteil(bauer);
@@ -132,6 +147,8 @@ export class Flora {
     if (!erzwingen && key === this.letzterChunk) return;
     this.letzterChunk = key;
     this.vergessen(ccx, ccz);
+    this.stand++;
+    if (this.wackler.length) this.wackler.length = 0;
 
     const zaehler = {};
     for (const art of Object.keys(this.netze)) zaehler[art] = 0;
@@ -162,6 +179,7 @@ export class Flora {
         _skal.setScalar(g.skal);
         _m.compose(_pos, _q, _skal);
         netz.setMatrixAt(i, _m);
+        g._i = i;                                   // Platz im Instanzfeld
         zaehler[g.art] = i + 1;
         if (STAMMDICK[g.art]) this.nah.push(g);
       }
@@ -184,6 +202,62 @@ export class Flora {
       if (d2 < bestD) { bestD = d2; best = g; }
     }
     return best;
+  }
+
+  /* Ein angeschlagener Baum neigt sich vom Schlag weg und pendelt zurück.
+     Gedreht wird um den Fuß — der Ursprung eines Gewächses liegt ohnehin
+     unten am Boden, also genügt es, die Kippung vor die Standdrehung zu
+     setzen. */
+  wackeln(g, richtungX = 0, richtungZ = 1, stark = 1) {
+    if (!g || g._i === undefined) return;
+    const netz = this.netze[g.art];
+    if (!netz || g._i >= netz.count) return;
+    const l = Math.hypot(richtungX, richtungZ) || 1;
+    const vorhanden = this.wackler.find((w) => w.g === g);
+    const w = vorhanden || { g, art: g.art, i: g._i, zeit: 0, stand: 0, ax: 0, az: 0, stark: 1 };
+    w.i = g._i;
+    w.stand = this.stand;
+    w.zeit = 0;
+    w.ax = richtungZ / l;          // Achse steht quer zur Schlagrichtung
+    w.az = -richtungX / l;
+    w.stark = stark;
+    if (!vorhanden) this.wackler.push(w);
+  }
+
+  /** Lässt die angeschlagenen Gewächse ausschwingen. Jedes Bild ein Aufruf. */
+  beleben(dt) {
+    if (!this.wackler.length) return;
+    const fertig = [];
+    for (const w of this.wackler) {
+      const netz = this.netze[w.art];
+      /* Neu aufgestellt oder weggefallen: die Nummer zeigt jetzt woanders
+         hin, also lieber gar nichts anfassen. */
+      if (w.stand !== this.stand || !netz || w.i >= netz.count) { fertig.push(w); continue; }
+      w.zeit += dt;
+      const k = w.zeit / WACKELZEIT;
+      const g = w.g;
+      _pos.set(g.x, g.y, g.z);
+      _skal.setScalar(g.skal);
+      _q.setFromAxisAngle(_achse, g.dreh);
+      if (k < 1) {
+        /* Abklingen mal Schwingung: der erste Ausschlag ist der größte,
+           danach wird es schnell ruhig. */
+        const winkel = WACKELWEIT * w.stark * (1 - k) * (1 - k)
+          * Math.cos(w.zeit * WACKELSCHNELL);
+        _kippachse.set(w.ax, 0, w.az);
+        _kipp.setFromAxisAngle(_kippachse, winkel);
+        _q.premultiply(_kipp);
+      } else {
+        fertig.push(w);                     // gerade steht es wieder von selbst
+      }
+      _m.compose(_pos, _q, _skal);
+      netz.setMatrixAt(w.i, _m);
+      netz.instanceMatrix.needsUpdate = true;
+    }
+    for (const w of fertig) {
+      const i = this.wackler.indexOf(w);
+      if (i >= 0) this.wackler.splice(i, 1);
+    }
   }
 
   /** Legt ein Gewächs um. Es bleibt weg, bis ein neues Spiel beginnt. */
@@ -223,6 +297,7 @@ export class Flora {
   }
 
   clear() {
+    this.wackler.length = 0;
     this.chunks.clear();
     this.gefaellt.clear();
     this.letzterChunk = null;
