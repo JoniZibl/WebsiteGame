@@ -116,7 +116,7 @@ const leute = new Leute(scene);
 const input = new Input();
 const player = new Player(scene);
 const audio = new GameAudio();
-const juice = new Juice(scene, camera);
+const juice = new Juice(scene, camera, blockMat);
 
 // Grubenlampe: unter Tage leuchtet die Figur sich selbst
 const lamp = new THREE.PointLight('#ffbe72', 0, 34, 1.25);
@@ -1383,13 +1383,14 @@ function abbauen() {
   audio.step(1.2, k.ton);
   juice.staub({ x: ziel.x, y: ziel.y + 0.5, z: ziel.z }, 0.7, ziel.farbe || k.farbe);
   juice.shake(0.1);
-  /* Damit der Knopfdruck ein Schlag wird: das Getroffene gibt nach. Bäume
-     und Felsen stehen als eigene Instanz und lassen sich wirklich neigen,
-     Stein und Erz stecken in der Chunk-Geometrie und bekommen stattdessen
-     einen Würfel übergelegt, der zuckt. Beides weg vom Spieler. */
+  /* Damit der Knopfdruck ein Schlag wird: das Getroffene gibt nach, immer
+     vom Spieler weg. Bäume und Felsen stehen als eigene Instanz und lassen
+     sich wirklich neigen; für Stein und Erz, die in der Chunk-Geometrie
+     stecken, tritt ein gleich aussehender Würfel an ihre Stelle und kippt
+     mit. */
   const rx = ziel.x - player.pos.x, rz = ziel.z - player.pos.z;
   if (ziel.pflanze) flora.wackeln(ziel.pflanze, rx, rz, ziel.art === 'fels' ? 0.55 : 1);
-  else if (ziel.ort) juice.stoss({ x: ziel.x, y: ziel.y, z: ziel.z }, ziel.farbe || k.farbe, rx, rz);
+  else if (ziel.ort) juice.stoss(ziel.ort, world.farbenAn(ziel.ort.x, ziel.ort.y, ziel.ort.z), rx, rz);
   if (state.abbau.hiebe < noetig) { updateHUD(); return; }
 
   state.abbau = null;
@@ -1401,7 +1402,7 @@ function abbauen() {
   if (h.vorteile.has('spuren3') && Math.random() < 0.25) menge *= 2;
   dinge.nehmen(h, k.stoff, menge);
   if (ziel.pflanze) flora.faellen(ziel.pflanze);
-  else world.set(ziel.ort.x, ziel.ort.y, ziel.ort.z, AIR);
+  else { world.set(ziel.ort.x, ziel.ort.y, ziel.ort.z, AIR); juice.blockRuhig(); }
 
   fert.uebung(h, 'spuren', 2);
   fert.xpGeben(h, k.xp);
@@ -1589,6 +1590,7 @@ function erzBrechen(ort) {
   const h = held();
   const erz = ERZE[ort.block] || ERZE[B.glimm];
   world.set(ort.x, ort.y, ort.z, AIR);
+  juice.blockRuhig();          // sonst bliebe der wackelnde Würfel im Loch stehen
   // „Sammler" gilt auch unter Tage
   const menge = h.vorteile.has('spuren3') && Math.random() < 0.25 ? 2 : 1;
   dinge.nehmen(h, erz.stoff, menge);

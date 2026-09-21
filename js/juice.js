@@ -5,8 +5,17 @@ import * as THREE from 'three';
  * Wackeln, Schockwellen und Zahlen, die aufsteigen. Ein Spiel ohne das
  * fühlt sich an wie ein Prototyp — egal wie viele Systeme darin stecken.
  */
+/* Wie weit und wie lange ein angeschlagener Stein nachgibt. Weniger als ein
+   Baum: die vier Grad sind gerade genug, dass man den Hieb sieht, und klein
+   genug, dass die echte Wand dahinter verdeckt bleibt. */
+const BLOCKWACKELZEIT = 0.26;
+const BLOCKWACKELWEIT = 0.07;
+const BLOCKWACKELSCHNELL = 34;
+const BLOCKDECKUNG = 1.06;
+const _kippachse = new THREE.Vector3();
+
 export class Juice {
-  constructor(scene, camera) {
+  constructor(scene, camera, blockStoff = null) {
     this.camera = camera;
 
     this.shakeAmount = 0;
@@ -42,20 +51,35 @@ export class Juice {
       return { mesh: m, t: 0, life: 0, size: 1, vx: 0, vz: 0 };
     });
 
-    /* Stein und Erz stecken in der Chunk-Geometrie — ein einzelner Würfel
-       daraus lässt sich nicht bewegen. Also legt sich für den Moment des
-       Hiebs ein zweiter, etwas größerer Würfel darüber, der zuckt und
-       verblasst. Von außen sieht es aus, als hätte der Block gewackelt. */
-    const stossGeo = new THREE.BoxGeometry(1.04, 1.04, 1.04);
-    this.stoesse = Array.from({ length: 6 }, () => {
-      const m = new THREE.Mesh(stossGeo, new THREE.MeshBasicMaterial({
-        color: '#b9ad97', transparent: true, opacity: 0, depthWrite: false,
+    /* Stein und Erz stecken in der Chunk-Geometrie — einen einzelnen Würfel
+       daraus zu bewegen ginge nur, indem man das ganze Netz neu baut, und
+       das bei jedem Hieb. Stattdessen stellt sich für den Moment des Hiebs
+       ein eigener Würfel an dieselbe Stelle und kippt. Er trägt dieselben
+       Seitenfarben und denselben Werkstoff wie die Wand, aus der er kommt,
+       also fällt der Wechsel nicht auf — es sieht aus, als gäbe der Stein
+       unter dem Beil nach.
+
+       Der Ursprung liegt unten in der Mitte: so dreht der Würfel um seinen
+       Fuß statt um seine Mitte, genau wie ein angeschlagener Baum. Ein Hauch
+       größer als ein Blockmaß ist er, damit der echte Stein darunter beim
+       Kippen nicht an den Kanten hervorschaut. */
+    const stossGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    stossGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(72), 3));
+    this.blockStoff = blockStoff;
+    this.stoesse = Array.from({ length: 4 }, () => {
+      const geo = stossGeo.clone();
+      const m = new THREE.Mesh(geo, blockStoff || new THREE.MeshBasicMaterial({
+        vertexColors: true,
       }));
       m.visible = false;
-      m.renderOrder = 2;
+      m.castShadow = false;
       scene.add(m);
-      return { mesh: m, t: 0, life: 0, x: 0, y: 0, z: 0, vx: 0, vz: 0 };
+      return { mesh: m, t: 0, life: 0, ax: 0, az: 0 };
     });
+    /* In welcher Reihenfolge BoxGeometry die Seiten ablegt. Die Farben kommen
+       nach Himmelsrichtung benannt herein, also muss das einmal sauber
+       zugeordnet werden — sonst sitzt die helle Deckelfarbe an der Flanke. */
+    this.seiten = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
 
     // Aufsteigende Zahlen als HTML — scharf, billig, funktioniert überall
     this.layer = document.getElementById('popups');
@@ -96,19 +120,37 @@ export class Juice {
     t.mesh.visible = true;
   }
 
-  /** Ein Block bekommt einen Schubs: kurzes Zucken in Schlagrichtung. */
-  stoss(pos, farbe = '#b9ad97', rx = 0, rz = 0) {
-    const t = this.stoesse.find((x) => x.life <= 0)
+  /** Ein Block wackelt: kurzes Kippen vom Schlag weg. */
+  stoss(ort, farben, rx = 0, rz = 0) {
+    if (!farben) return;
+    /* Steht derselbe Block schon da, wird er weitergeschlagen statt verdoppelt. */
+    const t = this.stoesse.find((x) => x.life > 0 && x.bx === ort.x && x.by === ort.y && x.bz === ort.z)
+      || this.stoesse.find((x) => x.life <= 0)
       || this.stoesse.reduce((a, b) => (a.t > b.t ? a : b));
-    t.life = 0.26;
+    t.life = BLOCKWACKELZEIT;
     t.t = 0;
-    const l = Math.hypot(rx, rz);
-    t.vx = l > 0 ? rx / l : 0;
-    t.vz = l > 0 ? rz / l : 0;
-    t.x = pos.x; t.y = pos.y ?? 0; t.z = pos.z;
-    t.mesh.material.color.set(farbe);
-    t.mesh.position.set(t.x, t.y, t.z);
+    const l = Math.hypot(rx, rz) || 1;
+    t.ax = rz / l;                 // Kippachse steht quer zur Schlagrichtung
+    t.az = -rx / l;
+    t.bx = ort.x; t.by = ort.y; t.bz = ort.z;
+
+    const farbe = t.mesh.geometry.getAttribute('color');
+    for (let f = 0; f < 6; f++) {
+      const c = farben[this.seiten[f]];
+      if (!c) continue;
+      for (let v = 0; v < 4; v++) farbe.setXYZ(f * 4 + v, c[0], c[1], c[2]);
+    }
+    farbe.needsUpdate = true;
+
+    t.mesh.position.set(ort.x + 0.5, ort.y, ort.z + 0.5);
+    t.mesh.quaternion.identity();
+    t.mesh.scale.setScalar(BLOCKDECKUNG);
     t.mesh.visible = true;
+  }
+
+  /** Nimmt die Steinwürfel sofort weg — etwa wenn der Block gerade bricht. */
+  blockRuhig() {
+    for (const t of this.stoesse) { t.life = 0; t.mesh.visible = false; }
   }
 
   ring(pos, size = 3, color = '#fff2cf', life = 0.4) {
@@ -181,13 +223,11 @@ export class Juice {
       t.t += dt;
       const k = Math.min(1, t.t / t.life);
       if (k >= 1) { t.life = 0; t.mesh.visible = false; continue; }
-      /* Erst weg vom Schlag, dann zurück — und dabei immer durchsichtiger,
-         damit der echte Block darunter nicht plötzlich die Farbe wechselt. */
-      const weg = Math.sin(k * Math.PI) * 0.13;
-      t.mesh.position.set(t.x + t.vx * weg, t.y, t.z + t.vz * weg);
-      const s3 = 1 + Math.sin(k * Math.PI) * 0.05;
-      t.mesh.scale.setScalar(s3);
-      t.mesh.material.opacity = Math.sin(k * Math.PI) * 0.55;
+      /* Abklingen mal Schwingung, wie beim Baum — nur kleiner und kürzer.
+         Ein Stein soll schwer wirken und nicht nachfedern wie ein Ast. */
+      const winkel = BLOCKWACKELWEIT * (1 - k) * (1 - k) * Math.cos(t.t * BLOCKWACKELSCHNELL);
+      _kippachse.set(t.ax, 0, t.az);
+      t.mesh.quaternion.setFromAxisAngle(_kippachse, winkel);
     }
 
     for (const p of this.pops) {
@@ -216,7 +256,7 @@ export class Juice {
     this.shakeAmount = 0;
     this.stop = 0;
     this.rings.forEach((r) => { r.life = 0; r.mesh.visible = false; });
-    this.stoesse.forEach((t) => { t.life = 0; t.mesh.visible = false; });
+    this.blockRuhig();
     this.pops.forEach((p) => { p.life = 0; p.el.style.opacity = '0'; });
   }
 }

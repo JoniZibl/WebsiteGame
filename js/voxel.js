@@ -458,6 +458,32 @@ export class VoxelWorld {
   key(cx, cz) { return cx + ',' + cz; }
   ekey(x, y, z) { return x + ',' + y + ',' + z; }
 
+  /* Die sechs Seitenfarben eines Blocks — genau so gerechnet wie im
+     Chunknetz. Gebraucht wird das, wenn ein Block kurz für sich allein
+     dastehen soll: beim Hieb legt sich ein eigener Würfel über ihn und
+     wackelt. Stimmte die Farbe dabei nicht, sähe man einen fremden Klotz
+     aufblitzen statt den Stein, auf den man einschlägt. */
+  farbenAn(x, y, z) {
+    const def = BLOCKS[this.get(x, y, z)];
+    if (!def) return null;
+    const surf = surfaceAt(x, z);
+    const tupf = 1 + (noise2(x * 0.085, z * 0.085, SEED + 5) - 0.5) * 0.075
+                   + (noise2(x * 0.021, z * 0.021, SEED + 9) - 0.5) * 0.06;
+    const farben = {};
+    for (const face of FACES) {
+      const base = def.erdig ? stratumAt(surf - y).color
+        : (def.side !== undefined && face.dir[1] === 0 ? def.side : def.color);
+      _c.setHex(base).multiplyScalar(face.shade * tupf);
+      const [dx, dy, dz] = face.dir;
+      if (this.edits.has(this.ekey(x + dx, y + dy, z + dz))) {
+        _c.lerp(_glow, 0.34).multiplyScalar(1.1);
+      }
+      const name = dy > 0 ? 'py' : dy < 0 ? 'ny' : dx > 0 ? 'px' : dx < 0 ? 'nx' : dz > 0 ? 'pz' : 'nz';
+      farben[name] = [_c.r, _c.g, _c.b];
+    }
+    return farben;
+  }
+
   /* --------------------------- Blöcke lesen/schreiben --------------------- */
   get(x, y, z) {
     if (y < 0 || y >= HEIGHT) return AIR;
