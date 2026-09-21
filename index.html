@@ -6,6 +6,17 @@
 <meta name="theme-color" content="#ede2cd" />
 <title>Talkunde</title>
 <link rel="stylesheet" href="css/style.css" />
+
+<!-- Aufs Telefon legen und ohne Netz spielen: Zeichen, Blatt und Vorrat.
+     Die Welt steht in der Rechenvorschrift, nicht auf einem Server — es gibt
+     also gar nichts, was unterwegs nachgeladen werden müsste. -->
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="bild/zeichen-192.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="bild/zeichen-apple.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Talkunde" />
 <script type="importmap">
 {
   "imports": {
@@ -240,5 +251,17 @@
 
   <noscript><div class="overlay"><div class="karte"><h1>JavaScript n&ouml;tig</h1></div></div></noscript>
   <script type="module" src="js/main.js"></script>
+  <script>
+    /* Der Vorrat wird still angelegt. Wo es ihn nicht gibt — in einem
+       abgeschotteten Rahmen, über file:// oder in einem alten Browser —,
+       passiert einfach nichts: das Spiel läuft davon unabhängig. */
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js', { scope: './' })
+          .then((r) => { window.__vorrat = r; })
+          .catch(() => { window.__vorrat = null; });
+      });
+    }
+  </script>
 </body>
 </html>
