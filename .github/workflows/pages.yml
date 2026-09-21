@@ -34,6 +34,9 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      # Die Einzeldatei wird vor dem Hochladen frisch gebaut, damit unter
+      # offline/talkunde.html immer die Fassung liegt, die auch online steht.
+      - run: node werkzeug/einzeldatei.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
