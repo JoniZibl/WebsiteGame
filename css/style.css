@@ -374,6 +374,13 @@ html, body {
   box-shadow: 0 4px 0 var(--terra-tief);
 }
 .primary:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--terra-tief); }
+/* Der stille Hinweis unter den Startknöpfen: Vorrat liegt bereit. */
+.vorrats-wort {
+  display: block; margin-top: 9px; text-align: center;
+  font-size: 11px; font-weight: 800; color: var(--salbei-tief); opacity: .85;
+}
+.vorrats-wort.hidden { display: none; }
+
 #resumeBtn.hidden { display: none; }
 #resumeBtn:not(.hidden) + #startBtn {
   margin-top: 9px; background: var(--putz-tief); color: var(--tinte);

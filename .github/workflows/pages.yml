@@ -22,10 +22,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      # enablement schaltet GitHub Pages beim ersten Lauf selbst ein. Ohne das
-      # bricht dieser Schritt ab, solange in den Repo-Einstellungen niemand
-      # von Hand auf „GitHub Actions" gestellt hat — und genau daran sind hier
-      # einundfünfzig Läufe nacheinander gescheitert.
+      # Hier sind zweiundfünfzig Läufe nacheinander gescheitert, immer mit
+      # „Get Pages site failed: Not Found". GitHub Pages ist für dieses Repo
+      # schlicht nicht eingeschaltet.
+      #
+      # `enablement: true` soll das selbst erledigen — kann es aber nicht: der
+      # GITHUB_TOKEN eines Laufs darf keine Pages-Seite anlegen („Resource not
+      # accessible by integration"). Das geht nur einmal von Hand:
+      #   Settings → Pages → Build and deployment → Source: GitHub Actions
+      # Danach läuft dieser Schritt durch, und jeder Push veröffentlicht.
       - uses: actions/configure-pages@v5
         with:
           enablement: true

@@ -227,6 +227,10 @@
       <div class="start-fuss">
         <button id="resumeBtn" class="primary hidden">Weiterspielen</button>
         <button id="startBtn" class="primary">Aufbrechen</button>
+        <!-- Steht nur da, wenn der Vorrat wirklich angelegt ist. So sieht man
+             auf dem Gerät selbst, ob es ohne Netz laufen wird — statt es
+             raten zu müssen. -->
+        <small id="vorratsWort" class="vorrats-wort hidden"></small>
       </div>
     </div>
   </div>
@@ -258,7 +262,30 @@
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js', { scope: './' })
-          .then((r) => { window.__vorrat = r; })
+          .then(async (r) => {
+            window.__vorrat = r;
+            await navigator.serviceWorker.ready;
+            // Warten, bis wirklich etwas im Schrank liegt — sonst verspricht
+            // die Zeile etwas, das noch gar nicht gilt.
+            for (let i = 0; i < 40; i++) {
+              const namen = await caches.keys();
+              if (namen.length) {
+                const schrank = await caches.open(namen[0]);
+                const stuecke = (await schrank.keys()).length;
+                if (stuecke >= 30) {
+                  const wort = document.getElementById('vorratsWort');
+                  if (wort) {
+                    wort.textContent = 'Ohne Netz spielbar \u2014 '
+                      + stuecke + ' Dateien liegen auf diesem Ger\u00e4t';
+                    wort.classList.remove('hidden');
+                  }
+                  window.__vorratFertig = stuecke;
+                  return;
+                }
+              }
+              await new Promise((w) => setTimeout(w, 500));
+            }
+          })
           .catch(() => { window.__vorrat = null; });
       });
     }
