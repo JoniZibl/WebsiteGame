@@ -24,6 +24,17 @@ export const BAUTEILE = {
     text: 'Heilt dich aus und bringt dich über die Nacht. Und man hört es.',
     bauer: () => props.feuerBauen(),
   },
+  werktisch: {
+    name: 'Werktisch', sym: 'werktisch',
+    kosten: { holz: 12, stein: 4 },
+    fest: 1.25,
+    nah: 3.0,
+    werken: true,          // nur hier gibt es die Rezepte
+    kurz: 'Hier wird gearbeitet',
+    text: 'Platte, Schraubstock, Säge. Ohne ihn hast du Stoffe und keine '
+        + 'Möglichkeit, etwas daraus zu machen.',
+    bauer: () => props.werktischBauen(),
+  },
   zelt: {
     name: 'Zelt', sym: 'lager',
     kosten: { holz: 12, stein: 2 },
@@ -83,6 +94,11 @@ export const LISTE = Object.keys(BAUTEILE);
  * Das Zweite, was man aus Stoffen machen kann: nicht etwas, das draußen steht,
  * sondern etwas, das in den Beutel wandert. Halbzeug zuerst — Seil und Tuch
  * braucht man für fast alles andere —, dann Werkzeug und Rüstung.
+ *
+ * Nichts davon geht aus dem Handgelenk. Man braucht einen Werktisch, man muss
+ * ihn gebaut und irgendwo hingestellt haben, und man muss davorstehen. Das ist
+ * der Unterschied zwischen einem Menüpunkt und einem Ort: das Lager wird zu
+ * etwas, wohin man zurückkommt.
  *
  * Absicht dahinter: jede Zeile soll aus einer anderen Richtung kommen. Holz
  * schlägt man oben, Eisen und Schwefel holt man aus der Tiefe, Fell und Wolle

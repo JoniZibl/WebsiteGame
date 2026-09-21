@@ -213,6 +213,16 @@ export const ICONS = {
     <path d="M6.2 12.4 C8 11.8 9.8 11.9 11.4 12.6" fill="none" stroke="${F.holz}" stroke-width=".9" opacity=".5"/>
     <path d="M15.6 8.6 C17.2 8.1 18.6 8 19.6 8.2" fill="none" stroke="${F.holzTief}" stroke-width=".9" opacity=".45"/>`),
 
+  /* Ein Werktisch von der Seite: Platte, Beine, eine Säge darauf. */
+  werktisch: svg(`
+    <path d="M4.6 8.2 L10.6 5.2 L19.8 8.6 L13.4 11.4 Z" fill="${F.stahlTief}"/>
+    <path d="M6.2 7.6 L10.8 6.4 L10.4 7.6 Z" fill="${F.stahl}"/>
+    <rect x="1.6" y="10.4" width="20.8" height="3" rx="1.2" fill="${F.holz}"/>
+    <rect x="1.6" y="12.6" width="20.8" height="1.2" fill="${F.holzTief}"/>
+    <rect x="3.4" y="13.6" width="2.6" height="7.8" rx="1" fill="${F.holzTief}"/>
+    <rect x="18" y="13.6" width="2.6" height="7.8" rx="1" fill="${F.holzTief}"/>
+    <rect x="5" y="16.4" width="14" height="1.8" rx=".8" fill="${F.holz}"/>`),
+
   /* Ein Ballon: Hülle mit Bahnen, Seile, Korb. */
   ballon: svg(`
     <path d="M12 1.6 C17.2 1.6 20.6 5.6 20.6 9.6 C20.6 13 17.6 15.6 14.6 16.8 L9.4 16.8

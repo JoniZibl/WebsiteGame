@@ -504,6 +504,31 @@ export function schleifsteinBauen() {
   return flattenGroup(g);
 }
 
+/* Ein Werktisch: schwere Platte auf vier Beinen, Schraubstock an der Ecke,
+   eine Säge und zwei Bretter darauf. Er soll von oben sofort nach Arbeit
+   aussehen und nicht nach einem weiteren Tisch. */
+export function werktischBauen() {
+  const g = new THREE.Group();
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    add(g, box(0.24, 0.9, 0.24), FARBEN.balkenTief, sx * 0.95, 0.45, sz * 0.52);
+  }
+  add(g, box(2.1, 0.16, 0.24), FARBEN.balkenTief, 0, 0.36, 0);   // Querstrebe
+  add(g, box(2.5, 0.22, 1.5), FARBEN.balken, 0, 1.01, 0);        // Platte
+  add(g, box(2.54, 0.08, 1.54), FARBEN.balkenTief, 0, 0.89, 0);  // Zarge darunter
+
+  // Schraubstock: Backe, Spindel, Kurbel
+  add(g, box(0.5, 0.34, 0.3), FARBEN.stein, -1.0, 1.24, 0.5);
+  add(g, box(0.16, 0.16, 0.5), FARBEN.steinTief, -1.0, 1.2, 0.86);
+  add(g, box(0.34, 0.1, 0.1), FARBEN.dunkel, -1.0, 1.2, 1.1);
+
+  // Werkzeug auf der Platte: eine Säge und zwei Bretter
+  add(g, box(0.9, 0.05, 0.22), FARBEN.stein, 0.5, 1.15, -0.3, [0, 0.22, 0]);
+  add(g, box(0.3, 0.09, 0.12), FARBEN.dunkel, 0.05, 1.17, -0.38, [0, 0.22, 0]);
+  add(g, box(1.1, 0.1, 0.34), FARBEN.putzWarm, 0.45, 1.17, 0.42, [0, -0.12, 0]);
+  add(g, box(1.0, 0.1, 0.3), FARBEN.putzWarm, 0.6, 1.27, 0.5, [0, -0.05, 0]);
+  return flattenGroup(g);
+}
+
 /* ------------------------------ Heißluftballon -----------------------------
  * Die Hülle ist kein Ball, sondern ein Stapel Ringe mit abnehmendem Umfang —
  * in Blockbauweise sieht das runder aus als eine echte Kugel und kostet ein

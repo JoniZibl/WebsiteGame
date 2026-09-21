@@ -1055,6 +1055,18 @@ function lagerInReichweite() {
   return best;
 }
 
+/** Steht ein Werktisch von dir in Reichweite? Nur dort wird gearbeitet. */
+function werktischInReichweite() {
+  for (const t of state.lager) {
+    const a = lager.artVon(t.art);
+    if (!a || !a.werken) continue;
+    if (Math.hypot(player.pos.x - t.x, player.pos.z - t.z) > a.nah) continue;
+    if (Math.abs(player.pos.y - t.y) > 3) continue;
+    return t;
+  }
+  return null;
+}
+
 /** Zelt, Feuer und Zaun sind Modelle — hier erst werden sie fest. */
 function lagerSchieben(x, z, rand = 0.3) {
   for (const t of state.lager) {
@@ -1614,6 +1626,7 @@ function was() {
     const a = lager.artVon(meins.art);
     if (a && a.rast) return { art: 'rast', ziel: meins };
     if (a && a.esse) return { art: 'esse', ziel: meins };
+    if (a && a.werken) return { art: 'werktisch', ziel: meins };
   }
   for (const t of truhen) {
     if (Math.hypot(t.pos.x - p.x, t.pos.z - p.z) < 2.4 && Math.abs(t.pos.y - p.y) < 2.5) {
@@ -1670,6 +1683,7 @@ function handeln() {
   if (w.art === 'tor') { gruftBetreten(w.ziel.gruft); return; }
   if (w.art === 'bett' || w.art === 'rast') { schlafen(); return; }
   if (w.art === 'esse') { esseOeffnen(); return; }
+  if (w.art === 'werktisch') { werktischOeffnen(); return; }
   if (w.art === 'ballon') { ballonBesteigen(w.ziel); return; }
   if (w.art === 'aussteigen') { ballonVerlassen(); return; }
   if (w.art === 'schrein') { schreinAnrufen(w.ziel); return; }
@@ -2975,11 +2989,22 @@ function questsZeichnen() {
   feld.append(hilfen);
 }
 
+/** Am Tisch stehen und drücken: das Blatt geht gleich aufs Werken auf. */
+function werktischOeffnen() {
+  lagerSeite = 'werken';
+  menuZeichnen('lager');
+  el('menu').classList.remove('hidden');
+}
+
 /** Etwas am Werktisch machen: Stoffe hinein, ein Stück in den Beutel. */
 function werken(id) {
   const r = lager.WERKZEUG[id];
   const h = held();
   if (!r || !state.running || state.dead) return false;
+  if (!werktischInReichweite()) {
+    meldung('Dafür brauchst du einen Werktisch', '#c9543f', 2.8);
+    return false;
+  }
   if (!lager.reichtFuer(h.beutel, r.kosten)) {
     meldung('Dafür fehlt dir noch Stoff', '#c9543f', 2.6);
     return false;
@@ -3075,17 +3100,25 @@ function lagerZeichnen() {
       + 'Wasser und nicht unter Tage.';
     feld.append(wo);
   } else {
+    /* Gearbeitet wird am Tisch, nicht im Kopf. Die Rezepte stehen trotzdem
+       da — man soll sehen, wofür sich der Tisch lohnt, bevor man ihn hat. */
+    const tisch = werktischInReichweite();
     const hinweis = document.createElement('p');
-    hinweis.className = 'punkte-hinweis';
-    hinweis.textContent = 'Eisen liegt ein paar Meter unter dem Gras, Schwefel erst '
-      + 'ganz unten. Fell und Wolle bringt nur das Getier.';
+    hinweis.className = 'punkte-hinweis' + (tisch ? '' : ' wichtig');
+    hinweis.textContent = tisch
+      ? 'Eisen liegt ein paar Meter unter dem Gras, Schwefel erst ganz unten. '
+        + 'Fell und Wolle bringt nur das Getier.'
+      : state.lager.some((t) => (lager.artVon(t.art) || {}).werken)
+        ? 'Dein Werktisch steht woanders. Geh hin, dann lässt sich arbeiten.'
+        : 'Nichts davon geht aus dem Handgelenk. Bau dir unter „Aufstellen" '
+          + 'einen Werktisch und stell dich davor.';
     feld.append(hinweis);
 
     for (const id of lager.WERKLISTE) {
       const r = lager.WERKZEUG[id];
       const d = DINGE[r.gibt];
       zeile(d.sym, d.name, r.kurz, d.text, r.kosten,
-        lager.reichtFuer(h.beutel, r.kosten), () => werken(id));
+        !!tisch && lager.reichtFuer(h.beutel, r.kosten), () => werken(id));
     }
   }
 }
@@ -3915,6 +3948,7 @@ function frame() {
       symbol(ui.rede, zeigeTat.art === 'npc' ? 'rede' : zeigeTat.art === 'truhe' ? 'truhe'
         : zeigeTat.art === 'waechter' ? 'kerze' : zeigeTat.art === 'esse' ? 'schwert'
         : zeigeTat.art === 'bett' || zeigeTat.art === 'rast' ? 'kerze'
+        : zeigeTat.art === 'werktisch' ? 'werktisch'
         : zeigeTat.art === 'ballon' || zeigeTat.art === 'aussteigen' ? 'ballon'
         : zeigeTat.art === 'schrein' ? 'glanz' : 'tor');
     }
@@ -4788,7 +4822,8 @@ window.__game = {
   zauberLernen,
   lager, lagerBauen, lagerAbreissen, lagerZeichnen, lagerInReichweite,
   abbauen, abbauZiel: () => abbauJetzt, abbauStand: () => state.abbau,
-  werken, ballonBesteigen, ballonVerlassen, brennen, ballonInReichweite,
+  werken, werktischInReichweite, werktischOeffnen,
+  ballonBesteigen, ballonVerlassen, brennen, ballonInReichweite,
   ERZE,
 };
 
