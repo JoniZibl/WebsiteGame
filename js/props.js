@@ -504,6 +504,78 @@ export function schleifsteinBauen() {
   return flattenGroup(g);
 }
 
+/* ------------------------------ Heißluftballon -----------------------------
+ * Die Hülle ist kein Ball, sondern ein Stapel Ringe mit abnehmendem Umfang —
+ * in Blockbauweise sieht das runder aus als eine echte Kugel und kostet ein
+ * Zehntel der Dreiecke. Die Bahnen wechseln die Farbe, daran erkennt man von
+ * weitem, dass sich da oben etwas dreht.
+ * -------------------------------------------------------------------------- */
+export function ballonBauen({ tuch = '#c9553f', bahn = '#f4e6cc' } = {}) {
+  const g = new THREE.Group();
+  /* Das Profil entscheidet alles. Breiter als hoch, und die dickste Stelle
+     obenauf: dann steht da ein Pilz. Also höher als breit, die dickste Stelle
+     bei gut der Hälfte, und nach oben eine Kuppel statt einer Kappe. */
+  const ringe = [
+    [0.42, 0.0], [1.05, 0.6], [1.55, 1.3], [1.82, 2.0], [1.95, 2.8],
+    [1.92, 3.6], [1.74, 4.4], [1.4, 5.2], [0.9, 5.95], [0.34, 6.6],
+  ];
+  const UNTEN = 4.3;                   // wo die Hülle anfängt, über dem Korb
+  for (let i = 0; i < ringe.length - 1; i++) {
+    const [r1, y1] = ringe[i];
+    const [r2, y2] = ringe[i + 1];
+    /* Geschlossene Ringe, keine offenen Röhren: von oben schaut man sonst
+       durch die Hülle hindurch in ihr Inneres, und aus dem Ballon wird ein
+       Fallschirm. Die Deckel liegen innen und sieht man nie. */
+    const m = new THREE.Mesh(
+      new THREE.CylinderGeometry(r2, r1, y2 - y1, 10),
+      mat(i % 2 ? bahn : tuch));
+    m.position.y = UNTEN + y1 + (y2 - y1) / 2;
+    m.castShadow = true;
+    g.add(m);
+  }
+  // Der Mund unten, wo die warme Luft hinein muss, und die Kappe ganz oben
+  add(g, box(0.78, 0.3, 0.78), FARBEN.dunkel, 0, UNTEN, 0);
+  add(g, box(0.54, 0.18, 0.54), FARBEN.balkenTief, 0, UNTEN + 6.64, 0);
+
+  /* Vier Seile vom Rand der Hülle zum Korb. Die Luft dazwischen ist der
+     halbe Grund, warum man das Ding von oben als Ballon erkennt und nicht
+     als Pilz: unten ein Kasten, oben eine Kugel, dazwischen nichts. */
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const seil = new THREE.Mesh(box(0.09, 3.5, 0.09), mat(FARBEN.balkenTief));
+    seil.position.set(sx * 0.66, 2.5, sz * 0.66);
+    seil.rotation.set(sz * 0.14, 0, -sx * 0.14);
+    seil.castShadow = true;
+    g.add(seil);
+  }
+
+  // Der Brenner: ein Messingkorb. Die Flamme darin kommt gleich extra dazu.
+  add(g, box(0.5, 0.36, 0.5), FARBEN.gold, 0, 3.7, 0);
+
+  // Der Korb: geflochtene Wand, Boden, ein Rand zum Festhalten
+  add(g, box(1.7, 0.2, 1.7), FARBEN.balkenTief, 0, 0.12, 0);
+  for (const [dx, dz, w, t] of [[0, -0.8, 1.7, 0.16], [0, 0.8, 1.7, 0.16],
+                                [-0.8, 0, 0.16, 1.7], [0.8, 0, 0.16, 1.7]]) {
+    add(g, box(w, 1.0, t), FARBEN.balken, dx, 0.7, dz);
+  }
+  add(g, box(1.9, 0.14, 1.9), FARBEN.balkenTief, 0, 1.24, 0);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    add(g, box(0.2, 1.2, 0.2), FARBEN.balkenTief, sx * 0.82, 0.68, sz * 0.82);
+  }
+  // Zwei Sandsäcke am Rand — sie sagen, dass das Ding schwer ist
+  add(g, box(0.34, 0.4, 0.34), '#8a7f70', 0.95, 0.5, -0.55);
+  add(g, box(0.3, 0.36, 0.3), '#8a7f70', -0.95, 0.46, 0.5);
+
+  /* Die Flamme bleibt ein eigenes Stück und wird nicht mit eingebacken: sie
+     ist das Einzige an diesem Ding, das sich bewegen muss. */
+  const ballon = flattenGroup(g);
+  const flamme = new THREE.Mesh(box(0.34, 0.5, 0.34), mat('#f5c451', true));
+  flamme.position.y = 4.0;
+  flamme.name = 'flamme';
+  flamme.visible = false;
+  ballon.add(flamme);
+  return ballon;
+}
+
 /** Der Beutel, den man am Sterbeort liegen lässt. */
 export function beutelBauen() {
   const g = new THREE.Group();

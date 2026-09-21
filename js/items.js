@@ -198,6 +198,18 @@ export const DINGE = {
   stein:       { name: 'Stein',          art: 'stoff', sym: 'brocken', wert: 5, rang: 0,
                  baustoff: true,
                  text: 'Schwer, kantig, brauchbar. Mehr muss ein Stein nicht sein.' },
+  eisen:       { name: 'Eisenklumpen',  art: 'stoff', sym: 'eisenerz', wert: 16, rang: 1,
+                 baustoff: true,
+                 text: 'Rostrot gesprenkelt. Liegt erst ein paar Meter unter dem Gras.' },
+  schwefel:    { name: 'Schwefel',      art: 'stoff', sym: 'schwefel', wert: 34, rang: 2,
+                 baustoff: true,
+                 text: 'Gelb, bröselig, riecht nach Streichholz. Er liegt ganz unten.' },
+  seil:        { name: 'Seil',          art: 'stoff', sym: 'seil', wert: 22, rang: 1,
+                 baustoff: true, gemacht: true,
+                 text: 'Aus Fell gedreht. Hält mehr aus, als es aussieht.' },
+  tuch:        { name: 'Segeltuch',     art: 'stoff', sym: 'tuch', wert: 48, rang: 2,
+                 baustoff: true, gemacht: true,
+                 text: 'Dicht gewebt und mit Fett getränkt. Es lässt keine Luft durch.' },
 
   /* -------------------------------- Krempel ------------------------------ */
   wolfsfell:   { name: 'Wolfsfell',      art: 'beute', sym: 'fell', wert: 14, rang: 0,

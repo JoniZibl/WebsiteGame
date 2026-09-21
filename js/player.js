@@ -118,6 +118,8 @@ export class Player {
     this.huepft = 0;
     this.tempo = 1;
     this.bogen = false;
+    // Im Ballonkorb setzt der Ballon die Lage — Schwerkraft und Wände sind aus
+    this.schweben = false;
     this.rennt = false;
     this.schritt = 0;   // Phase der Beinarbeit, läuft mit dem Tempo mit
     this.letzterSchritt = 0;  // bei welcher Phase zuletzt ein Fuß aufkam
@@ -154,6 +156,42 @@ export class Player {
 
     const feet = world.get(Math.floor(this.pos.x), Math.floor(this.pos.y + 0.2), Math.floor(this.pos.z));
     this.inWater = feet === B.wasser;
+
+    if (this.schweben) {
+      /* Im Korb bewegt sich die Figur nicht selbst. Sie steht, sieht in die
+         Fahrtrichtung, und der Rest dieser Rechnung — Schwung, Schwerkraft,
+         Wände, Stufen — hat hier nichts verloren. */
+      this.vel.set(0, 0, 0);
+      this.onGround = true;
+      this.fussAuf = null;
+      this.landung = 0;
+      this.huepft = 0;
+      this.warInDerLuft = false;
+      this.legL.rotation.x = 0;
+      this.legR.rotation.x = 0;
+      this.armR.rotation.x = 0;
+      this.torso.rotation.x = 0;
+      this.torso.position.y = 0.92;
+      this.head.position.y = 1.5;
+      this.head.rotation.x = 0;
+      this.group.scale.set(1, 1, 1);
+      const swingK = Math.max(0, this.swing / 0.25) * (this.bogen ? 0.45 : 1);
+      this.armL.rotation.x = -swingK * 1.5;
+      this.tool.rotation.x = -swingK * 1.5;
+      this.tool.position.set(-0.4, this.wGriffY - swingK * 0.22, 0.22 + swingK * 0.2);
+      this.head2.rotation.x = -swingK * 1.5;
+      this.head2.position.set(-0.4 + this.wKopfX, this.wKopfY - swingK * 0.44,
+        0.22 + swingK * 0.36);
+      if (this.zier.visible) {
+        this.zier.rotation.x = -swingK * 1.5;
+        this.zier.position.set(-0.4 + this.wZierX, this.wZierY - swingK * 0.32,
+          0.22 + swingK * 0.28);
+      }
+      this.laterne.scale.setScalar(0.94 + Math.sin(this.t * 4.5) * 0.06);
+      this.group.position.copy(this.pos);
+      this.group.rotation.y = this.facing;
+      return;
+    }
 
     const speed = (this.inWater ? 3.4 : 5.4) * (this.tempo || 1) * move.strength;
     const wishX = move.x * speed;

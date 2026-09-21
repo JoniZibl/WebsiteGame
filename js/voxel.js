@@ -22,6 +22,7 @@ export const B = {
   stamm: 6, laub: 7, wasser: 8, glimm: 9, moos: 10,
   eis:  11, grundstein: 12, weg: 13, planke: 14,
   heide: 15, trocken: 16, rotfels: 17, taiga: 18, moor: 19, kies: 20,
+  eisen: 21, schwefel: 22,
 };
 
 /* ---------------------------- Die Erdschichten ----------------------------
@@ -71,6 +72,11 @@ export const BLOCKS = {
   [B.kies]:     { name: 'Geröll',   color: 0xa9a293, side: 0x8d8778, hard: 0.5 },
   [B.weg]:      { name: 'Weg',     color: 0xdcc79a, side: 0xbe8d5a, hard: 0.3 },
   [B.planke]:   { name: 'Planke',  color: 0xc98f57, side: 0xa8743f, hard: 0.35 },
+  /* Die beiden Funde, für die man wirklich hinuntersteigen muss. Eisen
+     liegt als rostrote Sprenkel im Fels, Schwefel als gelbe Nester — und
+     der glimmt schwach, sonst fände man ihn in der Tiefe nie. */
+  [B.eisen]:    { name: 'Eisenader', color: 0xa2674a, side: 0x8a5539, hard: 1.1 },
+  [B.schwefel]: { name: 'Schwefel',  color: 0xd9c04a, hard: 0.9, glow: 0.45, licht: 12 },
   [B.grundstein]: { name: 'Urgestein', color: 0x46597a, hard: Infinity },
 };
 
@@ -264,13 +270,26 @@ function isCave(x, y, z) {
   return a < weite && b < weite;
 }
 
-/* Es gibt nur einen einzigen Fund: Glimm. Kein Erzsortiment, keine Tabelle
-   im Kopf - man sieht ein Leuchten im Fels und weiss sofort, was es ist.
+/* Drei Funde, und jeder liegt anders. Glimm leuchtet und liegt überall, wo
+   man gräbt. Eisen sitzt tiefer und sieht aus wie Rost im Fels. Schwefel
+   liegt ganz unten und nur dort, wo der Berg warm ist — wer ihn will, muss
+   wirklich absteigen. Mehr als drei will sich niemand merken.
    Je tiefer, desto mehr davon: das ist der ganze Grund, weiterzugraben. */
 function oreAt(x, y, z, depth) {
   const n = noise2(x * 0.22 + y * 0.13, z * 0.22 - y * 0.07, SEED + 151);
   const dichte = 0.955 - Math.min(0.06, depth * 0.0022);
   if (depth > 2 && n > dichte) return B.glimm;
+
+  // Eisen: ab ein paar Metern Tiefe, und nach unten hin häufiger
+  if (depth > 5) {
+    const e = noise2(x * 0.19 - y * 0.11, z * 0.19 + y * 0.09, SEED + 193);
+    if (e > 0.963 - Math.min(0.03, (depth - 5) * 0.0018)) return B.eisen;
+  }
+  // Schwefel: nur ganz unten, und in wenigen Nestern statt in Sprenkeln
+  if (depth > 16) {
+    const sch = fbm(x * 0.07, z * 0.07 + y * 0.05, SEED + 211, 2);
+    if (sch > 0.862) return B.schwefel;
+  }
   return B.stein;
 }
 

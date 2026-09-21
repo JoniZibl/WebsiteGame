@@ -84,6 +84,9 @@ const SICHTEN = {
   rennen: { dist: 54, hoehe: 25, weite: 21 },
   kampf:  { dist: 42, hoehe: 22, weite: 18 },
   gruft:  { dist: 34, hoehe: 26, weite: 13 },
+  /* Von oben lohnt sich der weite Blick — sonst sieht man beim Fliegen
+     dasselbe kleine Stück Wiese wie beim Laufen, nur schneller. */
+  ballon: { dist: 72, hoehe: 27, weite: 26 },
 };
 let camDist = SICHTEN.land.dist;
 let camZiel = { ...SICHTEN.land };
@@ -140,6 +143,9 @@ const state = {
   under: 0,
   hieb: 0,            // Nachladen des Schlags
   hack: 0,            // Pause zwischen zwei Axthieben
+  fliegt: false,      // sitzen wir im Ballonkorb?
+  ballon: null,       // in welchem — es ist ein Stück aus dem Lager
+  brenner: 0,         // wie lange der Brenner noch nachbrennt
   abbau: null,        // woran gerade gearbeitet wird und wie weit
   lager: [],          // was man sich selbst hingestellt hat
   zauber: 0,
@@ -274,6 +280,11 @@ function updateHUD() {
   if (state.imDungeon) {
     const a = gruft.artVon(state.imDungeon);
     ui.ortInfo.textContent = `${a.name} · Stufe ${state.imDungeon.stufe}`;
+  } else if (state.fliegt) {
+    const boden = surfaceAt(Math.round(player.pos.x), Math.round(player.pos.z)) + 1;
+    const hoch = Math.max(0, Math.round(player.pos.y - boden));
+    const gegend = biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
+    ui.ortInfo.innerHTML = `${gegend.name} <span class="wetter-wort">· ${hoch} über Grund</span>`;
   } else {
     const gegend = biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z));
     const g = gefahrVon(gegend.id);
@@ -370,7 +381,11 @@ function feindGefallen(f) {
     dinge.nehmen(h, dinge.beuteZiehen(rand, Math.min(4, (f.art.stufe || 1) + 1)));
     juice.ring({ x: f.pos.x, y: f.pos.y + 0.8, z: f.pos.z }, 4.2, '#e8a83c', 0.7);
   }
-  if ((f.art.beute && rand() < 0.55) || (f.gezeichnet && f.art.beute)) {
+  /* Was friedliches Getier hergibt, gibt es immer. Wolle und Bälge sind
+     Werkstoff, kein Zufallsfund — wer fünf Schafe erlegt, soll fünf Ballen
+     haben und nicht drei. Beim wilden Zeug bleibt es beim Glück. */
+  const sicher = f.gesinnung === 'friedlich';
+  if (f.art.beute && (sicher || f.gezeichnet || rand() < 0.55)) {
     // Sammler nimmt manchmal beides mit
     dinge.nehmen(h, f.art.beute, h.vorteile.has('spuren3') && rand() < 0.25 ? 2 : 1);
     fert.uebung(h, 'spuren', 1);        // Ausnehmen ist auch Spürarbeit
@@ -507,6 +522,7 @@ function richtungZu(f) {
 }
 
 function zuschlagen() {
+  if (state.fliegt) return;
   const h = held();
   const waffe = h.rue.waffe ? DINGE[h.rue.waffe] : null;
   if (waffe && waffe.fern) { schiessen(waffe); return; }
@@ -621,6 +637,7 @@ function zauberLernen(id) {
 }
 
 function zaubern() {
+  if (state.fliegt) return;
   const h = held();
   const z = aktiverZauber();
   if (state.zauber > 0) return;
@@ -822,6 +839,8 @@ function trinkKnopfPflegen() {
 
 function sterben(von) {
   const h = held();
+  // Wer im Korb fällt, fällt nicht mit dem Korb — der bleibt stehen, wo er ist
+  if (state.fliegt) ballonVerlassen();
   state.dead = true;
   state.running = false;
 
@@ -1114,6 +1133,151 @@ function lagerAbreissen(t) {
   writeSave();
 }
 
+
+/* =============================== Der Ballon =================================
+ * Das Ding ist teuer: drei Bahnen Segeltuch, vier Seile, Holz, Eisen und
+ * Schwefel. Wer es hat, war überall — oben bei den Bäumen, unten in der
+ * Tiefe und draußen beim Getier. Dafür bekommt er das Einzige, was diese
+ * Welt sonst nirgends hergibt: den Blick von oben.
+ *
+ * Gefahren wird mit zwei Fingern. Der große Knopf ist der Brenner und hebt,
+ * ohne ihn sinkt es von allein; der Knüppel schiebt waagerecht, aber träge —
+ * ein Ballon dreht nicht auf der Stelle, er zieht.
+ * ========================================================================== */
+const BALLON = {
+  steig: 8.0,          // wie hart der Brenner hebt
+  sink: 3.0,           // wie schnell sie ohne Feuer fällt
+  maxAuf: 5.0,
+  maxAb: 4.4,
+  drift: 7.4,          // waagerechtes Tempo bei vollem Ausschlag
+  traege: 1.15,        // wie schnell er auf den Knüppel hört
+  decke: HEIGHT - 3,   // höher geht die Welt nicht
+};
+
+let ballonVy = 0, ballonVx = 0, ballonVz = 0, ballonDreh = 0;
+
+/** Der Ballon in Reichweite, in den man einsteigen könnte. */
+function ballonInReichweite() {
+  for (const t of state.lager) {
+    if (t.art !== 'ballon') continue;
+    if (Math.hypot(player.pos.x - t.x, player.pos.z - t.z) > 3.4) continue;
+    if (Math.abs(player.pos.y - t.y) > 4) continue;
+    return t;
+  }
+  return null;
+}
+
+function ballonBesteigen(t) {
+  state.ballon = t;
+  state.fliegt = true;
+  state.brenner = 0;
+  player.schweben = true;
+  ballonVy = 1.4;                 // ein Ruck, dann trägt es
+  ballonVx = 0; ballonVz = 0;
+  player.pos.set(t.x, t.y, t.z);
+  audio.gem(1);
+  juice.staub({ x: t.x, y: t.y, z: t.z }, 1.4, '#cbb896');
+  meldung('Der Korb hebt ab', '#e8a83c', 3.0);
+  knoepfePflegen();
+  updateHUD();
+}
+
+function ballonVerlassen() {
+  const t = state.ballon;
+  state.fliegt = false;
+  state.ballon = null;
+  state.brenner = 0;
+  player.schweben = false;
+  ballonVy = 0; ballonVx = 0; ballonVz = 0;
+  if (t) {
+    // Aussteigen heißt: einen Schritt neben den Korb, nicht hinein
+    const ab = { x: t.x + Math.sin(player.facing) * 2.0, z: t.z + Math.cos(player.facing) * 2.0 };
+    player.pos.set(ab.x, surfaceAt(Math.round(ab.x), Math.round(ab.z)) + 1, ab.z);
+    const e = lagerAktiv.get(t.id);
+    if (e) { e.obj.position.set(t.x, t.y, t.z); ballonFlammeZeigen(e.obj, false); }
+  }
+  player.vel.set(0, 0, 0);
+  audio.step(1, 'holz');
+  meldung('Angekommen', '#7fae5e', 2.8);
+  knoepfePflegen();
+  updateHUD();
+  writeSave();
+}
+
+/** Die Flamme im Brenner — das Einzige am Ballon, das sich bewegt. */
+function ballonFlammeZeigen(obj, an, staerke = 1) {
+  const f = obj && obj.getObjectByName('flamme');
+  if (!f) return;
+  f.visible = an;
+  if (an) f.scale.set(0.8 + staerke * 0.5, 0.7 + staerke * 1.1, 0.8 + staerke * 0.5);
+}
+
+/** Ein Druck auf den großen Knopf heißt jetzt: Feuer unter die Hülle. */
+function brennen() {
+  if (!state.fliegt) return;
+  const h = held();
+  if (h.ausdauer < 1) return;
+  state.brenner = 0.22;           // hält, solange der Daumen nachlegt
+  h.ausdauer -= 0.9;
+}
+
+function ballonFliegen(dt, move) {
+  const t = state.ballon;
+  if (!t) { state.fliegt = false; player.schweben = false; return; }
+  const brennt = state.brenner > 0;
+
+  ballonVy += (brennt ? BALLON.steig : -BALLON.sink) * dt;
+  ballonVy = Math.max(-BALLON.maxAb, Math.min(BALLON.maxAuf, ballonVy));
+
+  // Waagerecht wird nur geschoben, nicht gesteuert — der Rest ist Trägheit
+  const zielX = move.active ? move.x * BALLON.drift * move.strength : 0;
+  const zielZ = move.active ? move.y * BALLON.drift * move.strength : 0;
+  const k = Math.min(1, dt * BALLON.traege);
+  ballonVx += (zielX - ballonVx) * k;
+  ballonVz += (zielZ - ballonVz) * k;
+
+  let x = player.pos.x + ballonVx * dt;
+  let z = player.pos.z + ballonVz * dt;
+  let y = player.pos.y + ballonVy * dt;
+
+  if (y > BALLON.decke) { y = BALLON.decke; ballonVy = Math.min(0, ballonVy); }
+  /* Über Wasser setzt man nicht auf dem Grund auf, sondern auf der
+     Oberfläche — ein Korb, der im Meer steht, wäre ein Fehler, kein Landen. */
+  const boden = Math.max(surfaceAt(Math.round(x), Math.round(z)), SEA) + 1;
+  let steht = false;
+  if (y <= boden) {
+    y = boden;
+    if (ballonVy < -2.2) { juice.shake(0.45); audio.step(1.4, 'holz'); }
+    ballonVy = 0;
+    ballonVx *= 0.4; ballonVz *= 0.4;
+    steht = true;
+  }
+  player.pos.set(x, y, z);
+  state.aufBoden = steht;
+
+  // Die Fahrtrichtung ist die Blickrichtung — ein Korb dreht sich nicht weg
+  const tempo = Math.hypot(ballonVx, ballonVz);
+  if (tempo > 0.4) player.facing = Math.atan2(ballonVx, ballonVz);
+
+  /* Der Ballon selbst: er steht im Wind und dreht sich langsam. Das ist der
+     ganze Unterschied zwischen „fliegen" und „schweben wie ein Aufzug". */
+  ballonDreh += dt * (0.12 + tempo * 0.02);
+  const e = lagerAktiv.get(t.id);
+  if (e) {
+    e.obj.position.set(x, y, z);
+    e.obj.rotation.y = ballonDreh;
+    ballonFlammeZeigen(e.obj, brennt, Math.min(1, state.brenner / 0.22));
+  }
+  if (brennt && Math.random() < dt * 9) {
+    juice.staub({ x, y: y + 3.6, z }, 0.5, '#f5c451');
+  }
+
+  /* Für den Spielstand steht der Ballon immer da, wo er landen würde. Wer
+     mitten in der Fahrt speichert und neu lädt, findet ihn unter sich stehen
+     statt in der Luft hängen. */
+  t.x = x; t.z = z; t.y = boden;
+}
+
 /* ================================= Abbauen ==================================
  * Ein Knopf für alles, was man aus der Welt herausholt: Bäume, Findlinge,
  * Felswände, Glimmadern — und das eigene Lager, wenn es am falschen Fleck
@@ -1123,7 +1287,7 @@ const ABBAUARTEN = {
   baum:  { hiebe: 4, stoff: 'holz',  menge: [2, 4], farbe: '#b5794a', ton: 'holz',  xp: 8 },
   fels:  { hiebe: 4, stoff: 'stein', menge: [2, 3], farbe: '#b9aa98', ton: 'stein', xp: 8 },
   block: { hiebe: 3, stoff: 'stein', menge: [1, 2], farbe: '#b9aa98', ton: 'stein', xp: 6 },
-  glimm: { hiebe: 3, farbe: '#f5c451', ton: 'stein' },
+  erz:   { hiebe: 3, farbe: '#f5c451', ton: 'stein' },
   lager: { hiebe: 2, farbe: '#cbb896', ton: 'holz' },
 };
 
@@ -1150,16 +1314,19 @@ function steinInReichweite() {
 
 /** Woran man hier arbeiten könnte. Das eigene Lager hat Vorrang. */
 function abbauZiel() {
-  if (!state.running || state.dead || state.gespraech) return null;
+  if (!state.running || state.dead || state.gespraech || state.fliegt) return null;
   const eigen = lagerInReichweite();
   if (eigen) {
-    return { art: 'lager', schl: 'L' + eigen.id, teil: eigen,
-             x: eigen.x, y: eigen.y, z: eigen.z, name: lager.artVon(eigen.art).name };
+    const a = lager.artVon(eigen.art);
+    return { art: 'lager', schl: 'L' + eigen.id, teil: eigen, hiebe: a.abbauHiebe,
+             x: eigen.x, y: eigen.y, z: eigen.z, name: a.name };
   }
-  const ader = glimmInReichweite();
+  const ader = erzInReichweite();
   if (ader) {
-    return { art: 'glimm', schl: `G${ader.x},${ader.y},${ader.z}`, ort: ader,
-             x: ader.x + 0.5, y: ader.y + 0.5, z: ader.z + 0.5, name: 'Glimmader' };
+    const erz = ERZE[ader.block];
+    return { art: 'erz', schl: `G${ader.x},${ader.y},${ader.z}`, ort: ader,
+             hiebe: erz.hiebe, farbe: erz.farbe,
+             x: ader.x + 0.5, y: ader.y + 0.5, z: ader.z + 0.5, name: erz.wort };
   }
   const g = flora.naechstes(player.pos.x, player.pos.z, 2.7);
   if (g && Math.abs(player.pos.y - g.y) < 4) {
@@ -1192,6 +1359,7 @@ function abbauen() {
   if (h.ausdauer < 3) { meldung('Keine Puste mehr', '#7d5227', 2.4); return; }
 
   const k = ABBAUARTEN[ziel.art];
+  const noetig = ziel.hiebe || k.hiebe;
   state.hack = 0.3;
   h.ausdauer -= 3;
   player.swing = 0.28;
@@ -1201,13 +1369,13 @@ function abbauen() {
   }
   state.abbau.hiebe++;
   audio.step(1.2, k.ton);
-  juice.staub({ x: ziel.x, y: ziel.y + 0.5, z: ziel.z }, 0.7, k.farbe);
+  juice.staub({ x: ziel.x, y: ziel.y + 0.5, z: ziel.z }, 0.7, ziel.farbe || k.farbe);
   juice.shake(0.1);
-  if (state.abbau.hiebe < k.hiebe) { updateHUD(); return; }
+  if (state.abbau.hiebe < noetig) { updateHUD(); return; }
 
   state.abbau = null;
   if (ziel.art === 'lager') { lagerAbreissen(ziel.teil); return; }
-  if (ziel.art === 'glimm') { glimmBrechen(ziel.ort); return; }
+  if (ziel.art === 'erz') { erzBrechen(ziel.ort); return; }
 
   let menge = k.menge[0] + Math.floor(Math.random() * (k.menge[1] - k.menge[0] + 1));
   // „Sammler" gilt auch für das, was man sich selbst schlägt
@@ -1242,9 +1410,9 @@ function abbauKnopfPflegen(dt) {
     ui.abbau.dataset.was = zeigen.name;
     ui.abbau.title = zeigen.name;
   }
-  const k = ABBAUARTEN[zeigen.art];
+  const noetig = zeigen.hiebe || ABBAUARTEN[zeigen.art].hiebe;
   const hiebe = state.abbau && state.abbau.schl === zeigen.schl ? state.abbau.hiebe : 0;
-  ui.abbau.style.setProperty('--ab', Math.round((hiebe / k.hiebe) * 100));
+  ui.abbau.style.setProperty('--ab', Math.round((hiebe / noetig) * 100));
 }
 
 /** Wie weit ist das nächste Feuer? Für das Knistern. */
@@ -1373,40 +1541,64 @@ function truheOeffnen(t) {
  * Ohne sie waere der Auftrag "Glimm fuer die Schmiede" unerfuellbar - graben
  * kann man seit dem Umbau zum Rollenspiel nicht mehr.
  * -------------------------------------------------------------------------- */
-function glimmInReichweite() {
+/* Drei Adern stecken im Fels, und jede gibt etwas anderes. Glimm findet man
+   überall, wo man gräbt; Eisen ab ein paar Metern; Schwefel erst ganz unten.
+   Das ist der Grund, eine Höhle nicht nur zu durchqueren. */
+const ERZE = {
+  [B.glimm]:    { stoff: 'glimmstein', wort: 'Glimmader',  farbe: '#f5c451', hiebe: 3, xp: 12 },
+  [B.eisen]:    { stoff: 'eisen',      wort: 'Eisenader',  farbe: '#a2674a', hiebe: 4, xp: 16 },
+  [B.schwefel]: { stoff: 'schwefel',   wort: 'Schwefel',   farbe: '#d9c04a', hiebe: 4, xp: 22 },
+};
+
+function erzInReichweite() {
   const px = Math.floor(player.pos.x), py = Math.floor(player.pos.y), pz = Math.floor(player.pos.z);
   let best = null, bestD = 99;
   for (let dy = -1; dy <= 2; dy++) {
     for (let dz = -2; dz <= 2; dz++) {
       for (let dx = -2; dx <= 2; dx++) {
-        if (world.get(px + dx, py + dy, pz + dz) !== B.glimm) continue;
+        const b = world.get(px + dx, py + dy, pz + dz);
+        if (!ERZE[b]) continue;
         const d = Math.abs(dx) + Math.abs(dy) + Math.abs(dz);
-        if (d < bestD) { bestD = d; best = { x: px + dx, y: py + dy, z: pz + dz }; }
+        if (d < bestD) { bestD = d; best = { x: px + dx, y: py + dy, z: pz + dz, block: b }; }
       }
     }
   }
   return best;
 }
 
-function glimmBrechen(ort) {
+function erzBrechen(ort) {
   const h = held();
+  const erz = ERZE[ort.block] || ERZE[B.glimm];
   world.set(ort.x, ort.y, ort.z, AIR);
-  dinge.nehmen(h, 'glimmstein');
+  // „Sammler" gilt auch unter Tage
+  const menge = h.vorteile.has('spuren3') && Math.random() < 0.25 ? 2 : 1;
+  dinge.nehmen(h, erz.stoff, menge);
   fert.uebung(h, 'spuren', 2);
-  fert.xpGeben(h, 12);
+  fert.xpGeben(h, erz.xp);
   audio.gem(2);
   juice.shake(0.25);
-  juice.ring({ x: ort.x + 0.5, y: ort.y + 0.5, z: ort.z + 0.5 }, 2.0, '#f5c451');
-  juice.popup({ x: ort.x + 0.5, y: ort.y + 1.2, z: ort.z + 0.5 }, 'Glimmstein', '#e8a83c');
-  const fertigeQ = state.buch.melden('sammeln', {});
-  for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
-  if (story.melden(state.geschichte, 'glimm', {})) kapitelGeschafft();
+  juice.ring({ x: ort.x + 0.5, y: ort.y + 0.5, z: ort.z + 0.5 }, 2.0, erz.farbe);
+  juice.popup({ x: ort.x + 0.5, y: ort.y + 1.2, z: ort.z + 0.5 },
+    `+${menge} ${DINGE[erz.stoff].name}`, '#e8a83c');
+  // Der Auftrag und das Kapitel zählen weiter nur den Glimm
+  if (ort.block === B.glimm) {
+    const fertigeQ = state.buch.melden('sammeln', {});
+    for (const q of fertigeQ) meldung(`„${q.titel}" erledigt`, '#7fae5e', 3.0);
+    if (story.melden(state.geschichte, 'glimm', {})) kapitelGeschafft();
+  }
   updateHUD();
 }
 
 /* -------------------------- Womit kann man reden? -------------------------- */
 function was() {
   const p = player.pos;
+  /* Im Korb gibt es nur eine Frage: raus hier? Und die stellt sich erst,
+     wenn man wieder Boden unter dem Korb hat. */
+  if (state.fliegt) {
+    return state.aufBoden ? { art: 'aussteigen', ziel: state.ballon } : null;
+  }
+  const ballon = ballonInReichweite();
+  if (ballon) return { art: 'ballon', ziel: ballon };
   const w = waechterInReichweite();
   if (w) return { art: 'waechter', ziel: w };
   // Wer direkt auf der Bettstelle steht, will schlafen — auch wenn der
@@ -1478,6 +1670,8 @@ function handeln() {
   if (w.art === 'tor') { gruftBetreten(w.ziel.gruft); return; }
   if (w.art === 'bett' || w.art === 'rast') { schlafen(); return; }
   if (w.art === 'esse') { esseOeffnen(); return; }
+  if (w.art === 'ballon') { ballonBesteigen(w.ziel); return; }
+  if (w.art === 'aussteigen') { ballonVerlassen(); return; }
   if (w.art === 'schrein') { schreinAnrufen(w.ziel); return; }
   if (w.art === 'npc') {
     if (w.ziel.chronist) chronistOeffnen(w.ziel);
@@ -2781,22 +2975,45 @@ function questsZeichnen() {
   feld.append(hilfen);
 }
 
+/** Etwas am Werktisch machen: Stoffe hinein, ein Stück in den Beutel. */
+function werken(id) {
+  const r = lager.WERKZEUG[id];
+  const h = held();
+  if (!r || !state.running || state.dead) return false;
+  if (!lager.reichtFuer(h.beutel, r.kosten)) {
+    meldung('Dafür fehlt dir noch Stoff', '#c9543f', 2.6);
+    return false;
+  }
+  for (const [stoff, n] of Object.entries(r.kosten)) dinge.ablegen(h, stoff, n);
+  dinge.nehmen(h, r.gibt);
+  audio.gem(2);
+  juice.popup({ x: player.pos.x, y: player.pos.y + 2.2, z: player.pos.z },
+    DINGE[r.gibt].name, '#7fae5e');
+  fert.uebung(h, 'spuren', 2);
+  fert.xpGeben(h, 14);
+  updateHUD();
+  writeSave();
+  return true;
+}
+
 /* --------------------------------- Lager -----------------------------------
  * Eine Liste, kein Raster: fünf Teile, jedes mit Preis und einem Satz dazu.
  * Was man sich leisten kann, ist anklickbar — der Rest steht grau daneben und
  * sagt einem, was noch fehlt. Gebaut wird draußen, zwei Schritte vor einem.
  * -------------------------------------------------------------------------- */
-const STOFFWORT = (id, n) => `${n} ${DINGE[id].name}`;
+let lagerSeite = 'bauen';
 
 function lagerZeichnen() {
   const h = held();
   const feld = el('tabLager');
   feld.replaceChildren();
 
-  // Oben der Vorrat — die drei Zahlen, um die es hier geht
+  // Oben der Vorrat — nur, was gerade nicht null ist, plus Holz und Stein
   const vorrat = document.createElement('div');
   vorrat.className = 'vorrat';
-  for (const id of ['holz', 'stein', 'glimmstein']) {
+  const zeigen = ['holz', 'stein', 'eisen', 'schwefel', 'seil', 'tuch']
+    .filter((id, i) => i < 2 || (h.beutel[id] || 0) > 0);
+  for (const id of zeigen.slice(0, 5)) {
     const k = document.createElement('span');
     k.innerHTML = `${sym(DINGE[id].sym)}<b>${h.beutel[id] || 0}</b>`
       + `<small>${DINGE[id].name}</small>`;
@@ -2804,42 +3021,73 @@ function lagerZeichnen() {
   }
   feld.append(vorrat);
 
-  const hinweis = document.createElement('p');
-  hinweis.className = 'punkte-hinweis';
-  hinweis.textContent = state.lager.length
-    ? `${state.lager.length} Teil${state.lager.length > 1 ? 'e' : ''} stehen draußen. `
-      + 'Mit der Axt nimmst du sie wieder auseinander.'
-    : 'Holz schlägst du an Bäumen, Stein an Findlingen und Felswänden — '
-      + 'mit der Axt unten rechts.';
-  feld.append(hinweis);
+  // Zwei Seiten: was draußen steht, und was in den Beutel geht
+  const segment = document.createElement('div');
+  segment.className = 'segment lager-segment';
+  for (const [id, wort] of [['bauen', 'Aufstellen'], ['werken', 'Am Werktisch']]) {
+    const b = document.createElement('button');
+    b.className = 'lreiter' + (lagerSeite === id ? ' an' : '');
+    b.textContent = wort;
+    b.addEventListener('click', () => { lagerSeite = id; audio.step(); lagerZeichnen(); });
+    segment.append(b);
+  }
+  feld.append(segment);
 
-  for (const id of lager.LISTE) {
-    const a = lager.BAUTEILE[id];
-    const kann = lager.reicht(h.beutel, id);
-    const zeile = document.createElement('button');
-    zeile.className = 'bau-zeile' + (kann ? '' : ' fehlt');
-    const preis = Object.entries(a.kosten)
-      .map(([stoff, n]) => `<span class="${(h.beutel[stoff] || 0) >= n ? 'hat' : 'offen'}">`
-        + `${STOFFWORT(stoff, n)}</span>`).join(' · ');
-    zeile.innerHTML = `<span class="bau-bild">${sym(a.sym)}</span>`
-      + `<span class="bau-text"><b>${a.name}</b><small>${a.kurz}</small>`
-      + `<p>${a.text}</p><span class="bau-preis">${preis}</span></span>`;
-    zeile.addEventListener('click', () => {
+  const preisZeile = (kosten) => Object.entries(kosten)
+    .map(([stoff, n]) => `<span class="${(h.beutel[stoff] || 0) >= n ? 'hat' : 'offen'}">`
+      + `${n} ${DINGE[stoff].name}</span>`).join(' · ');
+
+  const zeile = (sy, name, kurz, text, kosten, kann, tun) => {
+    const z = document.createElement('button');
+    z.className = 'bau-zeile' + (kann ? '' : ' fehlt');
+    z.innerHTML = `<span class="bau-bild">${sym(sy)}</span>`
+      + `<span class="bau-text"><b>${name}</b><small>${kurz}</small>`
+      + (text ? `<p>${text}</p>` : '')
+      + `<span class="bau-preis">${preisZeile(kosten)}</span></span>`;
+    z.addEventListener('click', () => {
       if (!kann) { audio.step(); return; }
-      if (lagerBauen(id)) {
-        el('menu').classList.add('hidden');     // hinsehen, was da entstanden ist
-      }
+      tun();
       lagerZeichnen();
     });
-    feld.append(zeile);
-  }
+    feld.append(z);
+  };
 
-  const wo = document.createElement('p');
-  wo.className = 'punkte-hinweis';
-  wo.style.marginTop = '10px';
-  wo.textContent = 'Gebaut wird zwei Schritte vor dir — nicht im Dorf, nicht im '
-    + 'Wasser und nicht unter Tage.';
-  feld.append(wo);
+  if (lagerSeite === 'bauen') {
+    const hinweis = document.createElement('p');
+    hinweis.className = 'punkte-hinweis';
+    hinweis.textContent = state.lager.length
+      ? `${state.lager.length} Teil${state.lager.length > 1 ? 'e' : ''} stehen draußen. `
+        + 'Mit der Axt nimmst du sie wieder auseinander.'
+      : 'Holz schlägst du an Bäumen, Stein an Findlingen und Felswänden — '
+        + 'mit der Axt unten rechts.';
+    feld.append(hinweis);
+
+    for (const id of lager.LISTE) {
+      const a = lager.BAUTEILE[id];
+      zeile(a.sym, a.name, a.kurz, a.text, a.kosten, lager.reicht(h.beutel, id), () => {
+        if (lagerBauen(id)) el('menu').classList.add('hidden');
+      });
+    }
+    const wo = document.createElement('p');
+    wo.className = 'punkte-hinweis';
+    wo.style.marginTop = '10px';
+    wo.textContent = 'Gebaut wird zwei Schritte vor dir — nicht im Dorf, nicht im '
+      + 'Wasser und nicht unter Tage.';
+    feld.append(wo);
+  } else {
+    const hinweis = document.createElement('p');
+    hinweis.className = 'punkte-hinweis';
+    hinweis.textContent = 'Eisen liegt ein paar Meter unter dem Gras, Schwefel erst '
+      + 'ganz unten. Fell und Wolle bringt nur das Getier.';
+    feld.append(hinweis);
+
+    for (const id of lager.WERKLISTE) {
+      const r = lager.WERKZEUG[id];
+      const d = DINGE[r.gibt];
+      zeile(d.sym, d.name, r.kurz, d.text, r.kosten,
+        lager.reichtFuer(h.beutel, r.kosten), () => werken(id));
+    }
+  }
 }
 
 /* --------------------------------- Karte -----------------------------------
@@ -3390,6 +3638,7 @@ function ereignisAnzeige() {
 /* Welche Sicht gerade gilt. Die Reihenfolge ist die Rangfolge: drinnen
    sticht alles, dann die Gruft, dann der Kampf, dann das Rennen. */
 function sichtWaehlen() {
+  if (state.fliegt) return SICHTEN.ballon;
   if (state.imHaus) return SICHTEN.stube;
   if (state.imDungeon || state.under > 0.6) return SICHTEN.gruft;
   if (feinde.bedrohung(player.pos, 13)) return SICHTEN.kampf;
@@ -3452,14 +3701,20 @@ function frame() {
     state.gelaufen += weg * (state.rennt ? 2 : 1);
     if (state.gelaufen > 26) { state.gelaufen = 0; fert.uebung(h, 'wandern', 1); }
     player.rennt = state.rennt;
-    player.update(dt, move, world);
-    // Häuser und Stämme sind Modelle, keine Blöcke — hier erst werden sie fest
-    schritteHoeren();
-    const raus = doerfer.wegSchieben(player.pos.x, player.pos.z)
-      || orteSchieben(player.pos.x, player.pos.z)
-      || lagerSchieben(player.pos.x, player.pos.z)
-      || flora.wegSchieben(player.pos.x, player.pos.z);
-    if (raus) { player.pos.x = raus.x; player.pos.z = raus.z; }
+    if (state.fliegt) {
+      // Im Korb setzt der Ballon die Lage, nicht der Boden
+      ballonFliegen(dt, move);
+      player.update(dt, move, world);
+    } else {
+      player.update(dt, move, world);
+      // Häuser und Stämme sind Modelle, keine Blöcke — hier erst werden sie fest
+      schritteHoeren();
+      const raus = doerfer.wegSchieben(player.pos.x, player.pos.z)
+        || orteSchieben(player.pos.x, player.pos.z)
+        || lagerSchieben(player.pos.x, player.pos.z)
+        || flora.wegSchieben(player.pos.x, player.pos.z);
+      if (raus) { player.pos.x = raus.x; player.pos.z = raus.z; }
+    }
     world.update(player.pos.x, player.pos.z, 1);
     doerfer.update(player.pos.x, player.pos.z);
     flora.update(player.pos.x, player.pos.z);
@@ -3493,11 +3748,13 @@ function frame() {
       aufschlag: (g) => juice.ring({ x: g.pos.x, y: g.pos.y, z: g.pos.z }, 0.9, '#b9aa98', 0.25),
     });
     feinde.aufraeumen(player.pos.x, player.pos.z, 130);
-    wildnisPflegen(dt);
+    // In der Luft wächst einem nichts entgegen — sonst steht unten ein Rudel,
+    // sobald man wieder aufsetzt.
+    if (!state.fliegt) wildnisPflegen(dt);
     beutelPflegen(dt);
     wesenGesehen();
     bannerPflegen(dt);
-    ereignisse.update(dt, {
+    if (!state.fliegt) ereignisse.update(dt, {
       nacht: istNacht(),
       imDorf: !!doerfer.dorfUnter(player.pos.x, player.pos.z),
       dorf: doerfer.dorfUnter(player.pos.x, player.pos.z),
@@ -3520,6 +3777,7 @@ function frame() {
     if (state.time < vorher) state.tag++;    // ein Tag ist herum, die Läden füllen auf
     if (state.hieb > 0) state.hieb -= dt;
     if (state.hack > 0) state.hack -= dt;
+    if (state.brenner > 0) state.brenner -= dt;
     if (state.zauber > 0) state.zauber -= dt;
     if (state.rausch > 0) state.rausch -= dt;
     if (state.schutz > 0) {
@@ -3546,8 +3804,10 @@ function frame() {
       h.hp = Math.min(hpMaxJetzt, h.hp + (h.vorteile.has('zaehe4') ? 3.2 : 1.4) * dt);
     }
 
-    // Sturz kostet Leben
-    if (player.onGround) {
+    // Sturz kostet Leben — im Ballonkorb natürlich nicht
+    if (state.fliegt) {
+      state.fallFrom = null;
+    } else if (player.onGround) {
       if (state.fallFrom !== null) {
         const sturz = state.fallFrom - player.pos.y;
         // „Fester Stand" nimmt dem Sturz die Hälfte — das ist jetzt sein Zweck
@@ -3610,7 +3870,7 @@ function frame() {
     cutPlane.constant = Math.round(state.cut) - 0.03;
 
     kameraPflegen(dt);
-    steckenPruefen(dt, move, tief);
+    if (!state.fliegt) steckenPruefen(dt, move, tief);
 
     state.under = Math.max(0, Math.min(1, tief / 4));
     applyDaytime();
@@ -3655,6 +3915,7 @@ function frame() {
       symbol(ui.rede, zeigeTat.art === 'npc' ? 'rede' : zeigeTat.art === 'truhe' ? 'truhe'
         : zeigeTat.art === 'waechter' ? 'kerze' : zeigeTat.art === 'esse' ? 'schwert'
         : zeigeTat.art === 'bett' || zeigeTat.art === 'rast' ? 'kerze'
+        : zeigeTat.art === 'ballon' || zeigeTat.art === 'aussteigen' ? 'ballon'
         : zeigeTat.art === 'schrein' ? 'glanz' : 'tor');
     }
     if (!zeigeTat) letzteTat = null;
@@ -3753,7 +4014,19 @@ function tippen(knopf, tun, halten = false) {
 }
 
 // Auf dem Hieb darf der Daumen liegen bleiben — er schlägt dann weiter
-tippen(el('hauBtn'), zuschlagen, true);
+/* Im Korb heißt der große Knopf nicht mehr „schlagen", sondern „Feuer".
+   Zaubern geht von dort oben nicht, die Axt auch nicht — beides verschwindet,
+   statt grau herumzustehen. */
+function knoepfePflegen() {
+  const f = state.fliegt;
+  symbol(el('hauBtn'), f ? 'flamme' : 'schwert');
+  el('hauBtn').title = f ? 'Brenner' : 'angreifen';
+  el('hauBtn').classList.toggle('brenner', f);
+  ui.wirk.classList.toggle('hidden', f);
+  if (f) ui.abbau.classList.add('hidden');
+}
+
+tippen(el('hauBtn'), () => { if (state.fliegt) brennen(); else zuschlagen(); }, true);
 tippen(el('abbauBtn'), abbauen, true);
 tippen(el('redeBtn'), handeln);
 tippen(el('trinkBtn'), trinken);
@@ -3808,7 +4081,7 @@ el('redeZu').addEventListener('click', redeSchliessen);
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (k === ' ' || k === 'j') { zuschlagen(); e.preventDefault(); }
+  if (k === ' ' || k === 'j') { if (state.fliegt) brennen(); else zuschlagen(); e.preventDefault(); }
   if (k === 'k') zaubern();
   if (k === 'l') zauberBlaettern();
   if (k === 'e') handeln();
@@ -4066,6 +4339,7 @@ function aufstellen(x, z) {
   camera.position.copy(state.camPos);
   camera.lookAt(player.pos);
   applyDaytime();
+  knoepfePflegen();
   updateHUD();
   state.running = true;
 }
@@ -4075,6 +4349,7 @@ function aufstellen(x, z) {
    uns am naechsten Dorf wieder ab — sie kostet nichts als den Weg zurueck. */
 function heimkehr() {
   if (!state.running || state.dead) return;
+  if (state.fliegt) ballonVerlassen();     // der Ballon bleibt, wo er steht
   const px = player.pos.x, pz = player.pos.z;
   const nah = doerferUm(px, pz, 900)
     .sort((a, b) => Math.hypot(a.x - px, a.z - pz) - Math.hypot(b.x - px, b.z - pz));
@@ -4153,6 +4428,9 @@ function neuesSpiel(wahl = null) {
   state.fallFrom = null;
   state.lager = [];
   state.abbau = null;
+  state.fliegt = false;
+  state.ballon = null;
+  player.schweben = false;
   beutelAufloesen();
   juice.reset();
 
@@ -4236,6 +4514,9 @@ function weiterSpielen(d) {
   state.beutel = d.beutel || null;
   state.lager = Array.isArray(d.lager) ? d.lager : [];
   state.abbau = null;
+  state.fliegt = false;
+  state.ballon = null;
+  player.schweben = false;
   flora.stuempfeSetzen(d.stuempfe);
     state.geschichte = Object.assign(story.neueGeschichte(), d.geschichte || {});
   welteinrichtung(startplatz().dorf);
@@ -4507,6 +4788,8 @@ window.__game = {
   zauberLernen,
   lager, lagerBauen, lagerAbreissen, lagerZeichnen, lagerInReichweite,
   abbauen, abbauZiel: () => abbauJetzt, abbauStand: () => state.abbau,
+  werken, ballonBesteigen, ballonVerlassen, brennen, ballonInReichweite,
+  ERZE,
 };
 
 /* ------------------------------ Hochfahren --------------------------------

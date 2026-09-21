@@ -610,6 +610,8 @@ html, body {
 .vorrat b { font-size: 15px; line-height: 1; }
 .vorrat small { font-size: 9.5px; font-weight: 800; opacity: .62; }
 
+.lager-segment { padding: 0 0 10px; }
+
 .bau-zeile {
   display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
   padding: 10px 12px; margin-bottom: 6px; border: 0; border-radius: var(--r-klein);

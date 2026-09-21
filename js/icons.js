@@ -182,6 +182,47 @@ export const ICONS = {
     <path d="M13.6 4.2 L18.8 3.4 L21.2 7.6 L18.4 11.2 L14 10.4 L12.6 6.8 Z" fill="${F.stahl}"/>
     <path d="M13.6 4.2 L18.8 3.4 L16.4 7 Z" fill="${F.stahlTief}"/>`),
 
+  /* Ein Klumpen Eisen: rostrot, mit hellen Bruchflächen. */
+  eisenerz: svg(`
+    <path d="M4.6 12.4 L8.4 7.2 L15.2 6.4 L19.8 10.4 L18.2 17.4 L11 20.6 L5.4 18 Z" fill="#a2674a"/>
+    <path d="M8.4 7.2 L15.2 6.4 L13.4 11.2 Z" fill="#c08160"/>
+    <path d="M13.4 11.2 L19.8 10.4 L18.2 17.4 Z" fill="#8a5539"/>
+    <circle cx="9.4" cy="14.6" r="1.5" fill="#d8a184"/>
+    <circle cx="14.4" cy="16.2" r="1.1" fill="#d8a184"/>`),
+
+  /* Schwefel: gelbe Kristallnester im Bruch. */
+  schwefel: svg(`
+    <path d="M3.6 14.2 L7.4 8.6 L16.4 8 L20.4 12.8 L18 19 L7.2 19.4 Z" fill="#8a7f70"/>
+    <path d="M9 12.4 L11.6 8.2 L14.2 12.4 L11.6 16.2 Z" fill="#d9c04a"/>
+    <path d="M11.6 8.2 L14.2 12.4 L11.6 16.2 Z" fill="#b39f32"/>
+    <path d="M15 14.4 L16.8 11.6 L18.6 14.4 L16.8 17.2 Z" fill="#e8d46a"/>
+    <path d="M5.8 15.2 L7.2 12.8 L8.6 15.2 L7.2 17.6 Z" fill="#e8d46a"/>`),
+
+  /* Ein Seil, in Schlaufen aufgeschossen. */
+  seil: svg(`
+    <ellipse cx="12" cy="13.6" rx="8.4" ry="6.2" fill="none" stroke="${F.holz}" stroke-width="2.6"/>
+    <ellipse cx="12" cy="13.6" rx="4.2" ry="2.8" fill="none" stroke="${F.holzTief}" stroke-width="2.2"/>
+    <path d="M6.2 8.6 C7.6 5.2 10.4 3.4 13.2 4.2 C15.4 4.8 16.2 6.6 15.4 8"
+          fill="none" stroke="${F.holz}" stroke-width="2.4" stroke-linecap="round"/>`),
+
+  /* Eine Bahn Segeltuch, gerollt. */
+  tuch: svg(`
+    <path d="M3.4 6.2 C7 4.6 10 4.6 13.6 6.2 L13.6 18.6 C10 17 7 17 3.4 18.6 Z" fill="${F.putz}"/>
+    <path d="M13.6 6.2 C16 5.1 18.4 4.8 20.6 5.4 L20.6 17.8 C18.4 17.2 16 17.5 13.6 18.6 Z" fill="${F.stahl}"/>
+    <path d="M6.2 9 C8 8.4 9.8 8.5 11.4 9.2" fill="none" stroke="${F.holz}" stroke-width=".9" opacity=".5"/>
+    <path d="M6.2 12.4 C8 11.8 9.8 11.9 11.4 12.6" fill="none" stroke="${F.holz}" stroke-width=".9" opacity=".5"/>
+    <path d="M15.6 8.6 C17.2 8.1 18.6 8 19.6 8.2" fill="none" stroke="${F.holzTief}" stroke-width=".9" opacity=".45"/>`),
+
+  /* Ein Ballon: Hülle mit Bahnen, Seile, Korb. */
+  ballon: svg(`
+    <path d="M12 1.6 C17.2 1.6 20.6 5.6 20.6 9.6 C20.6 13 17.6 15.6 14.6 16.8 L9.4 16.8
+             C6.4 15.6 3.4 13 3.4 9.6 C3.4 5.6 6.8 1.6 12 1.6 Z" fill="${F.terra}"/>
+    <path d="M12 1.6 C13.9 1.6 15.4 5.2 15.4 9.6 C15.4 12.6 14.7 15.2 13.8 16.8 L10.2 16.8
+             C9.3 15.2 8.6 12.6 8.6 9.6 C8.6 5.2 10.1 1.6 12 1.6 Z" fill="${F.putz}"/>
+    <path d="M9.6 16.8 L9 19.6 M14.4 16.8 L15 19.6" stroke="${F.holzTief}" stroke-width="1.1"/>
+    <rect x="8.4" y="19.2" width="7.2" height="3.4" rx="1" fill="${F.holz}"/>
+    <rect x="8" y="18.9" width="8" height="1.3" rx="0.6" fill="${F.holzTief}"/>`),
+
   /* Ein Zelt neben dem Feuer: das Lager. */
   lager: svg(`
     <path d="M9 3.8 L16.6 18.2 L1.4 18.2 Z" fill="${F.holz}"/>

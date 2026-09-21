@@ -53,6 +53,18 @@ export const BAUTEILE = {
     text: 'Vier Bretter. Nichts, was springen kann, hält er auf — der Rest bleibt draußen.',
     bauer: () => props.zaunBauen(4),
   },
+  ballon: {
+    name: 'Heißluftballon', sym: 'ballon',
+    kosten: { tuch: 3, seil: 4, holz: 12, eisen: 8, schwefel: 3 },
+    fest: 0,               // man soll hineinsteigen, nicht dagegenlaufen
+    nah: 3.4,
+    fliegt: true,
+    abbauHiebe: 7,         // das Teuerste reißt man nicht aus Versehen ab
+    kurz: 'Steig ein und flieg',
+    text: 'Drei Bahnen Segeltuch, ein Korb und ein Brenner. Von oben sieht das '
+        + 'Land aus wie eine Karte, die noch niemand gezeichnet hat.',
+    bauer: () => props.ballonBauen(),
+  },
   schleifstein: {
     name: 'Schleifstein', sym: 'schwert',
     kosten: { holz: 3, stein: 12 },
@@ -67,16 +79,54 @@ export const BAUTEILE = {
 
 export const LISTE = Object.keys(BAUTEILE);
 
+/* ------------------------------ Am Werktisch -------------------------------
+ * Das Zweite, was man aus Stoffen machen kann: nicht etwas, das draußen steht,
+ * sondern etwas, das in den Beutel wandert. Halbzeug zuerst — Seil und Tuch
+ * braucht man für fast alles andere —, dann Werkzeug und Rüstung.
+ *
+ * Absicht dahinter: jede Zeile soll aus einer anderen Richtung kommen. Holz
+ * schlägt man oben, Eisen und Schwefel holt man aus der Tiefe, Fell und Wolle
+ * bringt nur das Getier. Wer den Ballon will, muss überall gewesen sein.
+ * -------------------------------------------------------------------------- */
+export const WERKZEUG = {
+  seil:        { gibt: 'seil',        kosten: { wolfsfell: 2 },
+                 kurz: 'aus zwei Fellen gedreht' },
+  tuch:        { gibt: 'tuch',        kosten: { wolle: 3 },
+                 kurz: 'drei Ballen Wolle, dicht gewebt' },
+  knueppel:    { gibt: 'knueppel',    kosten: { holz: 4 },
+                 kurz: 'für den Anfang reicht ein Ast' },
+  holzspeer:   { gibt: 'holzspeer',   kosten: { holz: 8, stein: 2 },
+                 kurz: 'Abstand halten' },
+  beil:        { gibt: 'beil',        kosten: { holz: 6, eisen: 3 },
+                 kurz: 'die erste Schneide aus Eisen' },
+  wams:        { gibt: 'wams',        kosten: { wolfsfell: 4, seil: 1 },
+                 kurz: 'Fell auf dem Rücken' },
+  kurzschwert: { gibt: 'kurzschwert', kosten: { holz: 3, eisen: 8 },
+                 kurz: 'handlich und ehrlich' },
+  hornpanzer:  { gibt: 'hornpanzer',  kosten: { hauer: 2, wolfsfell: 6, seil: 2 },
+                 kurz: 'was der Keiler nicht mehr braucht' },
+  jagdspiess:  { gibt: 'jagdspiess',  kosten: { holz: 4, eisen: 10, seil: 1 },
+                 kurz: 'der Keiler kommt bis hierher' },
+  kettenhemd:  { gibt: 'kettenhemd',  kosten: { eisen: 14, seil: 2 },
+                 kurz: 'schwer, laut, sein Geld wert' },
+};
+
+export const WERKLISTE = Object.keys(WERKZEUG);
+
 export const artVon = (id) => BAUTEILE[id] || null;
 
-/** Steht im Beutel genug für dieses Teil? */
-export function reicht(beutel, id) {
-  const a = BAUTEILE[id];
-  if (!a) return false;
-  for (const [stoff, n] of Object.entries(a.kosten)) {
+/** Steht im Beutel genug für diese Kosten? */
+export function reichtFuer(beutel, kosten) {
+  for (const [stoff, n] of Object.entries(kosten)) {
     if ((beutel[stoff] || 0) < n) return false;
   }
   return true;
+}
+
+/** Steht im Beutel genug für dieses Bauteil? */
+export function reicht(beutel, id) {
+  const a = BAUTEILE[id];
+  return !!a && reichtFuer(beutel, a.kosten);
 }
 
 /** Was beim Abreißen zurückkommt: die Hälfte, aber nie nichts. */
