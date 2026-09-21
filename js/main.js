@@ -87,7 +87,15 @@ const SICHTEN = {
   /* Von oben lohnt sich der weite Blick — sonst sieht man beim Fliegen
      dasselbe kleine Stück Wiese wie beim Laufen, nur schneller. */
   ballon: { dist: 72, hoehe: 27, weite: 26 },
+  /* Und ganz oben schaut man nicht mehr über das Land, sondern darauf. Bei
+     der flachen Fahrsicht liegt der Grund unter einem außerhalb des Bildes:
+     man sieht den Horizont und viel Himmel, aber nicht die Gegend, wegen der
+     man hinaufgestiegen ist. Je höher es geht, desto steiler wird der Blick. */
+  hoch:   { dist: 86, hoehe: 46, weite: 12 },
 };
+/* Zwischen Fahr- und Höhensicht wird gemischt; das Ergebnis liegt hier,
+   damit nicht in jedem Bild ein neues Objekt entsteht. */
+const sichtMisch = { dist: 0, hoehe: 0, weite: 0 };
 let camDist = SICHTEN.land.dist;
 let camZiel = { ...SICHTEN.land };
 
@@ -1159,14 +1167,32 @@ function lagerAbreissen(t) {
 const BALLON = {
   steig: 8.0,          // wie hart der Brenner hebt
   sink: 3.0,           // wie schnell sie ohne Feuer fällt
-  maxAuf: 5.0,
-  maxAb: 4.4,
-  drift: 7.4,          // waagerechtes Tempo bei vollem Ausschlag
+  /* Bis ganz nach oben sind es rund hundert Schritt; mit siebeneinhalb in
+     der Sekunde ist man in einer Viertelminute dort. Langsamer wäre der
+     Brenner eine Geduldsprobe, schneller kein Ballon mehr. */
+  maxAuf: 7.5,
+  maxAb: 5.5,
+  drift: 7.4,          // waagerechtes Tempo unten
+  hoehenwind: 14.0,    // und ganz oben, wo der Wind steht
   traege: 1.15,        // wie schnell er auf den Knüppel hört
-  decke: HEIGHT - 3,   // höher geht die Welt nicht
+  /* Die Welt ist vierundvierzig Blöcke hoch, aber der Ballon muss nicht in
+     ihr bleiben — über dem höchsten Gipfel ist nur noch Himmel. Vorher endete
+     die Fahrt drei Blöcke unter der Weltdecke, und über einem Berg hieß das:
+     sieben Schritt über Grund. Das war kein Fliegen, das war Hüpfen. Jetzt
+     geht es auf das Dreifache hinauf, und von dort sieht man das Land
+     wirklich liegen. */
+  decke: HEIGHT * 3,
+  /* Ab welcher Höhe über Grund die Welt weit wird: Nebel, Sichtweite und
+     Wind wachsen zwischen diesen beiden Marken mit. */
+  weitAb: 12,
+  weitBis: 80,
 };
 
 let ballonVy = 0, ballonVx = 0, ballonVz = 0, ballonDreh = 0;
+/* Wie hoch über dem Grund der Korb gerade hängt. Nebel, Sichtweite und die
+   ferne Ebene der Kamera hängen daran; am Boden ist es null und alles bleibt,
+   wie es beim Laufen war. */
+let flugHoehe = 0;
 
 /** Der Ballon in Reichweite, in den man einsteigen könnte. */
 function ballonInReichweite() {
@@ -1183,6 +1209,7 @@ function ballonBesteigen(t) {
   state.ballon = t;
   state.fliegt = true;
   state.brenner = 0;
+  state.windGesagt = false;
   player.schweben = true;
   ballonVy = 1.4;                 // ein Ruck, dann trägt es
   ballonVx = 0; ballonVz = 0;
@@ -1201,6 +1228,8 @@ function ballonVerlassen() {
   state.brenner = 0;
   player.schweben = false;
   ballonVy = 0; ballonVx = 0; ballonVz = 0;
+  flugHoehe = 0;
+  fernsichtPflegen(0);          // zu Fuß reicht der nahe Ring wieder
   if (t) {
     // Aussteigen heißt: einen Schritt neben den Korb, nicht hinein
     const ab = { x: t.x + Math.sin(player.facing) * 2.0, z: t.z + Math.cos(player.facing) * 2.0 };
@@ -1233,17 +1262,57 @@ function brennen() {
   h.ausdauer -= 0.9;
 }
 
+/* Von oben will man auch etwas sehen. Der Dunst und die geladene Umgebung
+   sind auf Augenhöhe zugeschnitten — aus hundert Schritt Höhe läge das Land
+   sonst hinter einer weißen Wand, und dahinter käme die Kante der geladenen
+   Chunks. Beides wächst jetzt mit der Höhe mit.
+
+   Einen Ring weiter zu laden kostet spürbar: aus 81 Chunks werden 121. Wer
+   ohnehin schon am Anschlag rechnet — der Leistungswächter hat dann die
+   Pixeldichte heruntergenommen —, bekommt die Weitsicht darum nicht. */
+/* Wie weit die Fahrt schon vom Boden weg ist: null unten, eins ganz oben.
+   Sicht, Wind und Kameraneigung hängen alle an dieser einen Zahl. */
+function flugSteil() {
+  return Math.min(1, Math.max(0,
+    (flugHoehe - BALLON.weitAb) / (BALLON.weitBis - BALLON.weitAb)));
+}
+
+function fernsichtPflegen(oben) {
+  const will = sparstufe >= 2 ? 4 : oben > 0.45 ? 5 : 4;
+  if (will === world.radius) return;
+  world.radius = will;
+  flora.radius = will;
+  flora.letzterChunk = null;
+}
+
 function ballonFliegen(dt, move) {
   const t = state.ballon;
   if (!t) { state.fliegt = false; player.schweben = false; return; }
   const brennt = state.brenner > 0;
 
+  /* Wie weit unten der Grund liegt. Daran hängt nicht nur die Anzeige: oben
+     steht der Wind, und die Sicht wird weit. */
+  const drunter = Math.max(surfaceAt(Math.round(player.pos.x), Math.round(player.pos.z)), SEA) + 1;
+  flugHoehe = Math.max(0, player.pos.y - drunter);
+  const oben = flugSteil();
+  fernsichtPflegen(oben);
+  /* Einmal je Fahrt ein Wort, wenn die Strömung greift — sonst merkt niemand,
+     dass Höhe etwas einbringt. */
+  if (oben > 0.55 && !state.windGesagt) {
+    state.windGesagt = true;
+    meldung('Hier oben steht der Wind', '#7fae5e', 3.0);
+  }
+
   ballonVy += (brennt ? BALLON.steig : -BALLON.sink) * dt;
   ballonVy = Math.max(-BALLON.maxAb, Math.min(BALLON.maxAuf, ballonVy));
 
-  // Waagerecht wird nur geschoben, nicht gesteuert — der Rest ist Trägheit
-  const zielX = move.active ? move.x * BALLON.drift * move.strength : 0;
-  const zielZ = move.active ? move.y * BALLON.drift * move.strength : 0;
+  /* Waagerecht wird nur geschoben, nicht gesteuert — der Rest ist Trägheit.
+     Je höher, desto kräftiger schiebt es: unten ist Windstille zwischen den
+     Hügeln, oben steht die Strömung. Das ist der Grund, warum man überhaupt
+     hinaufsteigt — von dort kommt man doppelt so schnell voran. */
+  const schub = BALLON.drift + (BALLON.hoehenwind - BALLON.drift) * oben;
+  const zielX = move.active ? move.x * schub * move.strength : 0;
+  const zielZ = move.active ? move.y * schub * move.strength : 0;
   const k = Math.min(1, dt * BALLON.traege);
   ballonVx += (zielX - ballonVx) * k;
   ballonVz += (zielZ - ballonVz) * k;
@@ -1266,6 +1335,7 @@ function ballonFliegen(dt, move) {
   }
   player.pos.set(x, y, z);
   state.aufBoden = steht;
+  flugHoehe = Math.max(0, y - boden);
 
   // Die Fahrtrichtung ist die Blickrichtung — ein Korb dreht sich nicht weg
   const tempo = Math.hypot(ballonVx, ballonVz);
@@ -3414,8 +3484,38 @@ function applyDaytime() {
   // löst sich die Gruft in helles Nichts auf.
   // Regen und Nebel ziehen die Sicht zu; unter Tage gilt weiter der Berg
   const nf = state.under > 0.5 ? 1 : wetter.nebelFaktor();
-  scene.fog.near = (camDist + 14 + state.under * 10) * (0.35 + nf * 0.65);
-  scene.fog.far = (camDist + 62 + state.under * 26) * nf;
+  let nah = (camDist + 14 + state.under * 10) * (0.35 + nf * 0.65);
+  let fern = (camDist + 62 + state.under * 26) * nf;
+  /* Aus der Höhe stimmt diese Rechnung nicht mehr. Der Dunst misst Abstand
+     zur Kamera, und von oben ist alles Gelände ungefähr gleich weit weg —
+     der Boden unter dem Korb genauso wie das Stück ganz am Rand. Mit den
+     Weiten vom Boden bliebe alles gestochen scharf, und dann endet die Welt
+     dort, wo die geladenen Chunks aufhören: als harte Linie im Himmel.
+
+     Also werden die Weiten oben aus der Sache selbst gerechnet — der Dunst
+     setzt knapp unter dem Boden unter einem ein und ist genau am Rand des
+     geladenen Rings undurchsichtig. Das Land liegt dann wie ein Stück auf dem
+     Tisch, das nach außen hin verschwimmt. */
+  const hochK = state.fliegt ? flugSteil() : 0;
+  if (hochK > 0) {
+    const kamHoch = flugHoehe + CAM_DIR.y * camDist;
+    const rand = world.radius * CHUNK;
+    /* Die Höhe der Kamera steckt in jedem dieser Abstände drin, und weil sie
+       alles überwiegt, liegt der ganze geladene Ring in einem schmalen Band:
+       der Boden senkrecht darunter ist 166 weit, der Rand 188. Die Weiten
+       müssen also aus derselben Rechnung kommen, sonst verschluckt der Dunst
+       entweder nichts oder das halbe Bild. Klar bleibt, was innerhalb von
+       vier Fünfteln des Rings liegt. */
+    nah += (Math.hypot(kamHoch, rand * 0.8) * (0.35 + nf * 0.65) - nah) * hochK;
+    fern += (Math.hypot(kamHoch, rand * 1.12) * nf - fern) * hochK;
+  }
+  scene.fog.near = nah;
+  scene.fog.far = fern;
+  /* Die ferne Ebene muss hinter dem Dunst liegen, sonst schneidet sie das
+     Land an, bevor es verblassen kann. Sie wird nur in Stufen nachgeführt —
+     jede Änderung rechnet die Projektion neu. */
+  const willFern = Math.max(400, Math.ceil(fern * 1.5 / 100) * 100);
+  if (camera.far !== willFern) { camera.far = willFern; camera.updateProjectionMatrix(); }
   scene.background.copy(tmpSky);
   scene.fog.color.copy(tmpSky);
   renderer.setClearColor(tmpSky);
@@ -3680,7 +3780,21 @@ function ereignisAnzeige() {
 /* Welche Sicht gerade gilt. Die Reihenfolge ist die Rangfolge: drinnen
    sticht alles, dann die Gruft, dann der Kampf, dann das Rennen. */
 function sichtWaehlen() {
-  if (state.fliegt) return SICHTEN.ballon;
+  if (state.fliegt) {
+    const k = flugSteil();
+    if (k <= 0) return SICHTEN.ballon;
+    const a = SICHTEN.ballon, b = SICHTEN.hoch;
+    /* Wie weit die Kamera zurückdarf, hängt daran, wie weit die Welt geladen
+       ist: je weiter sie zurückgeht, desto mehr Gelände liegt im Bild, und
+       irgendwann sieht man die Kante der geladenen Chunks als harte Linie im
+       Himmel. Reicht es nur für den nahen Ring, bleibt die Kamera näher dran
+       und das Bild endet im Gelände statt an der Kante. */
+    const fern = world.radius >= 5 ? b.dist : b.dist * 0.74;
+    sichtMisch.dist = a.dist + (fern - a.dist) * k;
+    sichtMisch.hoehe = a.hoehe + (b.hoehe - a.hoehe) * k;
+    sichtMisch.weite = a.weite + (b.weite - a.weite) * k;
+    return sichtMisch;
+  }
   if (state.imHaus) return SICHTEN.stube;
   if (state.imDungeon || state.under > 0.6) return SICHTEN.gruft;
   if (feinde.bedrohung(player.pos, 13)) return SICHTEN.kampf;
@@ -3907,8 +4021,14 @@ function frame() {
       }
     }
 
-    // Die Welt über dem Kopf wegschneiden, sobald wir unter Tage sind
-    const wantCut = player.pos.y + 3 < surface ? Math.floor(player.pos.y) + 5 : HEIGHT + 4;
+    /* Die Welt über dem Kopf wegschneiden, sobald wir unter Tage sind. Über
+       Tage liegt die Ebene knapp über der Weltdecke — nur reicht der Ballon
+       jetzt weit darüber hinaus, und was oberhalb liegt, wird abgeschnitten.
+       Ohne das zweite Glied hängt man in hundert Schritt Höhe in einem Korb,
+       den man selbst nicht mehr sieht. */
+    const wantCut = player.pos.y + 3 < surface
+      ? Math.floor(player.pos.y) + 5
+      : Math.max(HEIGHT + 4, Math.ceil(player.pos.y) + 6);
     state.cut += (wantCut - state.cut) * Math.min(1, dt * 7);
     cutPlane.constant = Math.round(state.cut) - 0.03;
 
@@ -4475,6 +4595,8 @@ function neuesSpiel(wahl = null) {
   state.fliegt = false;
   state.ballon = null;
   player.schweben = false;
+  flugHoehe = 0;
+  fernsichtPflegen(0);
   beutelAufloesen();
   juice.reset();
 
@@ -4561,6 +4683,8 @@ function weiterSpielen(d) {
   state.fliegt = false;
   state.ballon = null;
   player.schweben = false;
+  flugHoehe = 0;
+  fernsichtPflegen(0);
   flora.stuempfeSetzen(d.stuempfe);
     state.geschichte = Object.assign(story.neueGeschichte(), d.geschichte || {});
   welteinrichtung(startplatz().dorf);
@@ -4824,7 +4948,7 @@ window.__game = {
   ereignisse, rudelSetzen, spielerNimmtSchaden, geschosse,
   applyDaytime, sun, hemi, nachtGrad,
   camDistWert: () => camDist, camRohWert: () => camRoh,
-  sparstufeWert: () => sparstufe,
+  sparstufeWert: () => sparstufe, sparstufeSetzen,
   esseOeffnen, esseZeichnen, dinge, fert, auftragFuer, kontextFuer, leute,
   updateHUD, dingBlatt, fertZeichnen, verkaufFuer,
   ZAUBER, ZAUBER_IDS, gelernte, aktiverZauber, zauberWaehlen, zauberBlaettern,
